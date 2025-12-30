@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import os
 import time
+import random
 from pathlib import Path
 
 # --- Configuration ---
@@ -14,6 +15,7 @@ st.set_page_config(layout="wide", page_title="AI Settings Manager")
 DEFAULTS = {
     "camera": "Camera stand still. Motion starts immediately.",
     "flf": 0,
+    "seed": 0,  # <--- NEW KEY
     "frame_to_skip": 81,
     "input_a_frames": "",
     "input_b_frames": "",
@@ -22,7 +24,7 @@ DEFAULTS = {
     "vace schedule": 1,
     "video file path": "",
     "reference image path": "",
-    "flf image path": "",  # <--- NEW KEY
+    "flf image path": "",
     "current_prompt": "",
     "negative": "",
     "lora 1 high": "", "lora 1 low": "",
@@ -91,7 +93,6 @@ def generate_templates(directory):
         elif "global" in filename: 
             data.update({"video file path": "", "negative": GLOBAL_NEGATIVE})
         elif "i2v" in filename: 
-            # Updated I2V Template
             data.update({"reference image path": "", "flf image path": ""})
         save_json(path, data)
 
@@ -193,6 +194,7 @@ if selected_file_name:
         st.session_state.last_mtime = mtime
         st.session_state.loaded_file = str(file_path)
         if 'append_prompt' in st.session_state: del st.session_state.append_prompt
+        if 'rand_seed' in st.session_state: del st.session_state.rand_seed
         st.session_state.edit_history_idx = None
     else:
         data = st.session_state.data_cache
@@ -209,6 +211,24 @@ if selected_file_name:
             
         new_prompt = st.text_area("Current Prompt", value=current_prompt_val, height=150)
         new_negative = st.text_area("Negative Prompt", value=data.get("negative", ""), height=100)
+
+        # --- SEED SECTION ---
+        col_seed_val, col_seed_btn = st.columns([4, 1])
+        with col_seed_btn:
+            st.write("") # Spacer
+            st.write("") 
+            if st.button("🎲 Randomize"):
+                st.session_state.rand_seed = random.randint(0, 999999999999)
+                st.rerun()
+        
+        with col_seed_val:
+            # Use randomized value if triggered, otherwise data value
+            seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
+            # IMPORTANT: Sync session state back to None to allow manual edits later if needed, 
+            # but usually keeping it in session state until save is fine.
+            new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d")
+            # Update cache immediately so it persists if we change other inputs
+            data["seed"] = new_seed 
         
         st.subheader("LoRAs")
         st.code("<lora::1.0>", language="text")
@@ -230,7 +250,6 @@ if selected_file_name:
         elif "global" in fname:
             fields += ["video file path"]
         elif "i2v" in fname:
-            # I2V Specific Fields Update
             fields += ["reference image path", "flf image path"]
             
         for f in fields:
@@ -249,6 +268,7 @@ if selected_file_name:
             if c_col1.button("Force Overwrite", type="primary"):
                 data["current_prompt"] = new_prompt
                 data["negative"] = new_negative
+                data["seed"] = new_seed
                 data.update(loras)
                 data.update(spec_fields)
                 st.session_state.last_mtime = save_json(file_path, data)
@@ -264,6 +284,7 @@ if selected_file_name:
             if st.button("💾 Update File", use_container_width=True):
                 data["current_prompt"] = new_prompt
                 data["negative"] = new_negative
+                data["seed"] = new_seed
                 data.update(loras)
                 data.update(spec_fields)
                 st.session_state.last_mtime = save_json(file_path, data)
@@ -277,6 +298,7 @@ if selected_file_name:
                 entry = {
                     "prompt": new_prompt, 
                     "negative": new_negative, 
+                    "seed": new_seed,
                     "note": archive_note if archive_note else f"Snapshot {len(data.get('prompt_history', [])) + 1}",
                     "loras": loras, 
                     **spec_fields
@@ -294,7 +316,6 @@ if selected_file_name:
 
         st.subheader("Media Preview")
         preview_path = None
-        # Add flf image path to preview logic
         for k in ["reference path", "video file path", "reference image path", "flf image path"]:
             if spec_fields.get(k):
                 preview_path = spec_fields[k]
@@ -336,12 +357,18 @@ if selected_file_name:
                     with st.expander(f"📝 EDITING: {note_title}", expanded=True):
                         st.info("Editing History Entry (In-Place)")
                         edit_note = st.text_input("Note", value=h.get('note', ''), key=f"edit_note_{idx}")
+                        
+                        # --- ADDED SEED EDITING HERE ---
+                        ec_seed1, ec_seed2 = st.columns([1, 3])
+                        edit_seed = ec_seed1.number_input("Seed", value=int(h.get('seed', 0)), step=1, key=f"edit_seed_{idx}")
+                        
                         edit_prompt = st.text_area("Prompt", value=h.get('prompt', ''), height=150, key=f"edit_prompt_{idx}")
                         edit_negative = st.text_area("Negative", value=h.get('negative', ''), height=80, key=f"edit_neg_{idx}")
                         
                         ec1, ec2 = st.columns([1, 4])
                         if ec1.button("💾 Save", key=f"save_edit_{idx}", type="primary"):
                             h['note'] = edit_note
+                            h['seed'] = edit_seed
                             h['prompt'] = edit_prompt
                             h['negative'] = edit_negative
                             st.session_state.last_mtime = save_json(file_path, data)
@@ -358,11 +385,11 @@ if selected_file_name:
                         col_h1, col_h2 = st.columns([3, 1])
                         
                         with col_h1:
-                            st.caption("📝 Prompt")
+                            st.caption(f"📝 Prompt (Seed: {h.get('seed', 0)})")
                             st.text(h.get('prompt', ''))
                             
                             st.caption("🧩 LoRAs & Files")
-                            info_dict = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'note'] and v}
+                            info_dict = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'note', 'seed'] and v}
                             if 'loras' in h and isinstance(h['loras'], dict):
                                 info_dict.update({k:v for k,v in h['loras'].items() if v})
                                 if 'loras' in info_dict: del info_dict['loras']
@@ -375,10 +402,11 @@ if selected_file_name:
                                 else:
                                     data["current_prompt"] = h.get("prompt", "")
                                     data["negative"] = h.get("negative", "")
+                                    data["seed"] = int(h.get("seed", 0))
                                     if "loras" in h and isinstance(h["loras"], dict):
                                         data.update(h["loras"])
                                     for k, v in h.items():
-                                        if k not in ["note", "prompt", "loras", "negative"]:
+                                        if k not in ["note", "prompt", "loras", "negative", "seed"]:
                                             data[k] = v
                                     
                                     st.session_state.last_mtime = save_json(file_path, data)
