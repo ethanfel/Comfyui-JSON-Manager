@@ -14,7 +14,7 @@ def read_json_data(json_path):
         return {}
 
 # ==========================================
-# 1. NEW DEDICATED LORA NODE
+# 1. DEDICATED LORA NODE
 # ==========================================
 class JSONLoaderLoRA:
     @classmethod
@@ -42,11 +42,10 @@ class JSONLoaderLoRA:
         )
 
 # ==========================================
-# 2. MAIN NODES (STRIPPED OF LORAS)
+# 2. MAIN NODES (CLEANED)
 # ==========================================
 
 # --- Node A: Simple (Global) ---
-# Unchanged, as it never had LoRAs.
 class JSONLoaderSimple:
     @classmethod
     def INPUT_TYPES(s):
@@ -66,7 +65,7 @@ class JSONLoaderSimple:
         )
 
 # --- Node B: Standard (I2V / Global Extend) ---
-# Removed LoRAs. Kept FLF Image Path.
+# CLEANED: No LoRAs. Only Prompts, FLF, and Paths.
 class JSONLoaderStandard:
     @classmethod
     def INPUT_TYPES(s):
@@ -100,7 +99,7 @@ class JSONLoaderStandard:
         )
 
 # --- Node C: VACE Full ---
-# Removed LoRAs. Kept all VACE settings.
+# CLEANED: No LoRAs. Only VACE Settings and Paths.
 class JSONLoaderVACE:
     @classmethod
     def INPUT_TYPES(s):
