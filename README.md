@@ -1,2 +1,2 @@
 # Comfyui-Json-Manager
-Streamlit webui to manager comfyui paramaters with json
+Streamlit webui and comfyui node to manage comfyui paramaters with json
