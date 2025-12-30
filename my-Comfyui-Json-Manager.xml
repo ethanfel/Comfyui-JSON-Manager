@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Comfyui-Json-Manager</Name>
+  <Repository>python:3.12-slim</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview/>
+  <Category/>
+  <WebUI>http://[IP]:[PORT:8501]</WebUI>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs>/bin/sh -c "pip install streamlit opencv-python-headless &amp;amp;&amp;amp; cd /app &amp;amp;&amp;amp; streamlit run stream_editor.py --server.headless true --server.port 8501"</PostArgs>
+  <CPUset/>
+  <DateInstalled>1767096338</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="App Location" Target="/app" Default="" Mode="rw" Description="" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/comfyui-json-manager/</Config>
+  <Config Name="Data" Target="/media/unraid/" Default="" Mode="rw" Description="" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/</Config>
+  <Config Name="WebUI" Target="8501" Default="" Mode="tcp" Description="" Type="Port" Display="always" Required="false" Mask="false">8501</Config>
+  <Config Name="PUID" Target="PUID" Default="" Mode="" Description="" Type="Variable" Display="always" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="" Mode="" Description="" Type="Variable" Display="always" Required="false" Mask="false">100</Config>
+  <TailscaleStateDir/>
+</Container>
