@@ -350,7 +350,6 @@ if selected_file_name:
         if not is_batch_file:
             st.warning("This is a Single file. To use Batch mode, create a copy.")
             
-            # --- CONVERT / CREATE BATCH COPY LOGIC ---
             if st.button("✨ Create Batch Copy (Preserves Original)"):
                 new_name = f"batch_{selected_file_name}"
                 new_path = st.session_state.current_dir / new_name
@@ -361,12 +360,7 @@ if selected_file_name:
                     first_item = data.copy()
                     if "prompt_history" in first_item: del first_item["prompt_history"]
                     first_item["sequence_number"] = 1
-                    
-                    new_data = {
-                        "batch_data": [first_item], 
-                        "prompt_history": data.get("prompt_history", [])
-                    }
-                    
+                    new_data = {"batch_data": [first_item], "prompt_history": data.get("prompt_history", [])}
                     save_json(new_path, new_data)
                     st.toast(f"Created {new_name}", icon="✨")
                     st.session_state.file_selector = new_name
@@ -376,22 +370,16 @@ if selected_file_name:
             
             st.subheader("Add New Sequence")
             
-            # --- CONTROL ROW ---
             add_c1, add_c2 = st.columns(2)
-            
             with add_c1:
-                # File Selector
                 file_options = [f.name for f in json_files]
                 default_idx = 0
                 if selected_file_name in file_options: 
                     default_idx = file_options.index(selected_file_name)
                 import_source_name = st.selectbox("Source File:", file_options, index=default_idx)
-                
-                # --- FIXED: Load source data IMMEDIATELY to populate History dropdown ---
                 source_data_imported, _ = load_json(st.session_state.current_dir / import_source_name)
 
             with add_c2:
-                # History Selector (Uses the IMPORTED SOURCE, not current file)
                 source_history = source_data_imported.get("prompt_history", [])
                 hist_options = []
                 if source_history:
@@ -401,10 +389,8 @@ if selected_file_name:
                     st.caption(f"No history in {import_source_name}.")
                     selected_hist_str = None
 
-            # --- BUTTON ROW ---
             btn_c1, btn_c2, btn_c3 = st.columns(3)
             
-            # 1. ADD EMPTY
             if btn_c1.button("➕ Add Empty", use_container_width=True):
                 new_seq = DEFAULTS.copy()
                 if "prompt_history" in new_seq: del new_seq["prompt_history"]
@@ -413,54 +399,41 @@ if selected_file_name:
                     if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                 new_seq["sequence_number"] = max_seq + 1
                 batch_list.append(new_seq)
-                
                 data["batch_data"] = batch_list
                 save_json(file_path, data)
                 st.rerun()
 
-            # 2. ADD FROM FILE (Uses already loaded source_data_imported)
             if btn_c2.button("➕ From File", use_container_width=True, help=f"Copy current state from {import_source_name}"):
                 new_seq = DEFAULTS.copy()
                 src_flat = source_data_imported
-                # If source is batch, take first item
                 if "batch_data" in source_data_imported and source_data_imported["batch_data"]:
                     src_flat = source_data_imported["batch_data"][0]
-                
                 new_seq.update(src_flat)
                 if "prompt_history" in new_seq: del new_seq["prompt_history"]
-                
                 max_seq = 0
                 for s in batch_list:
                     if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                 new_seq["sequence_number"] = max_seq + 1
                 batch_list.append(new_seq)
-                
                 data["batch_data"] = batch_list
                 save_json(file_path, data)
                 st.rerun()
 
-            # 3. ADD FROM HISTORY (Uses already loaded source_history)
             if btn_c3.button("➕ From History", use_container_width=True, disabled=not source_history):
                 if selected_hist_str:
                     hist_idx = int(selected_hist_str.split(":")[0].replace("#", "")) - 1
                     h_item = source_history[hist_idx]
-                    
                     new_seq = DEFAULTS.copy()
                     new_seq.update(h_item)
                     if "loras" in h_item and isinstance(h_item["loras"], dict):
                         new_seq.update(h_item["loras"])
-                        
-                    # Clean up
                     for k in ["prompt_history", "note", "loras"]:
                         if k in new_seq: del new_seq[k]
-                    
                     max_seq = 0
                     for s in batch_list:
                         if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                     new_seq["sequence_number"] = max_seq + 1
-                    
                     batch_list.append(new_seq)
-                    
                     data["batch_data"] = batch_list
                     save_json(file_path, data)
                     st.rerun()
@@ -468,18 +441,15 @@ if selected_file_name:
             st.markdown("---")
             st.info(f"Batch contains {len(batch_list)} sequences.")
             
-            # --- RENDER SEQUENCES ---
             for i, seq in enumerate(batch_list):
                 seq_num = seq.get("sequence_number", i+1)
                 
                 with st.expander(f"🎬 Sequence #{seq_num} : {seq.get('current_prompt', '')[:40]}...", expanded=False):
                     
-                    # Action Bar
                     b_col1, b_col2, b_col3 = st.columns([1, 1, 2])
                     
                     if b_col1.button(f"📥 Copy from {import_source_name}", key=f"copy_src_{i}"):
                         updated_seq = DEFAULTS.copy()
-                        # Use same source data
                         src_flat = source_data_imported
                         if "batch_data" in source_data_imported and source_data_imported["batch_data"]:
                             src_flat = source_data_imported["batch_data"][0]
@@ -487,7 +457,6 @@ if selected_file_name:
                         updated_seq["sequence_number"] = seq_num
                         if "prompt_history" in updated_seq: del updated_seq["prompt_history"]
                         batch_list[i] = updated_seq
-                        
                         data["batch_data"] = batch_list
                         save_json(file_path, data)
                         st.toast(f"Updated from {import_source_name}!", icon="📥")
@@ -508,25 +477,48 @@ if selected_file_name:
                         save_json(file_path, data)
                         st.rerun()
 
-                    # Editable Fields
                     st.markdown("---")
-                    sb_col1, sb_col2 = st.columns([2, 1])
                     
+                    # --- BATCH EDIT LAYOUT ---
+                    
+                    # 1. PROMPTS
+                    sb_col1, sb_col2 = st.columns([2, 1])
                     with sb_col1:
                         seq["general_prompt"] = st.text_area("General P", value=seq.get("general_prompt", ""), height=60, key=f"b_gp_{i}")
                         seq["general_negative"] = st.text_area("General N", value=seq.get("general_negative", ""), height=60, key=f"b_gn_{i}")
                         seq["current_prompt"] = st.text_area("Specific P", value=seq.get("current_prompt", ""), height=100, key=f"b_sp_{i}")
                         seq["negative"] = st.text_area("Specific N", value=seq.get("negative", ""), height=60, key=f"b_sn_{i}")
-                        
+                    
                     with sb_col2:
                         seq["sequence_number"] = st.number_input("Seq Num", value=int(seq_num), key=f"b_seqn_{i}")
                         seq["seed"] = st.number_input("Seed", value=int(seq.get("seed", 0)), key=f"b_seed_{i}")
                         seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"b_cam_{i}")
+                        seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"b_flf_{i}")
                         
+                        # Dynamic Paths & Params
                         if "video file path" in seq or "vace" in selected_file_name:
                             seq["video file path"] = st.text_input("Video Path", value=seq.get("video file path", ""), key=f"b_vid_{i}")
-                        if "reference image path" in seq or "i2v" in selected_file_name:
+                            # VACE Params
+                            with st.expander("VACE Settings"):
+                                seq["frame_to_skip"] = st.number_input("Skip", value=int(seq.get("frame_to_skip", 81)), key=f"b_fts_{i}")
+                                seq["input_a_frames"] = st.number_input("In A", value=int(seq.get("input_a_frames", 0)), key=f"b_ia_{i}")
+                                seq["input_b_frames"] = st.number_input("In B", value=int(seq.get("input_b_frames", 0)), key=f"b_ib_{i}")
+                                seq["reference switch"] = st.number_input("Switch", value=int(seq.get("reference switch", 1)), key=f"b_rsw_{i}")
+                                seq["vace schedule"] = st.number_input("Sched", value=int(seq.get("vace schedule", 1)), key=f"b_vsc_{i}")
+                                seq["reference path"] = st.text_input("Ref Path", value=seq.get("reference path", ""), key=f"b_rp_{i}")
+                                seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"b_rip_{i}")
+
+                        if "i2v" in selected_file_name and "vace" not in selected_file_name:
                             seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"b_ref_{i}")
+                            seq["flf image path"] = st.text_input("FLF Img", value=seq.get("flf image path", ""), key=f"b_flfi_{i}")
+
+                    # 2. LORAS EXPANDER
+                    with st.expander("LoRA Settings"):
+                        bl_c1, bl_c2 = st.columns(2)
+                        lkeys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
+                        for li, lk in enumerate(lkeys):
+                            with (bl_c1 if li % 2 == 0 else bl_c2):
+                                seq[lk] = st.text_input(lk, value=seq.get(lk, ""), key=f"b_{lk}_{i}")
 
             st.markdown("---")
             if st.button("💾 Save Batch Changes"):
