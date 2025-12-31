@@ -33,7 +33,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     batch_list = data.get("batch_data", [])
     
-    # --- ADD NEW SEQUENCE AREA ---
     st.subheader("Add New Sequence")
     ac1, ac2 = st.columns(2)
     
@@ -45,7 +44,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     with ac2:
         src_hist = src_data.get("prompt_history", [])
-        h_opts = [f"#{i+1}: {h.get('note', 'No Note')}" for i, h in enumerate(src_hist)] if src_hist else []
+        h_opts = [f"#{i+1}: {h.get('note', 'No Note')} ({h.get('prompt', '')[:15]}...)" for i, h in enumerate(src_hist)] if src_hist else []
         sel_hist = st.selectbox("History Entry:", h_opts, key="batch_src_hist")
 
     bc1, bc2, bc3 = st.columns(3)
@@ -61,6 +60,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         batch_list.append(new_item)
         data["batch_data"] = batch_list
         save_json(file_path, data)
+        st.session_state.ui_reset_token += 1 # Force refresh
         st.rerun()
 
     if bc1.button("➕ Add Empty", use_container_width=True):
@@ -82,15 +82,15 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 item.update(h_item["loras"])
             add_sequence(item)
 
-    # --- RENDER LIST ---
     st.markdown("---")
     st.info(f"Batch contains {len(batch_list)} sequences.")
 
     for i, seq in enumerate(batch_list):
         seq_num = seq.get("sequence_number", i+1)
-        prefix = f"{selected_file_name}_seq{i}" 
+        # Apply version token here too
+        prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
-        with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
+        with st.expander(f"🎬 Sequence #{seq_num} : {seq.get('current_prompt', '')[:40]}...", expanded=False):
             b1, b2, b3 = st.columns([1, 1, 2])
             
             if b1.button(f"📥 Copy {src_name}", key=f"{prefix}_copy"):
@@ -102,12 +102,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 batch_list[i] = item
                 data["batch_data"] = batch_list
                 save_json(file_path, data)
-                
-                # FORCE UI REFRESH
-                for k in list(st.session_state.keys()):
-                    if k.startswith(prefix):
-                        del st.session_state[k]
-                
+                st.session_state.ui_reset_token += 1 # Force refresh
                 st.toast("Copied!", icon="📥")
                 st.rerun()
 
