@@ -109,6 +109,34 @@ def generate_templates(directory):
                 data.update({"reference image path": "", "flf image path": ""})
         save_json(path, data)
 
+# --- CALLBACKS ---
+def create_batch_callback(original_filename, current_data):
+    """Safely creates a batch copy and updates selection without breaking Streamlit loop."""
+    new_name = f"batch_{original_filename}"
+    new_path = st.session_state.current_dir / new_name
+    
+    if new_path.exists():
+        st.toast(f"File {new_name} already exists!", icon="⚠️")
+        return
+
+    # Prepare Data
+    first_item = current_data.copy()
+    if "prompt_history" in first_item: del first_item["prompt_history"]
+    first_item["sequence_number"] = 1
+    
+    new_data = {
+        "batch_data": [first_item], 
+        "prompt_history": current_data.get("prompt_history", [])
+    }
+    
+    # Save
+    save_json(new_path, new_data)
+    st.toast(f"Created {new_name}", icon="✨")
+    
+    # Update Selection (Safe to do in callback)
+    st.session_state.file_selector = new_name
+
+
 # --- Initialization ---
 if 'config' not in st.session_state:
     st.session_state.config = load_config()
@@ -350,21 +378,10 @@ if selected_file_name:
         if not is_batch_file:
             st.warning("This is a Single file. To use Batch mode, create a copy.")
             
-            if st.button("✨ Create Batch Copy (Preserves Original)"):
-                new_name = f"batch_{selected_file_name}"
-                new_path = st.session_state.current_dir / new_name
-                
-                if new_path.exists():
-                    st.error(f"File {new_name} already exists!")
-                else:
-                    first_item = data.copy()
-                    if "prompt_history" in first_item: del first_item["prompt_history"]
-                    first_item["sequence_number"] = 1
-                    new_data = {"batch_data": [first_item], "prompt_history": data.get("prompt_history", [])}
-                    save_json(new_path, new_data)
-                    st.toast(f"Created {new_name}", icon="✨")
-                    st.session_state.file_selector = new_name
-                    st.rerun()
+            # --- USE CALLBACK HERE TO FIX API ERROR ---
+            st.button("✨ Create Batch Copy (Preserves Original)", 
+                     on_click=create_batch_callback, 
+                     args=(selected_file_name, data))
         else:
             batch_list = data.get("batch_data", [])
             
@@ -403,7 +420,7 @@ if selected_file_name:
                 save_json(file_path, data)
                 st.rerun()
 
-            if btn_c2.button("➕ From File", use_container_width=True, help=f"Copy current state from {import_source_name}"):
+            if btn_c2.button("➕ From File", use_container_width=True, help=f"Copy from {import_source_name}"):
                 new_seq = DEFAULTS.copy()
                 src_flat = source_data_imported
                 if "batch_data" in source_data_imported and source_data_imported["batch_data"]:
