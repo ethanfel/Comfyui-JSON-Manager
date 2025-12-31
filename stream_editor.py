@@ -17,8 +17,8 @@ DEFAULTS = {
     "flf": 0,
     "seed": 0,
     "frame_to_skip": 81,
-    "input_a_frames": "",
-    "input_b_frames": "",
+    "input_a_frames": 0,  # INT
+    "input_b_frames": 0,  # INT
     "reference path": "",
     "reference switch": 1,
     "vace schedule": 1,
@@ -27,10 +27,10 @@ DEFAULTS = {
     "flf image path": "",
     
     # --- PROMPTS ---
-    "general_prompt": "",      # NEW: The global layer
+    "general_prompt": "",
     "general_negative": "Vivid tones, overexposed, static, blurry details, subtitles, style, artwork, painting, picture, still image, overall gray, worst quality, low quality, JPEG compression artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, distorted, disfigured, malformed limbs, fused fingers, unmoving frame, cluttered background, three legs,",
-    "current_prompt": "",      # The specific layer
-    "negative": "",            # The specific layer
+    "current_prompt": "",
+    "negative": "",
     
     # --- LORAS ---
     "lora 1 high": "", "lora 1 low": "",
@@ -247,17 +247,28 @@ if selected_file_name:
 
         st.subheader("Settings")
         spec_fields = {}
-        fields = ["camera", "flf"]
         fname = selected_file_name
         
+        # --- DYNAMIC FIELD GENERATION ---
+        # Shared fields
+        spec_fields["camera"] = st.text_input("camera", value=str(data.get("camera", DEFAULTS["camera"])))
+        spec_fields["flf"] = st.text_input("flf", value=str(data.get("flf", DEFAULTS["flf"])))
+
         if "vace" in fname:
-            fields += ["frame_to_skip", "input_a_frames", "input_b_frames", "reference path", "reference switch", "vace schedule", "video file path"]
-        elif "i2v" in fname:
-            fields += ["reference image path", "flf image path"]
+            # Integers
+            spec_fields["frame_to_skip"] = st.number_input("frame_to_skip", value=int(data.get("frame_to_skip", 81)))
+            spec_fields["input_a_frames"] = st.number_input("input_a_frames", value=int(data.get("input_a_frames", 0)))
+            spec_fields["input_b_frames"] = st.number_input("input_b_frames", value=int(data.get("input_b_frames", 0)))
+            spec_fields["reference switch"] = st.number_input("reference switch", value=int(data.get("reference switch", 1)))
+            spec_fields["vace schedule"] = st.number_input("vace schedule", value=int(data.get("vace schedule", 1)))
             
-        for f in fields:
-            val = data.get(f, DEFAULTS.get(f, ""))
-            spec_fields[f] = st.text_input(f, value=str(val))
+            # Strings
+            for f in ["reference path", "video file path", "reference image path"]:
+                 spec_fields[f] = st.text_input(f, value=str(data.get(f, "")))
+
+        elif "i2v" in fname:
+            for f in ["reference image path", "flf image path", "video file path"]:
+                spec_fields[f] = st.text_input(f, value=str(data.get(f, "")))
 
     with col2:
         st.subheader("Actions")
