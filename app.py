@@ -23,6 +23,9 @@ if 'last_mtime' not in st.session_state: st.session_state.last_mtime = 0
 if 'edit_history_idx' not in st.session_state: st.session_state.edit_history_idx = None
 if 'single_editor_cache' not in st.session_state: st.session_state.single_editor_cache = DEFAULTS.copy()
 
+# NEW: Version Token for forcing UI refreshes
+if 'ui_reset_token' not in st.session_state: st.session_state.ui_reset_token = 0
+
 # --- Sidebar ---
 with st.sidebar:
     st.header("📂 Navigator")
