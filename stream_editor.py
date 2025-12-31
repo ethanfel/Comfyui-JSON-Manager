@@ -73,7 +73,6 @@ def get_file_mtime(path):
     return 0
 
 def load_json(path):
-    # Robust loader that handles empty files or bad json
     if not path.exists(): return DEFAULTS.copy(), 0
     try:
         with open(path, 'r') as f:
@@ -83,12 +82,10 @@ def load_json(path):
         return DEFAULTS.copy(), 0
 
 def save_json(path, data):
-    # Preserve existing structure if possible
     if path.exists():
         try:
             with open(path, 'r') as f:
                 existing = json.load(f)
-            # If we are saving a dict into a dict, update it
             if isinstance(existing, dict) and isinstance(data, dict):
                 existing.update(data)
                 data = existing
@@ -120,6 +117,7 @@ if 'snippets' not in st.session_state: st.session_state.snippets = load_snippets
 if 'loaded_file' not in st.session_state: st.session_state.loaded_file = None
 if 'last_mtime' not in st.session_state: st.session_state.last_mtime = 0
 if 'edit_history_idx' not in st.session_state: st.session_state.edit_history_idx = None
+if 'single_editor_cache' not in st.session_state: st.session_state.single_editor_cache = DEFAULTS.copy()
 
 # --- Sidebar ---
 with st.sidebar:
@@ -201,6 +199,7 @@ with st.sidebar:
 if selected_file_name:
     file_path = st.session_state.current_dir / selected_file_name
     
+    # Reload check
     if st.session_state.loaded_file != str(file_path):
         data, mtime = load_json(file_path)
         st.session_state.data_cache = data
@@ -281,12 +280,13 @@ if selected_file_name:
                         spec_fields[f] = st.text_input(f, value=str(data.get(f, "")))
 
             with col2:
-                # Capture State
+                # Store cache
                 current_state = {
                     "general_prompt": gen_prompt, "general_negative": gen_negative,
                     "current_prompt": new_prompt, "negative": new_negative,
                     "seed": new_seed, **loras, **spec_fields
                 }
+                st.session_state.single_editor_cache = current_state
 
                 st.subheader("Actions")
                 current_disk_mtime = get_file_mtime(file_path)
@@ -354,18 +354,87 @@ if selected_file_name:
         else:
             batch_list = data.get("batch_data", [])
             
-            # --- IMPORT SOURCE SELECTOR ---
-            st.subheader("Import Settings")
-            file_options = [f.name for f in json_files]
-            # Try to default to a likely single file if possible
-            default_idx = 0
-            if selected_file_name in file_options: 
-                default_idx = file_options.index(selected_file_name)
+            st.subheader("Add New Sequence")
             
-            import_source_name = st.selectbox("Select Source File to Copy From:", file_options, index=default_idx)
+            # --- CONTROL ROW ---
+            add_c1, add_c2 = st.columns(2)
             
-            # Load the source data once
-            source_data, _ = load_json(st.session_state.current_dir / import_source_name)
+            with add_c1:
+                # File Selector
+                file_options = [f.name for f in json_files]
+                default_idx = 0
+                if selected_file_name in file_options: 
+                    default_idx = file_options.index(selected_file_name)
+                import_source_name = st.selectbox("Source File:", file_options, index=default_idx)
+
+            with add_c2:
+                # History Selector
+                history = data.get("prompt_history", [])
+                hist_options = []
+                if history:
+                    hist_options = [f"#{i+1}: {h.get('note', 'No Note')} ({h.get('prompt', '')[:15]}...)" for i, h in enumerate(history)]
+                    selected_hist_str = st.selectbox("History Entry:", hist_options)
+                else:
+                    st.caption("No history available.")
+                    selected_hist_str = None
+
+            # --- BUTTON ROW ---
+            btn_c1, btn_c2, btn_c3 = st.columns(3)
+            
+            # 1. ADD EMPTY
+            if btn_c1.button("➕ Add Empty", use_container_width=True):
+                new_seq = DEFAULTS.copy()
+                if "prompt_history" in new_seq: del new_seq["prompt_history"]
+                max_seq = 0
+                for s in batch_list:
+                    if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
+                new_seq["sequence_number"] = max_seq + 1
+                batch_list.append(new_seq)
+                save_json(file_path, data)
+                st.rerun()
+
+            # 2. ADD FROM FILE
+            if btn_c2.button("➕ From File", use_container_width=True, help=f"Copy from {import_source_name}"):
+                source_data, _ = load_json(st.session_state.current_dir / import_source_name)
+                new_seq = DEFAULTS.copy()
+                src_flat = source_data
+                if "batch_data" in source_data and source_data["batch_data"]:
+                    src_flat = source_data["batch_data"][0]
+                
+                new_seq.update(src_flat)
+                if "prompt_history" in new_seq: del new_seq["prompt_history"]
+                
+                max_seq = 0
+                for s in batch_list:
+                    if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
+                new_seq["sequence_number"] = max_seq + 1
+                batch_list.append(new_seq)
+                save_json(file_path, data)
+                st.rerun()
+
+            # 3. ADD FROM HISTORY
+            if btn_c3.button("➕ From History", use_container_width=True, disabled=not history):
+                if selected_hist_str:
+                    hist_idx = int(selected_hist_str.split(":")[0].replace("#", "")) - 1
+                    h_item = history[hist_idx]
+                    
+                    new_seq = DEFAULTS.copy()
+                    if "loras" in h_item and isinstance(h_item["loras"], dict):
+                        new_seq.update(h_item["loras"])
+                    
+                    for k, v in h_item.items():
+                        if k not in ["note", "loras"]:
+                            new_seq[k] = v
+                            
+                    if "prompt_history" in new_seq: del new_seq["prompt_history"]
+                    max_seq = 0
+                    for s in batch_list:
+                        if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
+                    new_seq["sequence_number"] = max_seq + 1
+                    
+                    batch_list.append(new_seq)
+                    save_json(file_path, data)
+                    st.rerun()
 
             st.markdown("---")
             st.info(f"Batch contains {len(batch_list)} sequences.")
@@ -379,39 +448,27 @@ if selected_file_name:
                     # Action Bar
                     b_col1, b_col2, b_col3 = st.columns([1, 1, 2])
                     
-                    # 1. COPY FROM SOURCE BUTTON
                     if b_col1.button(f"📥 Copy from {import_source_name}", key=f"copy_src_{i}"):
-                        # Merge defaults + source data + keep sequence number
                         updated_seq = DEFAULTS.copy()
-                        # Flatten source data if it's a batch file (take first item) or regular dict
+                        source_data, _ = load_json(st.session_state.current_dir / import_source_name)
                         src_flat = source_data
-                        if "batch_data" in source_data:
-                            if source_data["batch_data"]:
-                                src_flat = source_data["batch_data"][0]
-                        
+                        if "batch_data" in source_data and source_data["batch_data"]:
+                            src_flat = source_data["batch_data"][0]
                         updated_seq.update(src_flat)
                         updated_seq["sequence_number"] = seq_num
-                        
-                        # Cleanup History keys if present
                         if "prompt_history" in updated_seq: del updated_seq["prompt_history"]
-                        
                         batch_list[i] = updated_seq
                         save_json(file_path, data)
-                        st.toast(f"Seq #{seq_num} imported from {import_source_name}!", icon="📥")
+                        st.toast(f"Updated from {import_source_name}!", icon="📥")
                         st.rerun()
 
-                    # 2. PROMOTE TO SINGLE BUTTON
-                    if b_col2.button("↖️ Promote to Single", key=f"prom_seq_{i}", help="Convert this entire file back to Single mode using this sequence"):
+                    if b_col2.button("↖️ Promote to Single", key=f"prom_seq_{i}"):
                         new_single_data = seq.copy()
-                        # Preserve history from the root file
                         new_single_data["prompt_history"] = data.get("prompt_history", [])
-                        # Clean up sequence specific keys
                         if "sequence_number" in new_single_data: del new_single_data["sequence_number"]
-                        
-                        # Overwrite file
                         st.session_state.last_mtime = save_json(file_path, new_single_data)
                         st.session_state.data_cache = new_single_data
-                        st.toast("Converted back to Single File!", icon="✅")
+                        st.toast("Converted to Single!", icon="✅")
                         st.rerun()
 
                     if b_col3.button("🗑️ Remove", key=f"del_seq_{i}"):
@@ -440,39 +497,6 @@ if selected_file_name:
                             seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"b_ref_{i}")
 
             st.markdown("---")
-            
-            # Add New Sequence Logic
-            ab_col1, ab_col2 = st.columns([1, 3])
-            if ab_col1.button("➕ Add New (Empty)", type="primary"):
-                new_seq = DEFAULTS.copy()
-                if "prompt_history" in new_seq: del new_seq["prompt_history"]
-                max_seq = 0
-                for s in batch_list:
-                    if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
-                new_seq["sequence_number"] = max_seq + 1
-                batch_list.append(new_seq)
-                save_json(file_path, data)
-                st.rerun()
-                
-            if ab_col2.button(f"➕ Add Copy from {import_source_name}"):
-                 # Clone source data into new sequence
-                new_seq = DEFAULTS.copy()
-                src_flat = source_data
-                if "batch_data" in source_data and source_data["batch_data"]:
-                    src_flat = source_data["batch_data"][0]
-                
-                new_seq.update(src_flat)
-                if "prompt_history" in new_seq: del new_seq["prompt_history"]
-                
-                max_seq = 0
-                for s in batch_list:
-                    if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
-                new_seq["sequence_number"] = max_seq + 1
-                
-                batch_list.append(new_seq)
-                save_json(file_path, data)
-                st.rerun()
-            
             if st.button("💾 Save Batch Changes"):
                 data["batch_data"] = batch_list
                 st.session_state.last_mtime = save_json(file_path, data)
