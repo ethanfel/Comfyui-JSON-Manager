@@ -82,6 +82,7 @@ def load_json(path):
         return DEFAULTS.copy(), 0
 
 def save_json(path, data):
+    # For batch files, check existing structure to avoid clobbering unknown keys
     if path.exists():
         try:
             with open(path, 'r') as f:
@@ -193,13 +194,21 @@ with st.sidebar:
             save_json(path, data)
             st.rerun()
 
-    selected_file_name = st.radio("Select File", [f.name for f in json_files])
+    # File Selector
+    # We use a session state key to allow programmatically changing selection (e.g. after creating a batch file)
+    if 'file_selector' not in st.session_state:
+        st.session_state.file_selector = json_files[0].name if json_files else None
+
+    # Handle case where file list changes (e.g. new folder)
+    if st.session_state.file_selector not in [f.name for f in json_files] and json_files:
+        st.session_state.file_selector = json_files[0].name
+
+    selected_file_name = st.radio("Select File", [f.name for f in json_files], key="file_selector")
 
 # --- Load Logic ---
 if selected_file_name:
     file_path = st.session_state.current_dir / selected_file_name
     
-    # Reload check
     if st.session_state.loaded_file != str(file_path):
         data, mtime = load_json(file_path)
         st.session_state.data_cache = data
@@ -280,7 +289,7 @@ if selected_file_name:
                         spec_fields[f] = st.text_input(f, value=str(data.get(f, "")))
 
             with col2:
-                # Store cache
+                # Capture State
                 current_state = {
                     "general_prompt": gen_prompt, "general_negative": gen_negative,
                     "current_prompt": new_prompt, "negative": new_negative,
@@ -342,15 +351,37 @@ if selected_file_name:
     # ==============================================================================
     with tab_batch:
         if not is_batch_file:
-            st.warning("This is not a batch file.")
-            if st.button("Convert this file to Batch format?"):
-                first_item = data.copy()
-                if "prompt_history" in first_item: del first_item["prompt_history"]
-                first_item["sequence_number"] = 1
-                new_data = {"batch_data": [first_item], "prompt_history": data.get("prompt_history", [])}
-                st.session_state.last_mtime = save_json(file_path, new_data)
-                st.session_state.data_cache = new_data
-                st.rerun()
+            st.warning("This is a Single file. To use Batch mode, create a copy.")
+            
+            # --- CONVERT / CREATE BATCH COPY LOGIC ---
+            if st.button("✨ Create Batch Copy (Preserves Original)"):
+                # 1. Prepare new filename
+                new_name = f"batch_{selected_file_name}"
+                new_path = st.session_state.current_dir / new_name
+                
+                if new_path.exists():
+                    st.error(f"File {new_name} already exists!")
+                else:
+                    # 2. Prepare Data (Current single settings -> First batch item)
+                    first_item = data.copy()
+                    if "prompt_history" in first_item: del first_item["prompt_history"]
+                    first_item["sequence_number"] = 1
+                    
+                    # 3. Create New Structure (Preserving History in root)
+                    new_data = {
+                        "batch_data": [first_item], 
+                        "prompt_history": data.get("prompt_history", [])
+                    }
+                    
+                    # 4. Save New File
+                    save_json(new_path, new_data)
+                    st.toast(f"Created {new_name}", icon="✨")
+                    
+                    # 5. Switch to it (Requires st.rerun to refresh file list)
+                    # We set the file_selector session state to the new name
+                    # (Ensure the radio button uses key="file_selector")
+                    st.session_state.file_selector = new_name
+                    st.rerun()
         else:
             batch_list = data.get("batch_data", [])
             
@@ -390,6 +421,8 @@ if selected_file_name:
                     if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                 new_seq["sequence_number"] = max_seq + 1
                 batch_list.append(new_seq)
+                
+                data["batch_data"] = batch_list # Explicit Update
                 save_json(file_path, data)
                 st.rerun()
 
@@ -409,30 +442,40 @@ if selected_file_name:
                     if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                 new_seq["sequence_number"] = max_seq + 1
                 batch_list.append(new_seq)
+                
+                data["batch_data"] = batch_list # Explicit Update
                 save_json(file_path, data)
                 st.rerun()
 
             # 3. ADD FROM HISTORY
             if btn_c3.button("➕ From History", use_container_width=True, disabled=not history):
                 if selected_hist_str:
+                    # FIX: Correctly parse index and retrieve entry
                     hist_idx = int(selected_hist_str.split(":")[0].replace("#", "")) - 1
                     h_item = history[hist_idx]
                     
                     new_seq = DEFAULTS.copy()
+                    
+                    # Merge data from history item
+                    new_seq.update(h_item)
+                    
+                    # If old history format had 'loras' dict, merge it too
                     if "loras" in h_item and isinstance(h_item["loras"], dict):
                         new_seq.update(h_item["loras"])
-                    
-                    for k, v in h_item.items():
-                        if k not in ["note", "loras"]:
-                            new_seq[k] = v
-                            
+                        
+                    # Clean up non-sequence keys
                     if "prompt_history" in new_seq: del new_seq["prompt_history"]
+                    if "note" in new_seq: del new_seq["note"]
+                    if "loras" in new_seq: del new_seq["loras"] # Remove nested dict if flat keys exist
+                    
                     max_seq = 0
                     for s in batch_list:
                         if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
                     new_seq["sequence_number"] = max_seq + 1
                     
                     batch_list.append(new_seq)
+                    
+                    data["batch_data"] = batch_list # Explicit Update
                     save_json(file_path, data)
                     st.rerun()
 
@@ -458,6 +501,8 @@ if selected_file_name:
                         updated_seq["sequence_number"] = seq_num
                         if "prompt_history" in updated_seq: del updated_seq["prompt_history"]
                         batch_list[i] = updated_seq
+                        
+                        data["batch_data"] = batch_list
                         save_json(file_path, data)
                         st.toast(f"Updated from {import_source_name}!", icon="📥")
                         st.rerun()
@@ -473,6 +518,7 @@ if selected_file_name:
 
                     if b_col3.button("🗑️ Remove", key=f"del_seq_{i}"):
                         batch_list.pop(i)
+                        data["batch_data"] = batch_list
                         save_json(file_path, data)
                         st.rerun()
 
