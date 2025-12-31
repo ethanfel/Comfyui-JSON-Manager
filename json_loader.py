@@ -14,8 +14,9 @@ def read_json_data(json_path):
         return {}
 
 # ==========================================
-# 1. DEDICATED LORA NODE (Existing)
+# 1. STANDARD NODES (Single File)
 # ==========================================
+
 class JSONLoaderLoRA:
     @classmethod
     def INPUT_TYPES(s):
@@ -40,10 +41,6 @@ class JSONLoaderLoRA:
             str(data.get("lora 3 high", "")),
             str(data.get("lora 3 low", ""))
         )
-
-# ==========================================
-# 2. MAIN NODES (Existing)
-# ==========================================
 
 class JSONLoaderStandard:
     @classmethod
@@ -135,8 +132,47 @@ class JSONLoaderVACE:
         )
 
 # ==========================================
-# 3. NEW BATCH NODES
+# 3. BATCH NODES (Sequence Support)
 # ==========================================
+
+# --- NEW: BATCH LORA ---
+class JSONLoaderBatchLoRA:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "json_path": ("STRING", {"default": "", "multiline": False}),
+                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999})
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = (
+        "lora_1_high", "lora_1_low", 
+        "lora_2_high", "lora_2_low", 
+        "lora_3_high", "lora_3_low"
+    )
+    FUNCTION = "load_batch_loras"
+    CATEGORY = "utils/json"
+
+    def load_batch_loras(self, json_path, sequence_number):
+        data = read_json_data(json_path)
+        
+        # Batch Logic
+        target_data = data
+        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
+            idx = sequence_number - 1
+            idx = idx % len(data["batch_data"])
+            target_data = data["batch_data"][idx]
+
+        return (
+            str(target_data.get("lora 1 high", "")),
+            str(target_data.get("lora 1 low", "")),
+            str(target_data.get("lora 2 high", "")),
+            str(target_data.get("lora 2 low", "")),
+            str(target_data.get("lora 3 high", "")),
+            str(target_data.get("lora 3 low", ""))
+        )
 
 class JSONLoaderBatchI2V:
     @classmethod
@@ -163,13 +199,9 @@ class JSONLoaderBatchI2V:
 
     def load_batch_i2v(self, json_path, sequence_number):
         data = read_json_data(json_path)
-        
-        # Batch Logic: Select specific sequence
         target_data = data
         if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            # Adjust 1-based index to 0-based
             idx = sequence_number - 1
-            # Modulo for looping (safely handles index > length)
             idx = idx % len(data["batch_data"])
             target_data = data["batch_data"][idx]
             
@@ -221,8 +253,6 @@ class JSONLoaderBatchVACE:
 
     def load_batch_vace(self, json_path, sequence_number):
         data = read_json_data(json_path)
-        
-        # Batch Logic
         target_data = data
         if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
             idx = sequence_number - 1
@@ -261,6 +291,7 @@ NODE_CLASS_MAPPINGS = {
     "JSONLoaderLoRA": JSONLoaderLoRA,
     "JSONLoaderStandard": JSONLoaderStandard,
     "JSONLoaderVACE": JSONLoaderVACE,
+    "JSONLoaderBatchLoRA": JSONLoaderBatchLoRA,
     "JSONLoaderBatchI2V": JSONLoaderBatchI2V,
     "JSONLoaderBatchVACE": JSONLoaderBatchVACE
 }
@@ -269,6 +300,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "JSONLoaderLoRA": "JSON Loader (LoRAs Only)",
     "JSONLoaderStandard": "JSON Loader (Standard/I2V)",
     "JSONLoaderVACE": "JSON Loader (VACE Full)",
+    "JSONLoaderBatchLoRA": "JSON Batch Loader (LoRAs)",
     "JSONLoaderBatchI2V": "JSON Batch Loader (I2V)",
     "JSONLoaderBatchVACE": "JSON Batch Loader (VACE)"
 }
