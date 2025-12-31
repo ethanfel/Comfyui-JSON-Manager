@@ -11,8 +11,9 @@ def render_single_editor(data, file_path):
 
     col1, col2 = st.columns([2, 1])
     
-    # Unique prefix for this file's widgets
-    fk = file_path.name 
+    # Unique Key + VERSION TOKEN (This forces the refresh)
+    # Every time ui_reset_token increments, all widgets are destroyed and recreated with new values
+    fk = f"{file_path.name}_v{st.session_state.ui_reset_token}"
 
     # --- FORM ---
     with col1:
@@ -22,7 +23,6 @@ def render_single_editor(data, file_path):
 
         st.write("📝 **Specific Prompts**")
         current_prompt_val = data.get("current_prompt", "")
-        # Append logic
         if 'append_prompt' in st.session_state:
             current_prompt_val = (current_prompt_val.strip() + ", " + st.session_state.append_prompt).strip(', ')
             del st.session_state.append_prompt 
@@ -40,7 +40,6 @@ def render_single_editor(data, file_path):
                 st.rerun()
         
         with col_seed_val:
-            # If random button was hit, use that, else use data
             seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
             new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d", key=f"{fk}_seed")
             data["seed"] = new_seed 
@@ -127,7 +126,6 @@ def render_single_editor(data, file_path):
             note = h.get('note', 'No Note')
             
             with st.container():
-                # EDIT MODE
                 if st.session_state.edit_history_idx == idx:
                     with st.expander(f"📝 Editing: {note}", expanded=True):
                         edit_note = st.text_input("Note", value=note, key=f"h_en_{idx}")
@@ -152,43 +150,34 @@ def render_single_editor(data, file_path):
                             st.session_state.edit_history_idx = None
                             st.rerun()
                             
-                # VIEW MODE
                 else:
                     with st.expander(f"#{idx+1}: {note}"):
                         st.caption(f"Seed: {h.get('seed', 0)}")
                         st.text(f"GEN: {h.get('general_prompt', '')[:40]}...")
                         st.text(f"SPEC: {h.get('prompt', '')[:40]}...")
                         
-                        # Full Data View
                         view_data = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'general_prompt', 'general_negative', 'note']}
                         st.json(view_data, expanded=False)
 
                         bh1, bh2, bh3 = st.columns([2, 1, 1])
                         
-                        # --- RESTORE BUTTON FIX ---
                         if bh1.button("Restore", key=f"h_rest_{idx}", use_container_width=True):
-                            # 1. Update Data
                             data.update(h)
                             if 'prompt' in h: data['current_prompt'] = h['prompt']
-                            
-                            # 2. Save
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
                             
-                            # 3. FORCE REFRESH: Clear session state for these widgets
-                            # This forces Streamlit to reload values from 'data' instead of keeping user input
-                            for k in list(st.session_state.keys()):
-                                if k.startswith(fk):
-                                    del st.session_state[k]
+                            # MAGIC FIX: Increment token to force full UI redraw
+                            st.session_state.ui_reset_token += 1
                             
                             st.toast("Restored!", icon="⏪")
                             st.rerun()
                         
-                        if bh2.button("✏️", key=f"h_edit_{idx}", help="Edit in-place"):
+                        if bh2.button("✏️", key=f"h_edit_{idx}"):
                             st.session_state.edit_history_idx = idx
                             st.rerun()
                             
-                        if bh3.button("🗑️", key=f"h_del_{idx}", help="Delete entry"):
+                        if bh3.button("🗑️", key=f"h_del_{idx}"):
                             history.pop(idx)
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
