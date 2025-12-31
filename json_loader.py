@@ -14,7 +14,7 @@ def read_json_data(json_path):
         return {}
 
 # ==========================================
-# 1. DEDICATED LORA NODE (Unchanged)
+# 1. DEDICATED LORA NODE
 # ==========================================
 class JSONLoaderLoRA:
     @classmethod
@@ -42,7 +42,7 @@ class JSONLoaderLoRA:
         )
 
 # ==========================================
-# 2. MAIN NODES (Merged Architecture)
+# 2. MAIN NODES
 # ==========================================
 
 # --- Node A: Standard (I2V) ---
@@ -69,6 +69,9 @@ class JSONLoaderStandard:
         def to_float(val):
             try: return float(val)
             except: return 0.0
+        def to_int(val):
+            try: return int(float(val))
+            except: return 0
 
         return (
             str(data.get("general_prompt", "")),
@@ -77,7 +80,7 @@ class JSONLoaderStandard:
             str(data.get("negative", "")),
             str(data.get("camera", "")),
             to_float(data.get("flf", 0.0)),
-            int(data.get("seed", 0)),
+            to_int(data.get("seed", 0)),
             str(data.get("video file path", "")),
             str(data.get("reference image path", "")),
             str(data.get("flf image path", ""))
@@ -92,7 +95,7 @@ class JSONLoaderVACE:
     RETURN_TYPES = (
         "STRING", "STRING", "STRING", "STRING",  # GenP, GenN, CurP, CurN
         "STRING", "FLOAT", "INT",                # Cam, FLF, Seed
-        "INT", "STRING", "STRING", "STRING", "INT", "INT", # VACE Specs
+        "INT", "INT", "INT", "STRING", "INT", "INT", # VACE Specs
         "STRING", "STRING"                       # Paths
     )
     RETURN_NAMES = (
@@ -123,8 +126,8 @@ class JSONLoaderVACE:
             to_int(data.get("seed", 0)),
             
             to_int(data.get("frame_to_skip", 81)),
-            str(data.get("input_a_frames", "")),
-            str(data.get("input_b_frames", "")),
+            to_int(data.get("input_a_frames", 0)),
+            to_int(data.get("input_b_frames", 0)),
             str(data.get("reference path", "")),
             to_int(data.get("reference switch", 1)),
             to_int(data.get("vace schedule", 1)),
