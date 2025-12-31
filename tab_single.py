@@ -11,17 +11,18 @@ def render_single_editor(data, file_path):
 
     col1, col2 = st.columns([2, 1])
     
+    # Unique prefix for this file's widgets
+    fk = file_path.name 
+
     # --- FORM ---
     with col1:
-        # Generate Unique Keys using filename to force refresh on file switch
-        fk = file_path.name 
-
         with st.expander("🌍 General Prompts (Global Layer)", expanded=False):
             gen_prompt = st.text_area("General Prompt", value=data.get("general_prompt", ""), height=100, key=f"{fk}_gp")
             gen_negative = st.text_area("General Negative", value=data.get("general_negative", DEFAULTS["general_negative"]), height=100, key=f"{fk}_gn")
 
         st.write("📝 **Specific Prompts**")
         current_prompt_val = data.get("current_prompt", "")
+        # Append logic
         if 'append_prompt' in st.session_state:
             current_prompt_val = (current_prompt_val.strip() + ", " + st.session_state.append_prompt).strip(', ')
             del st.session_state.append_prompt 
@@ -39,9 +40,10 @@ def render_single_editor(data, file_path):
                 st.rerun()
         
         with col_seed_val:
+            # If random button was hit, use that, else use data
             seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
             new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d", key=f"{fk}_seed")
-            data["seed"] = new_seed # Update memory immediately
+            data["seed"] = new_seed 
 
         # LoRAs
         st.subheader("LoRAs")
@@ -58,7 +60,6 @@ def render_single_editor(data, file_path):
         spec_fields["camera"] = st.text_input("Camera", value=str(data.get("camera", DEFAULTS["camera"])), key=f"{fk}_cam")
         spec_fields["flf"] = st.text_input("FLF", value=str(data.get("flf", DEFAULTS["flf"])), key=f"{fk}_flf")
         
-        # Conditional Fields based on filename
         if "vace" in file_path.name:
             spec_fields["frame_to_skip"] = st.number_input("Frame to Skip", value=int(data.get("frame_to_skip", 81)), key=f"{fk}_fts")
             spec_fields["input_a_frames"] = st.number_input("Input A Frames", value=int(data.get("input_a_frames", 0)), key=f"{fk}_ia")
@@ -114,7 +115,7 @@ def render_single_editor(data, file_path):
                 st.toast("Archived!", icon="📦")
                 st.rerun()
 
-        # --- FULL HISTORY PANEL (RESTORED) ---
+        # --- FULL HISTORY PANEL ---
         st.markdown("---")
         st.subheader("History")
         history = data.get("prompt_history", [])
@@ -125,9 +126,8 @@ def render_single_editor(data, file_path):
         for idx, h in enumerate(history):
             note = h.get('note', 'No Note')
             
-            # Use a container to visually separate items
             with st.container():
-                # If Editing
+                # EDIT MODE
                 if st.session_state.edit_history_idx == idx:
                     with st.expander(f"📝 Editing: {note}", expanded=True):
                         edit_note = st.text_input("Note", value=note, key=f"h_en_{idx}")
@@ -152,28 +152,35 @@ def render_single_editor(data, file_path):
                             st.session_state.edit_history_idx = None
                             st.rerun()
                             
-                # If Viewing
+                # VIEW MODE
                 else:
                     with st.expander(f"#{idx+1}: {note}"):
                         st.caption(f"Seed: {h.get('seed', 0)}")
-                        # Display Snippets
                         st.text(f"GEN: {h.get('general_prompt', '')[:40]}...")
                         st.text(f"SPEC: {h.get('prompt', '')[:40]}...")
                         
                         # Full Data View
-                        # Filter out large text keys for cleaner JSON view
                         view_data = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'general_prompt', 'general_negative', 'note']}
                         st.json(view_data, expanded=False)
 
-                        # Buttons
                         bh1, bh2, bh3 = st.columns([2, 1, 1])
+                        
+                        # --- RESTORE BUTTON FIX ---
                         if bh1.button("Restore", key=f"h_rest_{idx}", use_container_width=True):
-                            # Restore logic: Copy history values to main data
+                            # 1. Update Data
                             data.update(h)
-                            # Handle naming mapping (history uses 'prompt', root uses 'current_prompt')
                             if 'prompt' in h: data['current_prompt'] = h['prompt']
+                            
+                            # 2. Save
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
+                            
+                            # 3. FORCE REFRESH: Clear session state for these widgets
+                            # This forces Streamlit to reload values from 'data' instead of keeping user input
+                            for k in list(st.session_state.keys()):
+                                if k.startswith(fk):
+                                    del st.session_state[k]
+                            
                             st.toast("Restored!", icon="⏪")
                             st.rerun()
                         
