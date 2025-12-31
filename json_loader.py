@@ -1,7 +1,7 @@
 import json
 import os
 
-# --- Shared Helper ---
+# --- Helper ---
 def read_json_data(json_path):
     if not os.path.exists(json_path):
         print(f"[JSON Loader] Warning: File not found at {json_path}")
@@ -14,7 +14,7 @@ def read_json_data(json_path):
         return {}
 
 # ==========================================
-# 1. DEDICATED LORA NODE
+# 1. DEDICATED LORA NODE (Unchanged)
 # ==========================================
 class JSONLoaderLoRA:
     @classmethod
@@ -42,41 +42,23 @@ class JSONLoaderLoRA:
         )
 
 # ==========================================
-# 2. MAIN NODES (NOW WITH SEED)
+# 2. MAIN NODES (Merged Architecture)
 # ==========================================
 
-# --- Node A: Simple (Global) ---
-class JSONLoaderSimple:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {"json_path": ("STRING", {"default": "", "multiline": False})}}
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "INT") # Added INT
-    RETURN_NAMES = ("current_prompt", "negative", "camera", "seed") # Added seed
-    FUNCTION = "load_simple"
-    CATEGORY = "utils/json"
-
-    def load_simple(self, json_path):
-        data = read_json_data(json_path)
-        return (
-            str(data.get("current_prompt", "")),
-            str(data.get("negative", "")),
-            str(data.get("camera", "")),
-            int(data.get("seed", 0)) # Added seed
-        )
-
-# --- Node B: Standard (I2V / Global Extend) ---
+# --- Node A: Standard (I2V) ---
 class JSONLoaderStandard:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"json_path": ("STRING", {"default": "", "multiline": False})}}
 
     RETURN_TYPES = (
-        "STRING", "STRING", "STRING", "FLOAT", "INT", # Added INT
-        "STRING", "STRING", "STRING"
+        "STRING", "STRING", "STRING", "STRING",  # GenP, GenN, CurP, CurN
+        "STRING", "FLOAT", "INT",                # Cam, FLF, Seed
+        "STRING", "STRING", "STRING"             # Paths
     )
     RETURN_NAMES = (
-        "current_prompt", "negative", "camera", "flf", "seed", # Added seed
+        "general_prompt", "general_negative", "current_prompt", "negative",
+        "camera", "flf", "seed",
         "video_file_path", "reference_image_path", "flf_image_path"
     )
     FUNCTION = "load_standard"
@@ -89,29 +71,33 @@ class JSONLoaderStandard:
             except: return 0.0
 
         return (
+            str(data.get("general_prompt", "")),
+            str(data.get("general_negative", "")),
             str(data.get("current_prompt", "")),
             str(data.get("negative", "")),
             str(data.get("camera", "")),
             to_float(data.get("flf", 0.0)),
-            int(data.get("seed", 0)), # Added seed
+            int(data.get("seed", 0)),
             str(data.get("video file path", "")),
             str(data.get("reference image path", "")),
             str(data.get("flf image path", ""))
         )
 
-# --- Node C: VACE Full ---
+# --- Node B: VACE Full ---
 class JSONLoaderVACE:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"json_path": ("STRING", {"default": "", "multiline": False})}}
 
     RETURN_TYPES = (
-        "STRING", "STRING", "STRING", "FLOAT", "INT", # Added INT
-        "INT", "STRING", "STRING", "STRING", "INT", "INT",
-        "STRING", "STRING"
+        "STRING", "STRING", "STRING", "STRING",  # GenP, GenN, CurP, CurN
+        "STRING", "FLOAT", "INT",                # Cam, FLF, Seed
+        "INT", "STRING", "STRING", "STRING", "INT", "INT", # VACE Specs
+        "STRING", "STRING"                       # Paths
     )
     RETURN_NAMES = (
-        "current_prompt", "negative", "camera", "flf", "seed", # Added seed
+        "general_prompt", "general_negative", "current_prompt", "negative",
+        "camera", "flf", "seed",
         "frame_to_skip", "input_a_frames", "input_b_frames", "reference_path", "reference_switch", "vace_schedule",
         "video_file_path", "reference_image_path"
     )
@@ -128,11 +114,13 @@ class JSONLoaderVACE:
             except: return 0
 
         return (
+            str(data.get("general_prompt", "")),
+            str(data.get("general_negative", "")),
             str(data.get("current_prompt", "")),
             str(data.get("negative", "")),
             str(data.get("camera", "")),
             to_float(data.get("flf", 0.0)),
-            to_int(data.get("seed", 0)), # Added seed
+            to_int(data.get("seed", 0)),
             
             to_int(data.get("frame_to_skip", 81)),
             str(data.get("input_a_frames", "")),
@@ -148,14 +136,12 @@ class JSONLoaderVACE:
 # --- Mappings ---
 NODE_CLASS_MAPPINGS = {
     "JSONLoaderLoRA": JSONLoaderLoRA,
-    "JSONLoaderSimple": JSONLoaderSimple,
     "JSONLoaderStandard": JSONLoaderStandard,
     "JSONLoaderVACE": JSONLoaderVACE
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JSONLoaderLoRA": "JSON Loader (LoRAs Only)",
-    "JSONLoaderSimple": "JSON Loader (Simple/Global)",
     "JSONLoaderStandard": "JSON Loader (Standard/I2V)",
     "JSONLoaderVACE": "JSON Loader (VACE Full)"
 }
