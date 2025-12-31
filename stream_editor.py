@@ -44,8 +44,11 @@ GENERIC_TEMPLATES = ["prompt_i2v.json", "prompt_vace_extend.json", "batch_i2v.js
 # --- Helper Functions ---
 def load_config():
     if CONFIG_FILE.exists():
-        try: with open(CONFIG_FILE, 'r') as f: return json.load(f)
-        except: pass
+        try: 
+            with open(CONFIG_FILE, 'r') as f: 
+                return json.load(f)
+        except: 
+            pass
     return {"last_dir": str(Path.cwd()), "favorites": []}
 
 def save_config(current_dir, favorites):
@@ -54,8 +57,11 @@ def save_config(current_dir, favorites):
 
 def load_snippets():
     if SNIPPETS_FILE.exists():
-        try: with open(SNIPPETS_FILE, 'r') as f: return json.load(f)
-        except: pass
+        try: 
+            with open(SNIPPETS_FILE, 'r') as f: 
+                return json.load(f)
+        except: 
+            pass
     return {}
 
 def save_snippets(snippets):
@@ -81,7 +87,8 @@ def save_json(path, data):
             if isinstance(existing, dict) and isinstance(data, dict):
                 existing.update(data)
                 data = existing
-        except: pass
+        except: 
+            pass
         
     with open(path, 'w') as f:
         json.dump(data, f, indent=4)
