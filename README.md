@@ -1,6 +1,6 @@
 # 🎛️ AI Settings Manager for ComfyUI
 
-A powerful, visual dashboard for managing, versioning, and batch-processing JSON configuration files used in AI video generation workflows (I2V, VACE).
+A 100% vibecoded, visual dashboard for managing, versioning, and batch-processing JSON configuration files used in AI video generation workflows (I2V, VACE).
 
 This tool consists of two parts:
 1.  **Streamlit Web Interface:** A Dockerized editor to manage prompts, LoRAs, and settings.
