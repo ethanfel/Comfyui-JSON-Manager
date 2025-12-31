@@ -378,7 +378,7 @@ if selected_file_name:
         if not is_batch_file:
             st.warning("This is a Single file. To use Batch mode, create a copy.")
             
-            # --- USE CALLBACK HERE TO FIX API ERROR ---
+            # --- USE CALLBACK HERE ---
             st.button("✨ Create Batch Copy (Preserves Original)", 
                      on_click=create_batch_callback, 
                      args=(selected_file_name, data))
@@ -501,33 +501,33 @@ if selected_file_name:
                     # 1. PROMPTS
                     sb_col1, sb_col2 = st.columns([2, 1])
                     with sb_col1:
-                        seq["general_prompt"] = st.text_area("General P", value=seq.get("general_prompt", ""), height=60, key=f"b_gp_{i}")
-                        seq["general_negative"] = st.text_area("General N", value=seq.get("general_negative", ""), height=60, key=f"b_gn_{i}")
-                        seq["current_prompt"] = st.text_area("Specific P", value=seq.get("current_prompt", ""), height=100, key=f"b_sp_{i}")
-                        seq["negative"] = st.text_area("Specific N", value=seq.get("negative", ""), height=60, key=f"b_sn_{i}")
+                        seq["general_prompt"] = st.text_area("General Prompt", value=seq.get("general_prompt", ""), height=60, key=f"b_gp_{i}")
+                        seq["general_negative"] = st.text_area("General Negative", value=seq.get("general_negative", ""), height=60, key=f"b_gn_{i}")
+                        seq["current_prompt"] = st.text_area("Specific Prompt", value=seq.get("current_prompt", ""), height=100, key=f"b_sp_{i}")
+                        seq["negative"] = st.text_area("Specific Negative", value=seq.get("negative", ""), height=60, key=f"b_sn_{i}")
                     
                     with sb_col2:
-                        seq["sequence_number"] = st.number_input("Seq Num", value=int(seq_num), key=f"b_seqn_{i}")
+                        seq["sequence_number"] = st.number_input("Sequence Number", value=int(seq_num), key=f"b_seqn_{i}")
                         seq["seed"] = st.number_input("Seed", value=int(seq.get("seed", 0)), key=f"b_seed_{i}")
                         seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"b_cam_{i}")
                         seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"b_flf_{i}")
                         
                         # Dynamic Paths & Params
                         if "video file path" in seq or "vace" in selected_file_name:
-                            seq["video file path"] = st.text_input("Video Path", value=seq.get("video file path", ""), key=f"b_vid_{i}")
+                            seq["video file path"] = st.text_input("Video File Path", value=seq.get("video file path", ""), key=f"b_vid_{i}")
                             # VACE Params
                             with st.expander("VACE Settings"):
-                                seq["frame_to_skip"] = st.number_input("Skip", value=int(seq.get("frame_to_skip", 81)), key=f"b_fts_{i}")
-                                seq["input_a_frames"] = st.number_input("In A", value=int(seq.get("input_a_frames", 0)), key=f"b_ia_{i}")
-                                seq["input_b_frames"] = st.number_input("In B", value=int(seq.get("input_b_frames", 0)), key=f"b_ib_{i}")
-                                seq["reference switch"] = st.number_input("Switch", value=int(seq.get("reference switch", 1)), key=f"b_rsw_{i}")
-                                seq["vace schedule"] = st.number_input("Sched", value=int(seq.get("vace schedule", 1)), key=f"b_vsc_{i}")
-                                seq["reference path"] = st.text_input("Ref Path", value=seq.get("reference path", ""), key=f"b_rp_{i}")
-                                seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"b_rip_{i}")
+                                seq["frame_to_skip"] = st.number_input("Frame to Skip", value=int(seq.get("frame_to_skip", 81)), key=f"b_fts_{i}")
+                                seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"b_ia_{i}")
+                                seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"b_ib_{i}")
+                                seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"b_rsw_{i}")
+                                seq["vace schedule"] = st.number_input("VACE Schedule", value=int(seq.get("vace schedule", 1)), key=f"b_vsc_{i}")
+                                seq["reference path"] = st.text_input("Reference Path", value=seq.get("reference path", ""), key=f"b_rp_{i}")
+                                seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"b_rip_{i}")
 
                         if "i2v" in selected_file_name and "vace" not in selected_file_name:
-                            seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"b_ref_{i}")
-                            seq["flf image path"] = st.text_input("FLF Img", value=seq.get("flf image path", ""), key=f"b_flfi_{i}")
+                            seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"b_ref_{i}")
+                            seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"b_flfi_{i}")
 
                     # 2. LORAS EXPANDER
                     with st.expander("LoRA Settings"):
