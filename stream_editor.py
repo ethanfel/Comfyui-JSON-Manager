@@ -15,7 +15,7 @@ st.set_page_config(layout="wide", page_title="AI Settings Manager")
 DEFAULTS = {
     "camera": "Camera stand still. Motion starts immediately.",
     "flf": 0,
-    "seed": 0,  # <--- NEW KEY
+    "seed": 0,
     "frame_to_skip": 81,
     "input_a_frames": "",
     "input_b_frames": "",
@@ -25,17 +25,22 @@ DEFAULTS = {
     "video file path": "",
     "reference image path": "",
     "flf image path": "",
-    "current_prompt": "",
-    "negative": "",
+    
+    # --- PROMPTS ---
+    "general_prompt": "",      # NEW: The global layer
+    "general_negative": "Vivid tones, overexposed, static, blurry details, subtitles, style, artwork, painting, picture, still image, overall gray, worst quality, low quality, JPEG compression artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, distorted, disfigured, malformed limbs, fused fingers, unmoving frame, cluttered background, three legs,",
+    "current_prompt": "",      # The specific layer
+    "negative": "",            # The specific layer
+    
+    # --- LORAS ---
     "lora 1 high": "", "lora 1 low": "",
     "lora 2 high": "", "lora 2 low": "",
     "lora 3 high": "", "lora 3 low": "",
     "prompt_history": []
 }
 
-GLOBAL_NEGATIVE = "Vivid tones, overexposed, static, blurry details, subtitles, style, artwork, painting, picture, still image, overall gray, worst quality, low quality, JPEG compression artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, distorted, disfigured, malformed limbs, fused fingers, unmoving frame, cluttered background, three legs,"
-
-GENERIC_TEMPLATES = ["prompt_global.json", "prompt_i2v.json", "prompt_global_extend.json", "prompt_vace_extend.json"]
+# Only these two types exist now
+GENERIC_TEMPLATES = ["prompt_i2v.json", "prompt_vace_extend.json"]
 
 # --- Helper Functions ---
 def load_config():
@@ -90,8 +95,6 @@ def generate_templates(directory):
         data = DEFAULTS.copy()
         if "vace" in filename: 
             data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
-        elif "global" in filename: 
-            data.update({"video file path": "", "negative": GLOBAL_NEGATIVE})
         elif "i2v" in filename: 
             data.update({"reference image path": "", "flf image path": ""})
         save_json(path, data)
@@ -166,7 +169,7 @@ with st.sidebar:
     json_files = [f for f in json_files if f.name != ".editor_config.json" and f.name != ".editor_snippets.json"]
 
     if not json_files:
-        if st.button("Generate Generic Templates"):
+        if st.button("Generate Templates (I2V / VACE)"):
             generate_templates(st.session_state.current_dir)
             st.rerun()
     
@@ -177,7 +180,6 @@ with st.sidebar:
             path = st.session_state.current_dir / new_filename
             data = DEFAULTS.copy()
             if "vace" in new_filename: data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
-            elif "global" in new_filename: data.update({"video file path": "", "negative": GLOBAL_NEGATIVE})
             elif "i2v" in new_filename: data.update({"reference image path": "", "flf image path": ""})
             save_json(path, data)
             st.rerun()
@@ -204,30 +206,33 @@ if selected_file_name:
     col1, col2 = st.columns([2, 1])
     
     with col1:
+        # --- GENERAL SECTION (Collapsible) ---
+        with st.expander("🌍 General Prompts (Global Layer)", expanded=False):
+            gen_prompt = st.text_area("General Prompt", value=data.get("general_prompt", ""), height=100)
+            gen_negative = st.text_area("General Negative", value=data.get("general_negative", DEFAULTS["general_negative"]), height=100)
+
+        # --- SPECIFIC SECTION ---
+        st.write("📝 **Specific Prompts**")
         current_prompt_val = data.get("current_prompt", "")
         if 'append_prompt' in st.session_state:
             current_prompt_val = (current_prompt_val.strip() + ", " + st.session_state.append_prompt).strip(', ')
             del st.session_state.append_prompt 
             
-        new_prompt = st.text_area("Current Prompt", value=current_prompt_val, height=150)
-        new_negative = st.text_area("Negative Prompt", value=data.get("negative", ""), height=100)
+        new_prompt = st.text_area("Specific Prompt", value=current_prompt_val, height=150)
+        new_negative = st.text_area("Specific Negative", value=data.get("negative", ""), height=100)
 
-        # --- SEED SECTION ---
+        # --- SEED ---
         col_seed_val, col_seed_btn = st.columns([4, 1])
         with col_seed_btn:
-            st.write("") # Spacer
+            st.write("") 
             st.write("") 
             if st.button("🎲 Randomize"):
                 st.session_state.rand_seed = random.randint(0, 999999999999)
                 st.rerun()
         
         with col_seed_val:
-            # Use randomized value if triggered, otherwise data value
             seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
-            # IMPORTANT: Sync session state back to None to allow manual edits later if needed, 
-            # but usually keeping it in session state until save is fine.
             new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d")
-            # Update cache immediately so it persists if we change other inputs
             data["seed"] = new_seed 
         
         st.subheader("LoRAs")
@@ -247,8 +252,6 @@ if selected_file_name:
         
         if "vace" in fname:
             fields += ["frame_to_skip", "input_a_frames", "input_b_frames", "reference path", "reference switch", "vace schedule", "video file path"]
-        elif "global" in fname:
-            fields += ["video file path"]
         elif "i2v" in fname:
             fields += ["reference image path", "flf image path"]
             
@@ -266,9 +269,11 @@ if selected_file_name:
             st.error("⚠️ CONFLICT: File changed on disk!")
             c_col1, c_col2 = st.columns(2)
             if c_col1.button("Force Overwrite", type="primary"):
-                data["current_prompt"] = new_prompt
-                data["negative"] = new_negative
-                data["seed"] = new_seed
+                data.update({
+                    "current_prompt": new_prompt, "negative": new_negative,
+                    "general_prompt": gen_prompt, "general_negative": gen_negative,
+                    "seed": new_seed
+                })
                 data.update(loras)
                 data.update(spec_fields)
                 st.session_state.last_mtime = save_json(file_path, data)
@@ -282,9 +287,11 @@ if selected_file_name:
         
         else:
             if st.button("💾 Update File", use_container_width=True):
-                data["current_prompt"] = new_prompt
-                data["negative"] = new_negative
-                data["seed"] = new_seed
+                data.update({
+                    "current_prompt": new_prompt, "negative": new_negative,
+                    "general_prompt": gen_prompt, "general_negative": gen_negative,
+                    "seed": new_seed
+                })
                 data.update(loras)
                 data.update(spec_fields)
                 st.session_state.last_mtime = save_json(file_path, data)
@@ -296,8 +303,8 @@ if selected_file_name:
             archive_note = st.text_input("Archive Note (Optional)", placeholder="e.g. V1 with high motion")
             if st.button("📦 Snapshot to History", use_container_width=True):
                 entry = {
-                    "prompt": new_prompt, 
-                    "negative": new_negative, 
+                    "general_prompt": gen_prompt, "general_negative": gen_negative,
+                    "prompt": new_prompt, "negative": new_negative, 
                     "seed": new_seed,
                     "note": archive_note if archive_note else f"Snapshot {len(data.get('prompt_history', [])) + 1}",
                     "loras": loras, 
@@ -305,8 +312,10 @@ if selected_file_name:
                 }
                 if "prompt_history" not in data: data["prompt_history"] = []
                 data["prompt_history"].insert(0, entry)
+                # Update main state too
                 data.update(entry)
-                data["current_prompt"] = new_prompt 
+                data["current_prompt"] = new_prompt
+                
                 st.session_state.last_mtime = save_json(file_path, data)
                 st.session_state.data_cache = data
                 st.toast("Archived & Saved!", icon="📦")
@@ -340,14 +349,12 @@ if selected_file_name:
     
     h_head_1, h_head_2 = st.columns([1, 2])
     h_head_1.subheader(f"History ({len(history)})")
-    search_term = h_head_2.text_input("🔍 Search History", placeholder="Filter by prompt keyword or note...").lower()
+    search_term = h_head_2.text_input("🔍 Search History", placeholder="Filter...").lower()
 
     if history:
         for idx, h in enumerate(history):
             note_text = str(h.get('note', '')).lower()
-            prompt_text = str(h.get('prompt', '')).lower()
-            if search_term and (search_term not in note_text and search_term not in prompt_text):
-                continue
+            if search_term and search_term not in note_text: continue
 
             note_title = h.get('note', 'No Note') or "No Note"
             expander_label = f"#{idx+1}: {note_title}"
@@ -355,22 +362,28 @@ if selected_file_name:
             with st.container():
                 if st.session_state.edit_history_idx == idx:
                     with st.expander(f"📝 EDITING: {note_title}", expanded=True):
-                        st.info("Editing History Entry (In-Place)")
+                        st.info("Editing History Entry")
                         edit_note = st.text_input("Note", value=h.get('note', ''), key=f"edit_note_{idx}")
                         
-                        # --- ADDED SEED EDITING HERE ---
                         ec_seed1, ec_seed2 = st.columns([1, 3])
                         edit_seed = ec_seed1.number_input("Seed", value=int(h.get('seed', 0)), step=1, key=f"edit_seed_{idx}")
                         
-                        edit_prompt = st.text_area("Prompt", value=h.get('prompt', ''), height=150, key=f"edit_prompt_{idx}")
-                        edit_negative = st.text_area("Negative", value=h.get('negative', ''), height=80, key=f"edit_neg_{idx}")
+                        # EDIT ALL PROMPTS
+                        st.caption("General Layer")
+                        edit_gen_p = st.text_area("Gen Prompt", value=h.get('general_prompt', ''), height=60, key=f"egp_{idx}")
+                        edit_gen_n = st.text_area("Gen Negative", value=h.get('general_negative', ''), height=60, key=f"egn_{idx}")
+                        
+                        st.caption("Specific Layer")
+                        edit_prompt = st.text_area("Prompt", value=h.get('prompt', ''), height=100, key=f"edit_prompt_{idx}")
+                        edit_negative = st.text_area("Negative", value=h.get('negative', ''), height=60, key=f"edit_neg_{idx}")
                         
                         ec1, ec2 = st.columns([1, 4])
                         if ec1.button("💾 Save", key=f"save_edit_{idx}", type="primary"):
-                            h['note'] = edit_note
-                            h['seed'] = edit_seed
-                            h['prompt'] = edit_prompt
-                            h['negative'] = edit_negative
+                            h.update({
+                                'note': edit_note, 'seed': edit_seed,
+                                'general_prompt': edit_gen_p, 'general_negative': edit_gen_n,
+                                'prompt': edit_prompt, 'negative': edit_negative
+                            })
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
                             st.session_state.edit_history_idx = None
@@ -385,11 +398,12 @@ if selected_file_name:
                         col_h1, col_h2 = st.columns([3, 1])
                         
                         with col_h1:
-                            st.caption(f"📝 Prompt (Seed: {h.get('seed', 0)})")
-                            st.text(h.get('prompt', ''))
+                            st.caption(f"📝 Prompts (Seed: {h.get('seed', 0)})")
+                            # Show combined snippet
+                            st.text(f"GEN: {h.get('general_prompt', '')[:50]}...\nSPEC: {h.get('prompt', '')[:50]}...")
                             
                             st.caption("🧩 LoRAs & Files")
-                            info_dict = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'note', 'seed'] and v}
+                            info_dict = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'general_prompt', 'general_negative', 'note', 'seed'] and v}
                             if 'loras' in h and isinstance(h['loras'], dict):
                                 info_dict.update({k:v for k,v in h['loras'].items() if v})
                                 if 'loras' in info_dict: del info_dict['loras']
@@ -402,11 +416,14 @@ if selected_file_name:
                                 else:
                                     data["current_prompt"] = h.get("prompt", "")
                                     data["negative"] = h.get("negative", "")
+                                    data["general_prompt"] = h.get("general_prompt", "")
+                                    data["general_negative"] = h.get("general_negative", "")
                                     data["seed"] = int(h.get("seed", 0))
+                                    
                                     if "loras" in h and isinstance(h["loras"], dict):
                                         data.update(h["loras"])
                                     for k, v in h.items():
-                                        if k not in ["note", "prompt", "loras", "negative", "seed"]:
+                                        if k not in ["note", "prompt", "loras", "negative", "seed", "general_prompt", "general_negative"]:
                                             data[k] = v
                                     
                                     st.session_state.last_mtime = save_json(file_path, data)
