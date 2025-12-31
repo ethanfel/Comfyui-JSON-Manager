@@ -1,7 +1,6 @@
 import streamlit as st
 from utils import DEFAULTS, save_json, load_json
 
-# Callback for creating batch file
 def create_batch_callback(original_filename, current_data, current_dir):
     new_name = f"batch_{original_filename}"
     new_path = current_dir / new_name
@@ -51,13 +50,11 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     bc1, bc2, bc3 = st.columns(3)
     
-    # Helper to add sequence
     def add_sequence(new_item):
         max_seq = 0
         for s in batch_list:
             if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
         new_item["sequence_number"] = max_seq + 1
-        # Cleanup
         for k in ["prompt_history", "note", "loras"]: 
             if k in new_item: del new_item[k]
         
@@ -71,7 +68,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     if bc2.button("➕ From File", use_container_width=True, help=f"Copy {src_name}"):
         item = DEFAULTS.copy()
-        # Flatten logic
         flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
         item.update(flat)
         add_sequence(item)
@@ -92,12 +88,11 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     for i, seq in enumerate(batch_list):
         seq_num = seq.get("sequence_number", i+1)
-        # Unique prefix for this sequence in this file
         prefix = f"{selected_file_name}_seq{i}" 
 
         with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
-            # Header Buttons
             b1, b2, b3 = st.columns([1, 1, 2])
+            
             if b1.button(f"📥 Copy {src_name}", key=f"{prefix}_copy"):
                 item = DEFAULTS.copy()
                 flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
@@ -107,6 +102,12 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 batch_list[i] = item
                 data["batch_data"] = batch_list
                 save_json(file_path, data)
+                
+                # FORCE UI REFRESH
+                for k in list(st.session_state.keys()):
+                    if k.startswith(prefix):
+                        del st.session_state[k]
+                
                 st.toast("Copied!", icon="📥")
                 st.rerun()
 
@@ -124,7 +125,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 save_json(file_path, data)
                 st.rerun()
 
-            # Fields
             st.markdown("---")
             c1, c2 = st.columns([2, 1])
             with c1:
@@ -139,7 +139,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"{prefix}_cam")
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 
-                # Dynamic Paths
                 if "video file path" in seq or "vace" in selected_file_name:
                     seq["video file path"] = st.text_input("Video Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
                     with st.expander("VACE Settings"):
