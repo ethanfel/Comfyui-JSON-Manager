@@ -1,4 +1,5 @@
 import streamlit as st
+import random
 from utils import DEFAULTS, save_json, load_json
 
 def create_batch_callback(original_filename, current_data, current_dir):
@@ -60,7 +61,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         batch_list.append(new_item)
         data["batch_data"] = batch_list
         save_json(file_path, data)
-        st.session_state.ui_reset_token += 1 # Force refresh
+        st.session_state.ui_reset_token += 1
         st.rerun()
 
     if bc1.button("➕ Add Empty", use_container_width=True):
@@ -87,10 +88,9 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     for i, seq in enumerate(batch_list):
         seq_num = seq.get("sequence_number", i+1)
-        # Apply version token here too
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
-        with st.expander(f"🎬 Sequence #{seq_num} : {seq.get('current_prompt', '')[:40]}...", expanded=False):
+        with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
             b1, b2, b3 = st.columns([1, 1, 2])
             
             if b1.button(f"📥 Copy {src_name}", key=f"{prefix}_copy"):
@@ -102,7 +102,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 batch_list[i] = item
                 data["batch_data"] = batch_list
                 save_json(file_path, data)
-                st.session_state.ui_reset_token += 1 # Force refresh
+                st.session_state.ui_reset_token += 1 
                 st.toast("Copied!", icon="📥")
                 st.rerun()
 
@@ -130,7 +130,20 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             
             with c2:
                 seq["sequence_number"] = st.number_input("Seq Num", value=int(seq_num), key=f"{prefix}_sn_val")
-                seq["seed"] = st.number_input("Seed", value=int(seq.get("seed", 0)), key=f"{prefix}_seed")
+                
+                # --- FIXED SEED ROW ---
+                s_row1, s_row2 = st.columns([3, 1])
+                seed_key = f"{prefix}_seed"
+                with s_row2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🎲", key=f"{prefix}_rand"):
+                        st.session_state[seed_key] = random.randint(0, 999999999999)
+                        st.rerun()
+                with s_row1:
+                    seq["seed"] = st.number_input("Seed", value=int(seq.get("seed", 0)), key=seed_key)
+                # -----------------------
+
                 seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"{prefix}_cam")
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 
