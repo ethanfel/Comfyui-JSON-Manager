@@ -11,7 +11,7 @@ def render_single_editor(data, file_path):
 
     col1, col2 = st.columns([2, 1])
     
-    # Unique prefix for this file's widgets
+    # Unique prefix for this file's widgets + Version Token
     fk = f"{file_path.name}_v{st.session_state.ui_reset_token}"
 
     # --- FORM ---
@@ -29,23 +29,21 @@ def render_single_editor(data, file_path):
         new_prompt = st.text_area("Specific Prompt", value=current_prompt_val, height=150, key=f"{fk}_sp")
         new_negative = st.text_area("Specific Negative", value=data.get("negative", ""), height=100, key=f"{fk}_sn")
 
-        # --- SEED SECTION (FIXED) ---
+        # Seed
         col_seed_val, col_seed_btn = st.columns([4, 1])
-        seed_key = f"{fk}_seed"  # Defined key here
+        seed_key = f"{fk}_seed"
 
         with col_seed_btn:
             st.write("") 
             st.write("") 
             if st.button("🎲 Randomize", key=f"{fk}_rand"):
-                # DIRECTLY update the widget state
                 st.session_state[seed_key] = random.randint(0, 999999999999)
                 st.rerun()
         
         with col_seed_val:
-            # Streamlit will prioritize session_state[seed_key] if it exists
-            new_seed = st.number_input("Seed", value=int(data.get("seed", 0)), step=1, min_value=0, format="%d", key=seed_key)
+            seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
+            new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d", key=seed_key)
             data["seed"] = new_seed 
-        # ----------------------------
 
         # LoRAs
         st.subheader("LoRAs")
@@ -74,13 +72,63 @@ def render_single_editor(data, file_path):
             for f in ["reference image path", "flf image path", "video file path"]:
                 spec_fields[f] = st.text_input(f.title(), value=str(data.get(f, "")), key=f"{fk}_{f}")
 
+        # --- CUSTOM PARAMETERS LOGIC ---
+        st.markdown("---")
+        st.subheader("🔧 Custom Parameters")
+        
+        # 1. Identify Custom Keys (Not in Defaults, not Reserved)
+        reserved = set(DEFAULTS.keys()) | {'batch_data', 'prompt_history', 'sequence_number', 'ui_reset_token'}
+        custom_keys = [k for k in data.keys() if k not in reserved]
+        
+        keys_to_remove = []
+
+        # 2. Render Existing Custom Keys
+        if custom_keys:
+            for k in custom_keys:
+                c1, c2, c3 = st.columns([1, 2, 0.5])
+                c1.text_input("Key", value=k, disabled=True, key=f"{fk}_ck_lbl_{k}", label_visibility="collapsed")
+                # Using key-specific widget ID to ensure values persist correctly
+                val = c2.text_input("Value", value=str(data[k]), key=f"{fk}_cv_{k}", label_visibility="collapsed")
+                data[k] = val # Update memory
+                
+                if c3.button("🗑️", key=f"{fk}_cdel_{k}"):
+                    keys_to_remove.append(k)
+        else:
+            st.caption("No custom keys added.")
+
+        # 3. Add New Key Interface
+        with st.expander("➕ Add New Parameter"):
+            nk_col, nv_col = st.columns(2)
+            new_k = nk_col.text_input("Key Name", key=f"{fk}_new_k")
+            new_v = nv_col.text_input("Value", key=f"{fk}_new_v")
+            
+            if st.button("Add Parameter", key=f"{fk}_add_cust"):
+                if new_k and new_k not in data:
+                    data[new_k] = new_v
+                    st.rerun()
+                elif new_k in data:
+                    st.error(f"Key '{new_k}' already exists!")
+
+        # Apply Removals
+        if keys_to_remove:
+            for k in keys_to_remove:
+                del data[k]
+            st.rerun()
+
     # --- ACTIONS & HISTORY ---
     with col2:
+        # Capture Standard Fields
         current_state = {
             "general_prompt": gen_prompt, "general_negative": gen_negative,
             "current_prompt": new_prompt, "negative": new_negative,
             "seed": new_seed, **loras, **spec_fields
         }
+        
+        # MERGE CUSTOM KEYS into current_state so they get saved to disk/history
+        for k in custom_keys:
+            if k not in keys_to_remove:
+                current_state[k] = data[k]
+
         st.session_state.single_editor_cache = current_state
 
         st.subheader("Actions")
@@ -131,19 +179,22 @@ def render_single_editor(data, file_path):
             with st.container():
                 if st.session_state.edit_history_idx == idx:
                     with st.expander(f"📝 Editing: {note}", expanded=True):
+                        # Edit Standard fields
                         edit_note = st.text_input("Note", value=note, key=f"h_en_{idx}")
                         edit_seed = st.number_input("Seed", value=int(h.get('seed', 0)), key=f"h_es_{idx}")
                         edit_gp = st.text_area("General P", value=h.get('general_prompt', ''), height=60, key=f"h_egp_{idx}")
-                        edit_gn = st.text_area("General N", value=h.get('general_negative', ''), height=60, key=f"h_egn_{idx}")
                         edit_sp = st.text_area("Specific P", value=h.get('prompt', ''), height=100, key=f"h_esp_{idx}")
-                        edit_sn = st.text_area("Specific N", value=h.get('negative', ''), height=60, key=f"h_esn_{idx}")
+                        
+                        # --- Custom Key Editing in History ---
+                        # We won't build a full dynamic editor here for simplicity, 
+                        # but we preserve existing custom keys when saving.
                         
                         hc1, hc2 = st.columns([1, 4])
                         if hc1.button("💾 Save", key=f"h_save_{idx}"):
                             h.update({
                                 'note': edit_note, 'seed': edit_seed,
-                                'general_prompt': edit_gp, 'general_negative': edit_gn,
-                                'prompt': edit_sp, 'negative': edit_sn
+                                'general_prompt': edit_gp, 
+                                'prompt': edit_sp
                             })
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
@@ -156,9 +207,9 @@ def render_single_editor(data, file_path):
                 else:
                     with st.expander(f"#{idx+1}: {note}"):
                         st.caption(f"Seed: {h.get('seed', 0)}")
-                        st.text(f"GEN: {h.get('general_prompt', '')[:40]}...")
                         st.text(f"SPEC: {h.get('prompt', '')[:40]}...")
                         
+                        # Show Custom Keys in the JSON view
                         view_data = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'general_prompt', 'general_negative', 'note']}
                         st.json(view_data, expanded=False)
 
@@ -169,9 +220,7 @@ def render_single_editor(data, file_path):
                             if 'prompt' in h: data['current_prompt'] = h['prompt']
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
-                            
                             st.session_state.ui_reset_token += 1
-                            
                             st.toast("Restored!", icon="⏪")
                             st.rerun()
                         
