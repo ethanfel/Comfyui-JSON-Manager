@@ -86,11 +86,14 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     st.markdown("---")
     st.info(f"Batch contains {len(batch_list)} sequences.")
 
+    # Identify reserved keys to filter out standard fields
+    reserved = set(DEFAULTS.keys()) | {'sequence_number', 'prompt_history', 'note', 'batch_data'}
+
     for i, seq in enumerate(batch_list):
         seq_num = seq.get("sequence_number", i+1)
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
-        with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
+        with st.expander(f"🎬 Sequence #{seq_num} : {seq.get('current_prompt', '')[:40]}...", expanded=False):
             b1, b2, b3 = st.columns([1, 1, 2])
             
             if b1.button(f"📥 Copy {src_name}", key=f"{prefix}_copy"):
@@ -131,7 +134,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with c2:
                 seq["sequence_number"] = st.number_input("Seq Num", value=int(seq_num), key=f"{prefix}_sn_val")
                 
-                # --- FIXED SEED ROW ---
+                # Random Seed Button
                 s_row1, s_row2 = st.columns([3, 1])
                 seed_key = f"{prefix}_seed"
                 with s_row2:
@@ -142,7 +145,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                         st.rerun()
                 with s_row1:
                     seq["seed"] = st.number_input("Seed", value=int(seq.get("seed", 0)), key=seed_key)
-                # -----------------------
 
                 seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"{prefix}_cam")
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
@@ -168,6 +170,44 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 for li, lk in enumerate(lkeys):
                     with (lc1 if li % 2 == 0 else lc2):
                         seq[lk] = st.text_input(lk.title(), value=seq.get(lk, ""), key=f"{prefix}_{lk}")
+
+            # --- CUSTOM PARAMETERS (Sequence Level) ---
+            st.markdown("---")
+            st.subheader("🔧 Custom Parameters")
+            
+            # Identify
+            custom_keys = [k for k in seq.keys() if k not in reserved]
+            keys_to_remove = []
+
+            if custom_keys:
+                for k in custom_keys:
+                    cc1, cc2, cc3 = st.columns([1, 2, 0.5])
+                    cc1.text_input("Key", value=k, disabled=True, key=f"{prefix}_ck_{k}", label_visibility="collapsed")
+                    val = cc2.text_input("Value", value=str(seq[k]), key=f"{prefix}_cv_{k}", label_visibility="collapsed")
+                    seq[k] = val # Update
+                    
+                    if cc3.button("🗑️", key=f"{prefix}_cdel_{k}"):
+                        keys_to_remove.append(k)
+            else:
+                st.caption("No custom keys.")
+
+            # Add New
+            with st.expander("➕ Add Parameter"):
+                nk_col, nv_col, nbtn_col = st.columns([1, 1, 0.5])
+                new_k = nk_col.text_input("Key", key=f"{prefix}_nk", placeholder="e.g. motion_scale")
+                new_v = nv_col.text_input("Value", key=f"{prefix}_nv", placeholder="1.5")
+                if nbtn_col.button("Add", key=f"{prefix}_add_cust"):
+                    if new_k and new_k not in seq:
+                        seq[new_k] = new_v
+                        save_json(file_path, data)
+                        st.rerun()
+
+            # Apply Removals
+            if keys_to_remove:
+                for k in keys_to_remove:
+                    del seq[k]
+                save_json(file_path, data)
+                st.rerun()
 
     st.markdown("---")
     if st.button("💾 Save Batch Changes"):
