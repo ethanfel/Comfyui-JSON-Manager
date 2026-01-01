@@ -11,8 +11,7 @@ def render_single_editor(data, file_path):
 
     col1, col2 = st.columns([2, 1])
     
-    # Unique Key + VERSION TOKEN (This forces the refresh)
-    # Every time ui_reset_token increments, all widgets are destroyed and recreated with new values
+    # Unique prefix for this file's widgets
     fk = f"{file_path.name}_v{st.session_state.ui_reset_token}"
 
     # --- FORM ---
@@ -30,19 +29,23 @@ def render_single_editor(data, file_path):
         new_prompt = st.text_area("Specific Prompt", value=current_prompt_val, height=150, key=f"{fk}_sp")
         new_negative = st.text_area("Specific Negative", value=data.get("negative", ""), height=100, key=f"{fk}_sn")
 
-        # Seed
+        # --- SEED SECTION (FIXED) ---
         col_seed_val, col_seed_btn = st.columns([4, 1])
+        seed_key = f"{fk}_seed"  # Defined key here
+
         with col_seed_btn:
             st.write("") 
             st.write("") 
             if st.button("🎲 Randomize", key=f"{fk}_rand"):
-                st.session_state.rand_seed = random.randint(0, 999999999999)
+                # DIRECTLY update the widget state
+                st.session_state[seed_key] = random.randint(0, 999999999999)
                 st.rerun()
         
         with col_seed_val:
-            seed_val = st.session_state.get('rand_seed', int(data.get("seed", 0)))
-            new_seed = st.number_input("Seed", value=seed_val, step=1, min_value=0, format="%d", key=f"{fk}_seed")
+            # Streamlit will prioritize session_state[seed_key] if it exists
+            new_seed = st.number_input("Seed", value=int(data.get("seed", 0)), step=1, min_value=0, format="%d", key=seed_key)
             data["seed"] = new_seed 
+        # ----------------------------
 
         # LoRAs
         st.subheader("LoRAs")
@@ -167,7 +170,6 @@ def render_single_editor(data, file_path):
                             st.session_state.last_mtime = save_json(file_path, data)
                             st.session_state.data_cache = data
                             
-                            # MAGIC FIX: Increment token to force full UI redraw
                             st.session_state.ui_reset_token += 1
                             
                             st.toast("Restored!", icon="⏪")
