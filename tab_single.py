@@ -1,7 +1,7 @@
 import streamlit as st
 import random
 import json
-from utils import DEFAULTS, save_json, get_file_mtime, render_smart_input
+from utils import DEFAULTS, save_json, get_file_mtime
 from history_tree import HistoryTree 
 
 def render_single_editor(data, file_path):
@@ -15,23 +15,13 @@ def render_single_editor(data, file_path):
     if st.session_state.last_mtime != 0 and current_mtime > st.session_state.last_mtime:
         st.error("⚠️ File has been modified externally! Save will overwrite.")
 
-    # --- TOP ROW: MODELS (SMART INPUTS) ---
+    # --- TOP ROW: MODELS ---
     st.subheader("🤖 Models")
     c1, c2 = st.columns(2)
-    
-    # Access metadata from session state
-    meta = st.session_state.get("comfy_meta", {})
-    ckpts = meta.get("checkpoints", [])
-    vaes = meta.get("vaes", [])
-    
     with c1:
-        data["model_name"] = render_smart_input(
-            "Checkpoint", "s_model", data.get("model_name", ""), ckpts
-        )
+        data["model_name"] = st.text_input("Checkpoint", value=data.get("model_name", ""))
     with c2:
-        data["vae_name"] = render_smart_input(
-            "VAE", "s_vae", data.get("vae_name", ""), vaes
-        )
+        data["vae_name"] = st.text_input("VAE", value=data.get("vae_name", ""))
 
     # --- PROMPTS ---
     st.markdown("---")
@@ -84,32 +74,19 @@ def render_single_editor(data, file_path):
         data["video file path"] = st.text_input("Video Input Path", value=data.get("video file path", ""))
         data["reference image path"] = st.text_input("Reference Image Path", value=data.get("reference image path", ""))
 
-    # --- LORAS (SMART INPUTS) ---
+    # --- LORAS (Reverted to plain text to avoid float/string crashes) ---
     st.subheader("💊 LoRAs")
-    lora_list = meta.get("loras", [])
+    l1, l2, l3 = st.columns(3)
     
-    l1, l2 = st.columns(2)
-    
-    def lora_row(col, num):
-        with col:
-            st.caption(f"LoRA {num}")
-            k_high = f"lora {num} high"
-            k_low = f"lora {num} low"
-            
-            # SMART INPUT for Name
-            data[k_high] = render_smart_input(
-                "Model", f"s_l{num}_h", data.get(k_high, ""), lora_list
-            )
-            # Slider for Strength
-            try:
-                val = float(data.get(k_low, 1.0))
-            except:
-                val = 1.0
-            data[k_low] = st.slider("Strength", 0.0, 2.0, val, 0.05, key=f"s_l{num}_l")
-
-    lora_row(l1, 1)
-    lora_row(l2, 2)
-    lora_row(l1, 3)
+    with l1:
+        data["lora 1 high"] = st.text_input("LoRA 1 Name", value=data.get("lora 1 high", ""))
+        data["lora 1 low"] = st.text_input("LoRA 1 Strength", value=str(data.get("lora 1 low", "")))
+    with l2:
+        data["lora 2 high"] = st.text_input("LoRA 2 Name", value=data.get("lora 2 high", ""))
+        data["lora 2 low"] = st.text_input("LoRA 2 Strength", value=str(data.get("lora 2 low", "")))
+    with l3:
+        data["lora 3 high"] = st.text_input("LoRA 3 Name", value=data.get("lora 3 high", ""))
+        data["lora 3 low"] = st.text_input("LoRA 3 Strength", value=str(data.get("lora 3 low", "")))
 
     # --- CUSTOM PARAMETERS ---
     st.markdown("---")
@@ -155,7 +132,6 @@ def render_single_editor(data, file_path):
         with st.popover("📸 Save Snapshot (History)", use_container_width=True):
             note = st.text_input("Snapshot Note", placeholder="e.g. Changed lighting")
             if st.button("Confirm Snapshot"):
-                # Commit to History Tree
                 tree_data = data.get("history_tree", {})
                 htree = HistoryTree(tree_data)
                 
