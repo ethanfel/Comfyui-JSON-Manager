@@ -91,6 +91,14 @@ def save_json(path, data):
     with open(path, 'w') as f:
         json.dump(data, f, indent=4)
 
+# --- MISSING FUNCTION RESTORED HERE ---
+def get_file_mtime(path):
+    """Returns the modification time of a file, or 0 if it doesn't exist."""
+    path = Path(path)
+    if path.exists():
+        return path.stat().st_mtime
+    return 0
+
 def generate_templates(current_dir):
     """Creates dummy template files if folder is empty."""
     save_json(current_dir / "template_i2v.json", DEFAULTS)
