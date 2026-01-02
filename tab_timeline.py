@@ -24,18 +24,15 @@ def render_timeline_tab(data, file_path):
     st.markdown("---")
 
     # 3. The "Scrubber" / Inspector
-    # Since we can't click the graph directly easily, we use a selectbox as our "Time Scrubber"
     col_sel, col_act = st.columns([3, 1])
     
     all_nodes = list(htree.nodes.values())
     all_nodes.sort(key=lambda x: x["timestamp"], reverse=True) # Newest first
     
-    # Format: "Note (ID) - [Branch]"
     def fmt_node(n):
         return f"{n.get('note', 'Step')} ({n['id']})"
 
     with col_sel:
-        # Default to current HEAD
         current_idx = 0
         for i, n in enumerate(all_nodes):
             if n["id"] == htree.head_id:
@@ -56,10 +53,6 @@ def render_timeline_tab(data, file_path):
         st.info(f"Viewing State: **{selected_node.get('note')}** (ID: {selected_node['id']})")
         
         with st.expander("📝 View / Edit Data for this Point", expanded=True):
-            # We show raw JSON here for total control since it's an advanced tab
-            # But you can edit specific keys if you want to be granular
-            
-            # Editable JSON Text Area
             edited_json_str = st.text_area(
                 "Raw Data (JSON)", 
                 value=json.dumps(node_data, indent=4), 
@@ -68,7 +61,7 @@ def render_timeline_tab(data, file_path):
         
         # 5. Restore / Branch Button
         with col_act:
-            st.write("") # Spacer
+            st.write("") 
             st.write("")
             if st.button("⏪ Restore & Branch", type="primary", use_container_width=True):
                 try:
@@ -77,11 +70,7 @@ def render_timeline_tab(data, file_path):
                     # 1. Update the Main Data
                     data.update(new_data_content)
                     
-                    # 2. Update the Tree (Move HEAD to this node)
-                    # If the user EDITED the JSON, we should probably commit a NEW node automatically
-                    # But if they just clicked restore, we move HEAD.
-                    
-                    # Logic: Just move head to selected, then saving in future will branch.
+                    # 2. Move Head
                     htree.head_id = selected_node['id']
                     
                     # 3. Save to Disk
@@ -90,7 +79,9 @@ def render_timeline_tab(data, file_path):
                     
                     # 4. Reset UI
                     st.session_state.ui_reset_token += 1
-                    st.toast(f"Restored to {selected_node['id']}!", icon="↺")
+                    
+                    # FIXED: Changed icon to standard 'Refresh' emoji
+                    st.toast(f"Restored to {selected_node['id']}!", icon="🔄")
                     st.rerun()
                     
                 except json.JSONDecodeError:
@@ -104,7 +95,7 @@ def render_timeline_tab(data, file_path):
                 # Fix branches pointing to this
                 for b, tip in list(htree.branches.items()):
                     if tip == selected_node['id']:
-                        del htree.branches[b] # Prune broken branch tip
+                        del htree.branches[b] 
                 
                 data["history_tree"] = htree.to_dict()
                 save_json(file_path, data)
