@@ -5,7 +5,6 @@ from history_tree import HistoryTree
 from utils import save_json
 
 def render_timeline_tab(data, file_path):
-    # 1. Initialize Tree
     tree_data = data.get("history_tree", {})
     if not tree_data:
         st.info("No history timeline exists for this file yet. Make some changes in the Editor first!")
@@ -13,21 +12,24 @@ def render_timeline_tab(data, file_path):
 
     htree = HistoryTree(tree_data)
 
-    # 2. Horizontal Visualizer (Fusion 360 Style)
-    st.subheader("🕰️ Version History")
+    # 1. STATUS INDICATOR
+    if 'restored_indicator' in st.session_state and st.session_state.restored_indicator:
+        st.info(f"📍 You are currently viewing restored version: **{st.session_state.restored_indicator}**")
+
+    # 2. Horizontal Visualizer (Compact)
+    st.caption("Timeline")
     try:
         graph_dot = htree.generate_horizontal_graph()
         st.graphviz_chart(graph_dot, use_container_width=True)
     except Exception as e:
-        st.error(f"Graph Error (Ensure 'graphviz' is installed in Docker): {e}")
+        st.error(f"Graph Error: {e}")
 
     st.markdown("---")
 
-    # 3. The "Scrubber" / Inspector
     col_sel, col_act = st.columns([3, 1])
     
     all_nodes = list(htree.nodes.values())
-    all_nodes.sort(key=lambda x: x["timestamp"], reverse=True) # Newest first
+    all_nodes.sort(key=lambda x: x["timestamp"], reverse=True) 
     
     def fmt_node(n):
         return f"{n.get('note', 'Step')} ({n['id']})"
@@ -40,59 +42,49 @@ def render_timeline_tab(data, file_path):
                 break
                 
         selected_node = st.selectbox(
-            "Inspect Node (Select to View/Edit):", 
+            "Inspect Node:", 
             all_nodes, 
             format_func=fmt_node,
             index=current_idx
         )
 
-    # 4. The Editor (Inspector Panel)
     if selected_node:
         node_data = selected_node["data"]
         
-        st.info(f"Viewing State: **{selected_node.get('note')}** (ID: {selected_node['id']})")
-        
-        with st.expander("📝 View / Edit Data for this Point", expanded=True):
+        with st.expander(f"📝 Data Inspector: {selected_node.get('note')}", expanded=False):
             edited_json_str = st.text_area(
-                "Raw Data (JSON)", 
+                "Raw Data", 
                 value=json.dumps(node_data, indent=4), 
                 height=300
             )
         
-        # 5. Restore / Branch Button
         with col_act:
-            st.write("") 
-            st.write("")
-            if st.button("⏪ Restore & Branch", type="primary", use_container_width=True):
+            st.write(""); st.write("")
+            if st.button("⏪ Restore", type="primary", use_container_width=True):
                 try:
                     new_data_content = json.loads(edited_json_str)
-                    
-                    # 1. Update the Main Data
                     data.update(new_data_content)
-                    
-                    # 2. Move Head
                     htree.head_id = selected_node['id']
                     
-                    # 3. Save to Disk
                     data["history_tree"] = htree.to_dict()
                     save_json(file_path, data)
                     
-                    # 4. Reset UI
                     st.session_state.ui_reset_token += 1
                     
-                    # FIXED: Changed icon to standard 'Refresh' emoji
+                    # SET INDICATOR
+                    node_label = f"{selected_node.get('note', 'Step')} ({selected_node['id'][:4]})"
+                    st.session_state.restored_indicator = node_label
+                    
                     st.toast(f"Restored to {selected_node['id']}!", icon="🔄")
                     st.rerun()
                     
                 except json.JSONDecodeError:
-                    st.error("Invalid JSON format in editor.")
+                    st.error("Invalid JSON format.")
 
-    # 6. Delete Option
     with st.expander("Danger Zone"):
-        if st.button("🗑️ Delete this History Node"):
+        if st.button("🗑️ Delete Node"):
             if selected_node['id'] in htree.nodes:
                 del htree.nodes[selected_node['id']]
-                # Fix branches pointing to this
                 for b, tip in list(htree.branches.items()):
                     if tip == selected_node['id']:
                         del htree.branches[b] 
