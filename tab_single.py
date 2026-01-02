@@ -49,8 +49,8 @@ def render_single_editor(data, file_path):
         st.subheader("LoRAs")
         l_col1, l_col2 = st.columns(2)
         loras = {}
-        keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
-        for i, k in enumerate(keys):
+        lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
+        for i, k in enumerate(lora_keys):
             with (l_col1 if i % 2 == 0 else l_col2):
                 loras[k] = st.text_input(k.title(), value=data.get(k, ""), key=f"{fk}_{k}")
 
@@ -60,7 +60,17 @@ def render_single_editor(data, file_path):
         spec_fields["camera"] = st.text_input("Camera", value=str(data.get("camera", DEFAULTS["camera"])), key=f"{fk}_cam")
         spec_fields["flf"] = st.text_input("FLF", value=str(data.get("flf", DEFAULTS["flf"])), key=f"{fk}_flf")
         
+        # Explicitly track standard setting keys to exclude them from custom list
+        standard_keys = {
+            "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
+            "camera", "flf", "batch_data", "prompt_history", "sequence_number", "ui_reset_token"
+        }
+        standard_keys.update(lora_keys) # Add LoRAs to reserved list
+
         if "vace" in file_path.name:
+            vace_keys = ["frame_to_skip", "input_a_frames", "input_b_frames", "reference switch", "vace schedule", "reference path", "video file path", "reference image path"]
+            standard_keys.update(vace_keys)
+            
             spec_fields["frame_to_skip"] = st.number_input("Frame to Skip", value=int(data.get("frame_to_skip", 81)), key=f"{fk}_fts")
             spec_fields["input_a_frames"] = st.number_input("Input A Frames", value=int(data.get("input_a_frames", 0)), key=f"{fk}_ia")
             spec_fields["input_b_frames"] = st.number_input("Input B Frames", value=int(data.get("input_b_frames", 0)), key=f"{fk}_ib")
@@ -69,34 +79,34 @@ def render_single_editor(data, file_path):
             for f in ["reference path", "video file path", "reference image path"]:
                  spec_fields[f] = st.text_input(f.title(), value=str(data.get(f, "")), key=f"{fk}_{f}")
         elif "i2v" in file_path.name:
-            for f in ["reference image path", "flf image path", "video file path"]:
+            i2v_keys = ["reference image path", "flf image path", "video file path"]
+            standard_keys.update(i2v_keys)
+            
+            for f in i2v_keys:
                 spec_fields[f] = st.text_input(f.title(), value=str(data.get(f, "")), key=f"{fk}_{f}")
 
-        # --- CUSTOM PARAMETERS LOGIC ---
+        # --- CUSTOM PARAMETERS LOGIC (FIXED) ---
         st.markdown("---")
         st.subheader("🔧 Custom Parameters")
         
-        # 1. Identify Custom Keys (Not in Defaults, not Reserved)
-        reserved = set(DEFAULTS.keys()) | {'batch_data', 'prompt_history', 'sequence_number', 'ui_reset_token'}
-        custom_keys = [k for k in data.keys() if k not in reserved]
+        # Filter keys: Only those NOT in the standard set
+        custom_keys = [k for k in data.keys() if k not in standard_keys]
         
         keys_to_remove = []
 
-        # 2. Render Existing Custom Keys
         if custom_keys:
             for k in custom_keys:
                 c1, c2, c3 = st.columns([1, 2, 0.5])
                 c1.text_input("Key", value=k, disabled=True, key=f"{fk}_ck_lbl_{k}", label_visibility="collapsed")
-                # Using key-specific widget ID to ensure values persist correctly
                 val = c2.text_input("Value", value=str(data[k]), key=f"{fk}_cv_{k}", label_visibility="collapsed")
-                data[k] = val # Update memory
+                data[k] = val 
                 
                 if c3.button("🗑️", key=f"{fk}_cdel_{k}"):
                     keys_to_remove.append(k)
         else:
             st.caption("No custom keys added.")
 
-        # 3. Add New Key Interface
+        # Add New Key Interface
         with st.expander("➕ Add New Parameter"):
             nk_col, nv_col = st.columns(2)
             new_k = nk_col.text_input("Key Name", key=f"{fk}_new_k")
@@ -117,14 +127,13 @@ def render_single_editor(data, file_path):
 
     # --- ACTIONS & HISTORY ---
     with col2:
-        # Capture Standard Fields
         current_state = {
             "general_prompt": gen_prompt, "general_negative": gen_negative,
             "current_prompt": new_prompt, "negative": new_negative,
             "seed": new_seed, **loras, **spec_fields
         }
         
-        # MERGE CUSTOM KEYS into current_state so they get saved to disk/history
+        # MERGE CUSTOM KEYS
         for k in custom_keys:
             if k not in keys_to_remove:
                 current_state[k] = data[k]
@@ -179,15 +188,10 @@ def render_single_editor(data, file_path):
             with st.container():
                 if st.session_state.edit_history_idx == idx:
                     with st.expander(f"📝 Editing: {note}", expanded=True):
-                        # Edit Standard fields
                         edit_note = st.text_input("Note", value=note, key=f"h_en_{idx}")
                         edit_seed = st.number_input("Seed", value=int(h.get('seed', 0)), key=f"h_es_{idx}")
                         edit_gp = st.text_area("General P", value=h.get('general_prompt', ''), height=60, key=f"h_egp_{idx}")
                         edit_sp = st.text_area("Specific P", value=h.get('prompt', ''), height=100, key=f"h_esp_{idx}")
-                        
-                        # --- Custom Key Editing in History ---
-                        # We won't build a full dynamic editor here for simplicity, 
-                        # but we preserve existing custom keys when saving.
                         
                         hc1, hc2 = st.columns([1, 4])
                         if hc1.button("💾 Save", key=f"h_save_{idx}"):
@@ -209,7 +213,6 @@ def render_single_editor(data, file_path):
                         st.caption(f"Seed: {h.get('seed', 0)}")
                         st.text(f"SPEC: {h.get('prompt', '')[:40]}...")
                         
-                        # Show Custom Keys in the JSON view
                         view_data = {k:v for k,v in h.items() if k not in ['prompt', 'negative', 'general_prompt', 'general_negative', 'note']}
                         st.json(view_data, expanded=False)
 
