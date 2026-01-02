@@ -1,4 +1,5 @@
 import streamlit as st
+import random
 from utils import DEFAULTS, save_json, load_json
 
 def create_batch_callback(original_filename, current_data, current_dir):
@@ -33,7 +34,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     batch_list = data.get("batch_data", [])
     
-    # --- ADD NEW SEQUENCE AREA ---
     st.subheader("Add New Sequence")
     ac1, ac2 = st.columns(2)
     
@@ -83,18 +83,16 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 item.update(h_item["loras"])
             add_sequence(item)
 
-    # --- RENDER LIST ---
     st.markdown("---")
     st.info(f"Batch contains {len(batch_list)} sequences.")
 
-    # Define Standard Keys to exclude from Custom List
+    # Standard keys to exclude from Custom List in Batch
     lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
     standard_keys = {
         "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
         "camera", "flf", "sequence_number"
     }
     standard_keys.update(lora_keys)
-    # Add VACE/I2V keys
     standard_keys.update([
         "frame_to_skip", "input_a_frames", "input_b_frames", "reference switch", "vace schedule", 
         "reference path", "video file path", "reference image path", "flf image path"
@@ -198,7 +196,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     if ck3.button("🗑️", key=f"{prefix}_cdel_{k}"):
                         keys_to_remove.append(k)
             
-            with st.expander("➕ Add Parameter to Sequence"):
+            with st.expander("➕ Add Parameter"):
                 nk_col, nv_col = st.columns(2)
                 new_k = nk_col.text_input("Key", key=f"{prefix}_new_k")
                 new_v = nv_col.text_input("Value", key=f"{prefix}_new_v")
