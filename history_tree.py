@@ -55,47 +55,58 @@ class HistoryTree:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     def generate_horizontal_graph(self):
-        """Generates a Fixed-Size, Compact Horizontal Graph."""
+        """Generates a Compact Graph with HTML Labels and Tooltips."""
         dot = [
             'digraph History {',
             '  rankdir=LR;',
-            '  bgcolor="white";', # Clean background
+            '  bgcolor="white";', 
             
-            # --- COMPACT LAYOUT SETTINGS ---
-            '  nodesep=0.15;',   # Horizontal gap between nodes
-            '  ranksep=0.25;',   # Vertical gap between branches
+            # TIGHT LAYOUT
+            '  nodesep=0.2;',  
+            '  ranksep=0.3;',
+            '  splines=ortho;', # Orthogonal lines (right angles) look cleaner/techier
             
-            # --- FIXED SIZE NODES (The Key Fix) ---
-            # fixedsize=true: Ignores text length, forces the width/height below.
-            # width=1.2: Sets box width to ~100px
-            # height=0.4: Sets box height to ~30px
-            '  node [shape=box, style="filled,rounded", fillcolor="#f9f9f9", fontname="Arial", fontsize=9, fixedsize=true, width=1.3, height=0.45];',
-            '  edge [color="#666666", arrowsize=0.5, penwidth=1.0];'
+            # BASE NODE STYLE
+            '  node [shape=plain, fontname="Arial", fontsize=9];', # shape=plain for HTML labels
+            '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
         ]
         
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
         
         for n in sorted_nodes:
             nid = n["id"]
-            
-            # Truncate text to fit in the 1.3 inch box
             full_note = n.get('note', 'Step')
-            short_note = (full_note[:10] + '..') if len(full_note) > 10 else full_note
             
-            label = f"{short_note}\\n{nid[:4]}"
+            # Sanitize for HTML (replace quotes)
+            safe_note = full_note.replace('"', "'")
             
-            # Colors
-            color = "#f0f0f0" 
-            penwidth = "1"
+            # Truncate visual label
+            short_note = (full_note[:12] + '..') if len(full_note) > 12 else full_note
+            
+            # Determine Colors
+            bg_color = "#f4f4f4"
+            border_color = "#cccccc"
+            border_width = "1"
             
             if nid == self.head_id:
-                color = "#fff6cd" # Yellow for Active
-                penwidth = "2"
+                bg_color = "#fff6cd" # Yellow
+                border_color = "#eebb00"
+                border_width = "2"
+            elif nid in self.branches.values():
+                bg_color = "#e6ffe6" # Green tip
+                border_color = "#99cc99"
             
-            if nid in self.branches.values():
-                if color == "#f0f0f0": color = "#e6ffe6" # Green for Branch Tips
+            # HTML Label Construction
+            # This creates a tight table-like node
+            label = (
+                f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4" BGCOLOR="{bg_color}" COLOR="{border_color}">'
+                f'<TR><TD><B>{short_note}</B></TD></TR>'
+                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#666666">{nid[:4]}</FONT></TD></TR>'
+                f'</TABLE>>'
+            )
             
-            dot.append(f'  "{nid}" [label="{label}", fillcolor="{color}", penwidth="{penwidth}"];')
+            # Add node with Tooltip
+            dot.append(f'  "{nid}" [label={label}, tooltip="{safe_note}"];')
             
             if n["parent"] and n["parent"] in self.nodes:
                 dot.append(f'  "{n["parent"]}" -> "{nid}";')
