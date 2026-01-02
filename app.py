@@ -5,7 +5,7 @@ from pathlib import Path
 # --- Import Custom Modules ---
 from utils import (
     load_config, save_config, load_snippets, save_snippets, 
-    load_json, save_json, generate_templates, DEFAULTS
+    load_json, save_json, generate_templates, fetch_comfy_metadata, DEFAULTS
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -21,17 +21,13 @@ st.set_page_config(layout="wide", page_title="AI Settings Manager")
 # ==========================================
 # 2. SESSION STATE INITIALIZATION
 # ==========================================
-# Core Configuration
 if 'config' not in st.session_state:
     st.session_state.config = load_config()
-    # Default to current working dir if last_dir is missing
     st.session_state.current_dir = Path(st.session_state.config.get("last_dir", Path.cwd()))
 
-# Snippet Library
 if 'snippets' not in st.session_state: 
     st.session_state.snippets = load_snippets()
 
-# File Loading & Caching
 if 'loaded_file' not in st.session_state: 
     st.session_state.loaded_file = None
 
@@ -44,9 +40,17 @@ if 'edit_history_idx' not in st.session_state:
 if 'single_editor_cache' not in st.session_state: 
     st.session_state.single_editor_cache = DEFAULTS.copy()
 
-# CRITICAL: Token to force UI widgets to refresh when history/batch actions occur
 if 'ui_reset_token' not in st.session_state: 
     st.session_state.ui_reset_token = 0
+
+# --- NEW: FETCH METADATA ON STARTUP ---
+if 'comfy_meta' not in st.session_state:
+    # Try to get URL from first instance, or default
+    instances = st.session_state.config.get("comfy_instances", [])
+    target_url = instances[0]["url"] if instances else "http://127.0.0.1:8188"
+    
+    st.session_state.comfy_meta = fetch_comfy_metadata(target_url)
+# --------------------------------------
 
 # ==========================================
 # 3. SIDEBAR (NAVIGATOR & TOOLS)
@@ -55,7 +59,6 @@ with st.sidebar:
     st.header("📂 Navigator")
     
     # --- Path Navigator ---
-    # Input field to manually change directory
     new_path = st.text_input("Current Path", value=str(st.session_state.current_dir))
     if new_path != str(st.session_state.current_dir):
         p = Path(new_path)
@@ -72,7 +75,6 @@ with st.sidebar:
             save_config(st.session_state.current_dir, st.session_state.config['favorites'])
             st.rerun()
 
-    # Quick Jump Dropdown
     fav_selection = st.radio(
         "Jump to:", 
         ["Select..."] + st.session_state.config['favorites'], 
@@ -97,16 +99,13 @@ with st.sidebar:
                 st.success(f"Saved '{snip_name}'")
                 st.rerun()
 
-    # Snippet List
     if st.session_state.snippets:
         st.caption("Click to Append to Prompt:")
         for name, content in st.session_state.snippets.items():
             col_s1, col_s2 = st.columns([4, 1])
-            # Append Button
             if col_s1.button(f"➕ {name}", use_container_width=True):
                 st.session_state.append_prompt = content
                 st.rerun()
-            # Delete Button
             if col_s2.button("🗑️", key=f"del_snip_{name}"):
                 del st.session_state.snippets[name]
                 save_snippets(st.session_state.snippets)
@@ -115,9 +114,7 @@ with st.sidebar:
     st.markdown("---")
     
     # --- File List & Creation ---
-    # Scan directory for JSONs
     json_files = sorted(list(st.session_state.current_dir.glob("*.json")))
-    # Exclude internal config files
     json_files = [f for f in json_files if f.name != ".editor_config.json" and f.name != ".editor_snippets.json"]
 
     if not json_files:
@@ -125,30 +122,22 @@ with st.sidebar:
             generate_templates(st.session_state.current_dir)
             st.rerun()
     
-    # Creator Form
     with st.expander("Create New JSON"):
         new_filename = st.text_input("Filename", placeholder="my_prompt_vace")
         is_batch = st.checkbox("Is Batch File?")
         if st.button("Create"):
             if not new_filename.endswith(".json"): new_filename += ".json"
             path = st.session_state.current_dir / new_filename
-            
-            # Initialize appropriate structure
             if is_batch:
                 data = {"batch_data": []}
             else:
                 data = DEFAULTS.copy()
-                # Auto-fill defaults based on name hint
-                if "vace" in new_filename: 
-                    data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
-                elif "i2v" in new_filename: 
-                    data.update({"reference image path": "", "flf image path": ""})
-            
+                if "vace" in new_filename: data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
+                elif "i2v" in new_filename: data.update({"reference image path": "", "flf image path": ""})
             save_json(path, data)
             st.rerun()
 
-    # --- File Selector Logic ---
-    # Ensure selector state is valid
+    # --- File Selector ---
     if 'file_selector' not in st.session_state:
         st.session_state.file_selector = json_files[0].name if json_files else None
     if st.session_state.file_selector not in [f.name for f in json_files] and json_files:
@@ -162,16 +151,11 @@ with st.sidebar:
 if selected_file_name:
     file_path = st.session_state.current_dir / selected_file_name
     
-    # --- Load & Cache Logic ---
-    # We only reload from disk if the filename changed or file mtime changed externally.
-    # Otherwise, we use the session state cache to preserve unsaved edits during interactions.
     if st.session_state.loaded_file != str(file_path):
         data, mtime = load_json(file_path)
         st.session_state.data_cache = data
         st.session_state.last_mtime = mtime
         st.session_state.loaded_file = str(file_path)
-        
-        # Clear transient states on file switch
         if 'append_prompt' in st.session_state: del st.session_state.append_prompt
         if 'rand_seed' in st.session_state: del st.session_state.rand_seed
         if 'restored_indicator' in st.session_state: del st.session_state.restored_indicator
@@ -182,7 +166,6 @@ if selected_file_name:
     st.title(f"Editing: {selected_file_name}")
 
     # --- TABS ---
-    # The heart of the application
     tab_single, tab_batch, tab_timeline, tab_wip, tab_comfy = st.tabs([
         "📝 Single Editor", 
         "🚀 Batch Processor", 
@@ -191,22 +174,17 @@ if selected_file_name:
         "🔌 Comfy Monitor"
     ])
     
-    # 1. Single Editor (Form-based editing)
     with tab_single:
         render_single_editor(data, file_path)
         
-    # 2. Batch Processor (Sequence list management)
     with tab_batch:
         render_batch_processor(data, file_path, json_files, st.session_state.current_dir, selected_file_name)
         
-    # 3. Stable Timeline (Clean Graphviz + Diff Inspector)
     with tab_timeline:
         render_timeline_tab(data, file_path)
         
-    # 4. WIP Timeline (Interactive Agraph - Experimental)
     with tab_wip:
         render_timeline_wip(data, file_path)
 
-    # 5. Comfy Monitor (Multi-server dashboard + Live View)
     with tab_comfy:
         render_comfy_monitor()
