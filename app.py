@@ -5,7 +5,7 @@ from pathlib import Path
 # --- Import Custom Modules ---
 from utils import (
     load_config, save_config, load_snippets, save_snippets, 
-    load_json, save_json, generate_templates, fetch_comfy_metadata, DEFAULTS
+    load_json, save_json, generate_templates, DEFAULTS
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -42,15 +42,6 @@ if 'single_editor_cache' not in st.session_state:
 
 if 'ui_reset_token' not in st.session_state: 
     st.session_state.ui_reset_token = 0
-
-# --- NEW: FETCH METADATA ON STARTUP ---
-if 'comfy_meta' not in st.session_state:
-    # Try to get URL from first instance, or default
-    instances = st.session_state.config.get("comfy_instances", [])
-    target_url = instances[0]["url"] if instances else "http://127.0.0.1:8188"
-    
-    st.session_state.comfy_meta = fetch_comfy_metadata(target_url)
-# --------------------------------------
 
 # ==========================================
 # 3. SIDEBAR (NAVIGATOR & TOOLS)
