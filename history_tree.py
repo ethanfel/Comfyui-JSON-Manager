@@ -55,39 +55,50 @@ class HistoryTree:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     def generate_horizontal_graph(self):
-        """Generates a Compact Fusion 360-style Horizontal Graph."""
+        """Generates a Compact, White-Background Horizontal Graph."""
         dot = [
             'digraph History {',
             '  rankdir=LR;',
-            '  bgcolor="transparent";',
-            # COMPACT STYLING
-            '  nodesep=0.3;', 
-            '  ranksep=0.4;',
-            '  node [shape=rect, style="filled,rounded", fontname="Arial", fontsize=10, height=0.4, margin="0.1,0.05"];',
-            '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
+            # 1. Force White Background (Fixes the black/transparent issue)
+            '  bgcolor="white";',
+            
+            # 2. TIGHT Layout settings (Fixes "Too Big")
+            '  nodesep=0.2;',  # Closer together horizontally
+            '  ranksep=0.3;',  # Closer together vertically
+            '  ratio=compress;', # Try to compress the drawing
+            
+            # 3. Small Node Styling
+            # height=0 forces node to fit text exactly
+            # margin=0.05 removes internal padding
+            '  node [shape=box, style="filled,rounded", fillcolor="#f9f9f9", fontname="Arial", fontsize=9, height=0, margin="0.05,0.05"];',
+            '  edge [color="#666666", arrowsize=0.5, penwidth=1.0];'
         ]
         
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
         
         for n in sorted_nodes:
             nid = n["id"]
-            # TRUNCATE LABEL to keep box small
-            full_note = n.get('note', 'Step')
-            short_note = (full_note[:15] + '..') if len(full_note) > 15 else full_note
             
-            label = f"{short_note}\\n<{nid[:4]}>"
+            # 4. Aggressive Text Truncation
+            full_note = n.get('note', 'Step')
+            # Keep only first 12 chars to keep box small
+            short_note = (full_note[:12] + '..') if len(full_note) > 12 else full_note
+            
+            # Use simple label
+            label = f"{short_note}\\n{nid[:4]}"
             
             # Styling
-            color = "#e0e0e0" 
+            color = "#f0f0f0" # Light Grey default
             penwidth = "1"
             
+            # Active Node (HEAD) - Yellow
             if nid == self.head_id:
-                color = "#ffeba0" # Active Yellow
+                color = "#fff6cd" 
                 penwidth = "2"
             
+            # Branch Tips - Light Green
             if nid in self.branches.values():
-                # Branch tips get slightly darker border
-                if color == "#e0e0e0": color = "#d0f0c0" 
+                if color == "#f0f0f0": color = "#e6ffe6" 
             
             dot.append(f'  "{nid}" [label="{label}", fillcolor="{color}", penwidth="{penwidth}"];')
             
