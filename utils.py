@@ -5,9 +5,16 @@ import streamlit as st
 
 # Default structure for new files
 DEFAULTS = {
-    "positive_prompt": "",
-    "negative_prompt": "",
+    # --- Standard Keys for your Restored Single Tab ---
+    "general_prompt": "",       # Global positive
+    "general_negative": "",     # Global negative
+    "current_prompt": "",       # Specific positive
+    "negative": "",             # Specific negative
     "seed": -1,
+    
+    # --- Settings ---
+    "camera": "static",
+    "flf": 0.0,
     "steps": 20,
     "cfg": 7.0,
     "sampler_name": "euler",
@@ -15,14 +22,19 @@ DEFAULTS = {
     "denoise": 1.0,
     "model_name": "v1-5-pruned-emaonly.ckpt",
     "vae_name": "vae-ft-mse-840000-ema-pruned.ckpt",
-    # I2V / VACE Specifics
+
+    # --- I2V / VACE Specifics ---
     "frame_to_skip": 81,
     "vace schedule": 1,
+    "input_a_frames": 0,
+    "input_b_frames": 0,
+    "reference switch": 1,
     "video file path": "",
     "reference image path": "",
-    "flf": 0.0,
-    "camera": "static",
-    # LoRAs
+    "reference path": "",
+    "flf image path": "",
+    
+    # --- LoRAs ---
     "lora 1 high": "", "lora 1 low": "",
     "lora 2 high": "", "lora 2 low": "",
     "lora 3 high": "", "lora 3 low": ""
@@ -47,15 +59,12 @@ def save_config(current_dir, favorites, extra_data=None):
         "last_dir": str(current_dir),
         "favorites": favorites
     }
-    # Merge existing config to prevent data loss
     existing = load_config()
     data.update(existing)
     
-    # Update with new 'last_dir' and 'favorites'
     data["last_dir"] = str(current_dir)
     data["favorites"] = favorites
     
-    # Update with any extra data passed (like server lists)
     if extra_data:
         data.update(extra_data)
         
