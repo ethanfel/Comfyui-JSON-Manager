@@ -55,19 +55,19 @@ class HistoryTree:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     def generate_horizontal_graph(self):
-        """Generates a Compact Graph with HTML Labels and Tooltips."""
+        """Generates a Compact, Readable Horizontal Graph using HTML Labels."""
         dot = [
             'digraph History {',
             '  rankdir=LR;',
             '  bgcolor="white";', 
+            '  splines=ortho;', # Clean right-angle lines
             
-            # TIGHT LAYOUT
-            '  nodesep=0.2;',  
+            # TIGHT SPACING
+            '  nodesep=0.2;',
             '  ranksep=0.3;',
-            '  splines=ortho;', # Orthogonal lines (right angles) look cleaner/techier
             
-            # BASE NODE STYLE
-            '  node [shape=plain, fontname="Arial", fontsize=9];', # shape=plain for HTML labels
+            # GLOBAL STYLES
+            '  node [shape=plain, fontname="Arial"];', 
             '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
         ]
         
@@ -77,36 +77,35 @@ class HistoryTree:
             nid = n["id"]
             full_note = n.get('note', 'Step')
             
-            # Sanitize for HTML (replace quotes)
-            safe_note = full_note.replace('"', "'")
+            # Truncate slightly for display, but keep enough to read
+            # HTML Labels allow distinct styling for Title vs ID
+            display_note = (full_note[:15] + '..') if len(full_note) > 15 else full_note
             
-            # Truncate visual label
-            short_note = (full_note[:12] + '..') if len(full_note) > 12 else full_note
-            
-            # Determine Colors
-            bg_color = "#f4f4f4"
-            border_color = "#cccccc"
+            # COLORS
+            bg_color = "#f9f9f9"
+            border_color = "#999999"
             border_width = "1"
             
             if nid == self.head_id:
-                bg_color = "#fff6cd" # Yellow
+                bg_color = "#fff6cd" # Yellow for Current
                 border_color = "#eebb00"
                 border_width = "2"
             elif nid in self.branches.values():
-                bg_color = "#e6ffe6" # Green tip
-                border_color = "#99cc99"
-            
-            # HTML Label Construction
-            # This creates a tight table-like node
+                bg_color = "#e6ffe6" # Green for Tips
+                border_color = "#66aa66"
+
+            # HTML LABEL (Table)
+            # This is the trick to make it compact but readable
             label = (
                 f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4" BGCOLOR="{bg_color}" COLOR="{border_color}">'
-                f'<TR><TD><B>{short_note}</B></TD></TR>'
-                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#666666">{nid[:4]}</FONT></TD></TR>'
+                f'<TR><TD><B><FONT POINT-SIZE="10">{display_note}</FONT></B></TD></TR>'
+                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#555555">{nid[:4]}</FONT></TD></TR>'
                 f'</TABLE>>'
             )
             
-            # Add node with Tooltip
-            dot.append(f'  "{nid}" [label={label}, tooltip="{safe_note}"];')
+            # Tooltip shows full text on hover
+            safe_tooltip = full_note.replace('"', "'")
+            dot.append(f'  "{nid}" [label={label}, tooltip="{safe_tooltip}"];')
             
             if n["parent"] and n["parent"] in self.nodes:
                 dot.append(f'  "{n["parent"]}" -> "{nid}";')
