@@ -2,36 +2,54 @@ import streamlit as st
 import random
 from pathlib import Path
 
-# Import Modules
+# --- Import Custom Modules ---
 from utils import (
     load_config, save_config, load_snippets, save_snippets, 
     load_json, save_json, generate_templates, DEFAULTS
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
-from tab_timeline import render_timeline_tab  # <--- NEW IMPORT
+from tab_timeline import render_timeline_tab
+from tab_timeline_wip import render_timeline_wip  # <--- New Interactive Tab
 
-# --- Page Setup ---
+# ==========================================
+# 1. PAGE CONFIGURATION
+# ==========================================
 st.set_page_config(layout="wide", page_title="AI Settings Manager")
 
-# --- Init Session State ---
+# ==========================================
+# 2. SESSION STATE INITIALIZATION
+# ==========================================
 if 'config' not in st.session_state:
     st.session_state.config = load_config()
     st.session_state.current_dir = Path(st.session_state.config.get("last_dir", Path.cwd()))
-if 'snippets' not in st.session_state: st.session_state.snippets = load_snippets()
-if 'loaded_file' not in st.session_state: st.session_state.loaded_file = None
-if 'last_mtime' not in st.session_state: st.session_state.last_mtime = 0
-if 'edit_history_idx' not in st.session_state: st.session_state.edit_history_idx = None
-if 'single_editor_cache' not in st.session_state: st.session_state.single_editor_cache = DEFAULTS.copy()
 
-# Version Token for forcing UI refreshes (Critical for Branching/Restoring)
-if 'ui_reset_token' not in st.session_state: st.session_state.ui_reset_token = 0
+if 'snippets' not in st.session_state: 
+    st.session_state.snippets = load_snippets()
 
-# --- Sidebar ---
+if 'loaded_file' not in st.session_state: 
+    st.session_state.loaded_file = None
+
+if 'last_mtime' not in st.session_state: 
+    st.session_state.last_mtime = 0
+
+if 'edit_history_idx' not in st.session_state: 
+    st.session_state.edit_history_idx = None
+
+if 'single_editor_cache' not in st.session_state: 
+    st.session_state.single_editor_cache = DEFAULTS.copy()
+
+# CRITICAL: Token to force UI widgets to refresh when history is restored
+if 'ui_reset_token' not in st.session_state: 
+    st.session_state.ui_reset_token = 0
+
+# ==========================================
+# 3. SIDEBAR (NAVIGATOR & TOOLS)
+# ==========================================
 with st.sidebar:
     st.header("📂 Navigator")
     
-    # Path Navigator
+    # --- Path Navigator ---
     new_path = st.text_input("Current Path", value=str(st.session_state.current_dir))
     if new_path != str(st.session_state.current_dir):
         p = Path(new_path)
@@ -41,21 +59,26 @@ with st.sidebar:
             save_config(st.session_state.current_dir, st.session_state.config['favorites'])
             st.rerun()
 
-    # Favorites
+    # --- Favorites System ---
     if st.button("📌 Pin Current Folder"):
         if str(st.session_state.current_dir) not in st.session_state.config['favorites']:
             st.session_state.config['favorites'].append(str(st.session_state.current_dir))
             save_config(st.session_state.current_dir, st.session_state.config['favorites'])
             st.rerun()
 
-    fav_selection = st.radio("Jump to:", ["Select..."] + st.session_state.config['favorites'], index=0, label_visibility="collapsed")
+    fav_selection = st.radio(
+        "Jump to:", 
+        ["Select..."] + st.session_state.config['favorites'], 
+        index=0, 
+        label_visibility="collapsed"
+    )
     if fav_selection != "Select..." and fav_selection != str(st.session_state.current_dir):
         st.session_state.current_dir = Path(fav_selection)
         st.rerun()
 
     st.markdown("---")
     
-    # Snippets
+    # --- Snippet Library ---
     st.subheader("🧩 Snippet Library")
     with st.expander("Add New Snippet"):
         snip_name = st.text_input("Name", placeholder="e.g. Cinematic")
@@ -81,7 +104,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # File List
+    # --- File List & Creation ---
     json_files = sorted(list(st.session_state.current_dir.glob("*.json")))
     json_files = [f for f in json_files if f.name != ".editor_config.json" and f.name != ".editor_snippets.json"]
 
@@ -90,7 +113,6 @@ with st.sidebar:
             generate_templates(st.session_state.current_dir)
             st.rerun()
     
-    # Create New
     with st.expander("Create New JSON"):
         new_filename = st.text_input("Filename", placeholder="my_prompt_vace")
         is_batch = st.checkbox("Is Batch File?")
@@ -106,7 +128,7 @@ with st.sidebar:
             save_json(path, data)
             st.rerun()
 
-    # File Selector
+    # --- File Selector ---
     if 'file_selector' not in st.session_state:
         st.session_state.file_selector = json_files[0].name if json_files else None
     if st.session_state.file_selector not in [f.name for f in json_files] and json_files:
@@ -114,18 +136,25 @@ with st.sidebar:
     
     selected_file_name = st.radio("Select File", [f.name for f in json_files], key="file_selector")
 
-# --- Main App Logic ---
+# ==========================================
+# 4. MAIN APP LOGIC
+# ==========================================
 if selected_file_name:
     file_path = st.session_state.current_dir / selected_file_name
     
-    # Load or Reload if file changed
+    # --- Load & Cache Logic ---
+    # We only reload from disk if the filename changed or mtime changed.
+    # Otherwise, we use the session state cache to preserve unsaved edits.
     if st.session_state.loaded_file != str(file_path):
         data, mtime = load_json(file_path)
         st.session_state.data_cache = data
         st.session_state.last_mtime = mtime
         st.session_state.loaded_file = str(file_path)
+        
+        # Clear transient states
         if 'append_prompt' in st.session_state: del st.session_state.append_prompt
         if 'rand_seed' in st.session_state: del st.session_state.rand_seed
+        if 'restored_indicator' in st.session_state: del st.session_state.restored_indicator
         st.session_state.edit_history_idx = None
     else:
         data = st.session_state.data_cache
@@ -133,7 +162,12 @@ if selected_file_name:
     st.title(f"Editing: {selected_file_name}")
 
     # --- TABS ---
-    tab_single, tab_batch, tab_timeline = st.tabs(["📝 Single Editor", "🚀 Batch Processor", "🕒 Timeline"])
+    tab_single, tab_batch, tab_timeline, tab_wip = st.tabs([
+        "📝 Single Editor", 
+        "🚀 Batch Processor", 
+        "🕒 Timeline", 
+        "🧪 WIP Timeline"
+    ])
     
     with tab_single:
         render_single_editor(data, file_path)
@@ -143,3 +177,6 @@ if selected_file_name:
         
     with tab_timeline:
         render_timeline_tab(data, file_path)
+        
+    with tab_wip:
+        render_timeline_wip(data, file_path)
