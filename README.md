@@ -78,6 +78,7 @@ Navigate to your container's IP (e.g., `http://192.168.1.100:8501`).
 ### ComfyUI Workflow
 Search for "JSON" in ComfyUI to find the new nodes.
 
+<img width="1251" height="921" alt="image" src="https://github.com/user-attachments/assets/06d567f8-15ee-4011-9b86-d0b43ce1ba74" />
 #### Standard Nodes
 | Node Name | Description |
 | :--- | :--- |
