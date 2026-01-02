@@ -36,7 +36,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         st.button("✨ Create Batch Copy", on_click=create_batch_callback, args=(selected_file_name, data, current_dir))
         return
 
-    # --- 1. RESTORED STATE INDICATOR ---
     if 'restored_indicator' in st.session_state and st.session_state.restored_indicator:
         st.info(f"📍 Editing Restored Version: **{st.session_state.restored_indicator}**")
 
@@ -188,27 +187,38 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"{prefix}_ri2")
                     seq["flf image path"] = st.text_input("FLF Img", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
 
-            # --- LoRA Settings (SMART INPUTS) ---
+            # --- LoRA Settings (SMART INPUTS + SAFE FLOAT FIX) ---
             with st.expander("💊 LoRA Settings"):
                 meta = st.session_state.get("comfy_meta", {})
                 lora_list = meta.get("loras", [])
                 
                 lc1, lc2 = st.columns(2)
                 
+                # HELPER: Safe conversion
+                def get_safe_float(val, default=1.0):
+                    try:
+                        return float(val)
+                    except (ValueError, TypeError):
+                        # If it's a string like "<lora:name>", return default 1.0
+                        return default
+
                 with lc1:
                     st.caption("LoRA 1")
                     seq["lora 1 high"] = render_smart_input("Model", f"{prefix}_l1h", seq.get("lora 1 high", ""), lora_list)
-                    seq["lora 1 low"] = str(st.slider("Strength", 0.0, 2.0, float(seq.get("lora 1 low", 1.0)), 0.05, key=f"{prefix}_l1l"))
+                    val = get_safe_float(seq.get("lora 1 low", 1.0))
+                    seq["lora 1 low"] = str(st.slider("Strength", 0.0, 2.0, val, 0.05, key=f"{prefix}_l1l"))
 
                 with lc2:
                     st.caption("LoRA 2")
                     seq["lora 2 high"] = render_smart_input("Model", f"{prefix}_l2h", seq.get("lora 2 high", ""), lora_list)
-                    seq["lora 2 low"] = str(st.slider("Strength", 0.0, 2.0, float(seq.get("lora 2 low", 1.0)), 0.05, key=f"{prefix}_l2l"))
+                    val = get_safe_float(seq.get("lora 2 low", 1.0))
+                    seq["lora 2 low"] = str(st.slider("Strength", 0.0, 2.0, val, 0.05, key=f"{prefix}_l2l"))
                 
                 with lc1:
                     st.caption("LoRA 3")
                     seq["lora 3 high"] = render_smart_input("Model", f"{prefix}_l3h", seq.get("lora 3 high", ""), lora_list)
-                    seq["lora 3 low"] = str(st.slider("Strength", 0.0, 2.0, float(seq.get("lora 3 low", 1.0)), 0.05, key=f"{prefix}_l3l"))
+                    val = get_safe_float(seq.get("lora 3 low", 1.0))
+                    seq["lora 3 low"] = str(st.slider("Strength", 0.0, 2.0, val, 0.05, key=f"{prefix}_l3l"))
 
             # --- CUSTOM PARAMETERS ---
             st.markdown("---")
@@ -273,4 +283,3 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 del st.session_state.restored_indicator
             
             st.toast("Batch Saved & Snapshot Created!", icon="🚀")
-            st.rerun()
