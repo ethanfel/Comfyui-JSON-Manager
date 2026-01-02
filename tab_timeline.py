@@ -36,7 +36,6 @@ def render_timeline_tab(data, file_path):
         return f"{n.get('note', 'Step')} ({n['id']})"
 
     with col_sel:
-        # Default to Head
         current_idx = 0
         for i, n in enumerate(all_nodes):
             if n["id"] == htree.head_id:
@@ -102,3 +101,32 @@ def render_timeline_tab(data, file_path):
             data["history_tree"] = htree.to_dict()
             save_json(file_path, data)
             st.rerun()
+
+        # --- 5. DANGER ZONE (RESTORED) ---
+        st.markdown("---")
+        with st.expander("⚠️ Danger Zone (Delete)"):
+            st.warning("Deleting a node cannot be undone. If this node has branches, they might become disconnected.")
+            if st.button("🗑️ Delete This Node", type="primary"):
+                if selected_node['id'] in htree.nodes:
+                    # Remove Node
+                    del htree.nodes[selected_node['id']]
+                    
+                    # Fix Branches pointing to this node
+                    # (Simple logic: just remove the branch pointer)
+                    for b, tip in list(htree.branches.items()):
+                        if tip == selected_node['id']:
+                            del htree.branches[b] 
+                    
+                    # If we deleted the HEAD, reset HEAD to something safe (or None)
+                    if htree.head_id == selected_node['id']:
+                        if htree.nodes:
+                            # Fallback to the last created node
+                            fallback = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])[-1]
+                            htree.head_id = fallback["id"]
+                        else:
+                            htree.head_id = None
+
+                    data["history_tree"] = htree.to_dict()
+                    save_json(file_path, data)
+                    st.toast("Node Deleted", icon="🗑️")
+                    st.rerun()
