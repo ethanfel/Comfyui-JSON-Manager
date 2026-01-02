@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from PIL import Image
 from io import BytesIO
-from utils import save_config # <--- IMPORTED
+from utils import save_config
 
 def render_single_instance(instance_config, index, all_instances):
     url = instance_config.get("url", "http://127.0.0.1:8188")
@@ -13,29 +13,25 @@ def render_single_instance(instance_config, index, all_instances):
     c_head, c_set = st.columns([3, 1])
     c_head.markdown(f"### 🔌 {name}")
     
-    # --- SETTINGS POPOVER ---
     with c_set.popover("⚙️ Settings"):
         st.caption("Press Update to apply changes!")
         new_name = st.text_input("Name", value=name, key=f"name_{index}")
         new_url = st.text_input("URL", value=url, key=f"url_{index}")
         
-        # VISUAL WARNING if typed value differs from saved value
         if new_url != url:
             st.warning("⚠️ Unsaved URL! Click Update below.")
 
         if st.button("💾 Update & Save", key=f"save_{index}", type="primary"):
-            # 1. Update Memory
             all_instances[index]["name"] = new_name
             all_instances[index]["url"] = new_url
             st.session_state.config["comfy_instances"] = all_instances
             
-            # 2. SAVE TO DISK (The Fix)
             save_config(
                 st.session_state.current_dir, 
                 st.session_state.config['favorites'], 
                 {"comfy_instances": all_instances}
             )
-            st.toast("Server config saved to disk!", icon="💾")
+            st.toast("Server config saved!", icon="💾")
             st.rerun()
             
         st.divider()
@@ -71,26 +67,32 @@ def render_single_instance(instance_config, index, all_instances):
             st.error(f"Could not connect to {COMFY_URL}")
             return 
 
-    # --- 2. LIVE VIEW ---
+    # --- 2. LIVE VIEW (WITH TOGGLE) ---
     st.write("") 
-    c_label, c_slider = st.columns([1, 2])
+    c_label, c_ctrl = st.columns([1, 2])
     c_label.subheader("📺 Live View")
     
-    # Slider force-reloads the iframe (normal behavior)
-    iframe_h = c_slider.slider(
-        "Window Size (px)", 
-        min_value=600, max_value=2500, value=1000, step=50, 
-        key=f"h_slider_{index}", label_visibility="collapsed"
-    )
+    # LIVE PREVIEW TOGGLE
+    enable_preview = c_ctrl.checkbox("Enable Live Preview", value=True, key=f"live_toggle_{index}")
+    
+    if enable_preview:
+        # Height Slider
+        iframe_h = st.slider(
+            "Height (px)", 
+            min_value=600, max_value=2500, value=1000, step=50, 
+            key=f"h_slider_{index}"
+        )
 
-    st.markdown(
-        f"""
-        <iframe src="{COMFY_URL}" width="100%" height="{iframe_h}px" 
-            style="border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        </iframe>
-        """,
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"""
+            <iframe src="{COMFY_URL}" width="100%" height="{iframe_h}px" 
+                style="border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            </iframe>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.info("Live Preview is disabled. Enable it above to see the interface.")
 
     st.markdown("---")
 
@@ -152,7 +154,6 @@ def render_comfy_monitor():
                     instances.append({"name": new_name, "url": new_url})
                     st.session_state.config["comfy_instances"] = instances
                     
-                    # SAVE TO DISK IMMEDIATELY
                     save_config(
                         st.session_state.current_dir, 
                         st.session_state.config['favorites'], 
