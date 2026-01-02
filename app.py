@@ -43,6 +43,10 @@ if 'single_editor_cache' not in st.session_state:
 if 'ui_reset_token' not in st.session_state: 
     st.session_state.ui_reset_token = 0
 
+# Track the active tab state for programmatic switching
+if 'active_tab_name' not in st.session_state:
+    st.session_state.active_tab_name = "📝 Single Editor"
+
 # ==========================================
 # 3. SIDEBAR (NAVIGATOR & TOOLS)
 # ==========================================
@@ -142,40 +146,69 @@ with st.sidebar:
 if selected_file_name:
     file_path = st.session_state.current_dir / selected_file_name
     
+    # --- FILE LOADING & AUTO-SWITCH LOGIC ---
     if st.session_state.loaded_file != str(file_path):
         data, mtime = load_json(file_path)
         st.session_state.data_cache = data
         st.session_state.last_mtime = mtime
         st.session_state.loaded_file = str(file_path)
+        
+        # Clear transient states
         if 'append_prompt' in st.session_state: del st.session_state.append_prompt
         if 'rand_seed' in st.session_state: del st.session_state.rand_seed
         if 'restored_indicator' in st.session_state: del st.session_state.restored_indicator
         st.session_state.edit_history_idx = None
+        
+        # --- AUTO-SWITCH TAB LOGIC ---
+        # If the file has 'batch_data' or is a list, force Batch tab.
+        # Otherwise, force Single tab.
+        is_batch = "batch_data" in data or isinstance(data, list)
+        if is_batch:
+            st.session_state.active_tab_name = "🚀 Batch Processor"
+        else:
+            st.session_state.active_tab_name = "📝 Single Editor"
+            
     else:
         data = st.session_state.data_cache
 
     st.title(f"Editing: {selected_file_name}")
 
-    # --- TABS ---
-    tab_single, tab_batch, tab_timeline, tab_wip, tab_comfy = st.tabs([
+    # --- CONTROLLED NAVIGATION (REPLACES ST.TABS) ---
+    # Using radio buttons allows us to change 'active_tab_name' programmatically above.
+    tabs_list = [
         "📝 Single Editor", 
         "🚀 Batch Processor", 
         "🕒 Timeline", 
         "🧪 WIP Timeline",
         "🔌 Comfy Monitor"
-    ])
+    ]
     
-    with tab_single:
+    # Ensure active tab is valid (safety check)
+    if st.session_state.active_tab_name not in tabs_list:
+        st.session_state.active_tab_name = tabs_list[0]
+
+    current_tab = st.radio(
+        "Navigation", 
+        tabs_list,
+        key="active_tab_name", # Binds to session state
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+
+    # --- RENDER SELECTED TAB ---
+    if current_tab == "📝 Single Editor":
         render_single_editor(data, file_path)
         
-    with tab_batch:
+    elif current_tab == "🚀 Batch Processor":
         render_batch_processor(data, file_path, json_files, st.session_state.current_dir, selected_file_name)
         
-    with tab_timeline:
+    elif current_tab == "🕒 Timeline":
         render_timeline_tab(data, file_path)
         
-    with tab_wip:
+    elif current_tab == "🧪 WIP Timeline":
         render_timeline_wip(data, file_path)
 
-    with tab_comfy:
+    elif current_tab == "🔌 Comfy Monitor":
         render_comfy_monitor()
