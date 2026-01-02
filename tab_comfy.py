@@ -2,44 +2,59 @@ import streamlit as st
 import requests
 from PIL import Image
 from io import BytesIO
+from utils import save_config # <--- IMPORTED
 
 def render_single_instance(instance_config, index, all_instances):
-    """Helper to render one specific ComfyUI monitor"""
     url = instance_config.get("url", "http://127.0.0.1:8188")
     name = instance_config.get("name", f"Server {index+1}")
     
-    # Clean URL
     COMFY_URL = url.rstrip("/")
     
-    # --- HEADER & SETTINGS ---
     c_head, c_set = st.columns([3, 1])
     c_head.markdown(f"### 🔌 {name}")
     
+    # --- SETTINGS POPOVER ---
     with c_set.popover("⚙️ Settings"):
+        st.caption("Press Update to apply changes!")
         new_name = st.text_input("Name", value=name, key=f"name_{index}")
         new_url = st.text_input("URL", value=url, key=f"url_{index}")
         
-        if st.button("💾 Update", key=f"save_{index}"):
+        # VISUAL WARNING if typed value differs from saved value
+        if new_url != url:
+            st.warning("⚠️ Unsaved URL! Click Update below.")
+
+        if st.button("💾 Update & Save", key=f"save_{index}", type="primary"):
+            # 1. Update Memory
             all_instances[index]["name"] = new_name
             all_instances[index]["url"] = new_url
             st.session_state.config["comfy_instances"] = all_instances
+            
+            # 2. SAVE TO DISK (The Fix)
+            save_config(
+                st.session_state.current_dir, 
+                st.session_state.config['favorites'], 
+                {"comfy_instances": all_instances}
+            )
+            st.toast("Server config saved to disk!", icon="💾")
             st.rerun()
             
         st.divider()
         if st.button("🗑️ Remove Server", key=f"del_{index}"):
             all_instances.pop(index)
             st.session_state.config["comfy_instances"] = all_instances
+            save_config(
+                st.session_state.current_dir, 
+                st.session_state.config['favorites'], 
+                {"comfy_instances": all_instances}
+            )
             st.rerun()
 
-    # --- 1. STATUS DASHBOARD (Compact) ---
+    # --- 1. STATUS DASHBOARD ---
     with st.expander("📊 Server Status", expanded=True):
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-        
         try:
-            # Timeout is short to prevent UI freezing if server is down
             res = requests.get(f"{COMFY_URL}/queue", timeout=1.5)
             queue_data = res.json()
-            
             running_cnt = len(queue_data.get("queue_running", []))
             pending_cnt = len(queue_data.get("queue_pending", []))
             
@@ -47,45 +62,30 @@ def render_single_instance(instance_config, index, all_instances):
             col2.metric("Pending", pending_cnt)
             col3.metric("Running", running_cnt)
             
-            # Refresh Button for the Image
             if col4.button("🔄 Check Img", key=f"refresh_{index}", use_container_width=True):
                  st.session_state[f"force_img_refresh_{index}"] = True
-
         except Exception:
             col1.metric("Status", "🔴 Offline")
             col2.metric("Pending", "-")
             col3.metric("Running", "-")
             st.error(f"Could not connect to {COMFY_URL}")
-            # If offline, stop here to avoid ugly iframe error
             return 
 
-    # --- 2. LIVE INTERFACE (Full Control) ---
-    st.write("") # Spacer
-    
-    # Controls Row
+    # --- 2. LIVE VIEW ---
+    st.write("") 
     c_label, c_slider = st.columns([1, 2])
     c_label.subheader("📺 Live View")
     
-    # Slider to control height dynamically
+    # Slider force-reloads the iframe (normal behavior)
     iframe_h = c_slider.slider(
         "Window Size (px)", 
-        min_value=600, 
-        max_value=2500, 
-        value=1000, 
-        step=50, 
-        key=f"h_slider_{index}",
-        label_visibility="collapsed"
+        min_value=600, max_value=2500, value=1000, step=50, 
+        key=f"h_slider_{index}", label_visibility="collapsed"
     )
 
-    # RAW HTML IFRAME
-    # We use this instead of st.components.v1.iframe to get full width and exact height
-    # without the Streamlit component sandbox borders.
     st.markdown(
         f"""
-        <iframe 
-            src="{COMFY_URL}" 
-            width="100%" 
-            height="{iframe_h}px" 
+        <iframe src="{COMFY_URL}" width="100%" height="{iframe_h}px" 
             style="border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
         </iframe>
         """,
@@ -94,18 +94,15 @@ def render_single_instance(instance_config, index, all_instances):
 
     st.markdown("---")
 
-    # --- 3. LATEST OUTPUT FETCHER (Optional View) ---
-    # Only calculate if button was clicked to save resources
+    # --- 3. LATEST OUTPUT ---
     if st.session_state.get(f"force_img_refresh_{index}", False):
         st.caption("🖼️ Most Recent Output")
         try:
             hist_res = requests.get(f"{COMFY_URL}/history", timeout=2)
             history = hist_res.json()
-            
             if history:
                 last_prompt_id = list(history.keys())[-1]
                 outputs = history[last_prompt_id].get("outputs", {})
-                
                 found_img = None
                 for node_id, node_output in outputs.items():
                     if "images" in node_output:
@@ -120,7 +117,6 @@ def render_single_instance(instance_config, index, all_instances):
                     folder = found_img['subfolder']
                     img_type = found_img['type']
                     img_url = f"{COMFY_URL}/view?filename={img_name}&subfolder={folder}&type={img_type}"
-                    
                     img_res = requests.get(img_url)
                     image = Image.open(BytesIO(img_res.content))
                     st.image(image, caption=f"Last Output: {img_name}")
@@ -128,13 +124,9 @@ def render_single_instance(instance_config, index, all_instances):
                     st.warning("Last run had no image output.")
             else:
                 st.info("No history found.")
-                
-            # Reset trigger
             st.session_state[f"force_img_refresh_{index}"] = False
-            
         except Exception as e:
             st.error(f"Error fetching image: {e}")
-
 
 def render_comfy_monitor():
     if "comfy_instances" not in st.session_state.config:
@@ -143,7 +135,6 @@ def render_comfy_monitor():
         ]
     
     instances = st.session_state.config["comfy_instances"]
-    
     tab_names = [i["name"] for i in instances] + ["➕ Add Server"]
     tabs = st.tabs(tab_names)
     
@@ -156,11 +147,17 @@ def render_comfy_monitor():
         with st.form("add_server_form"):
             new_name = st.text_input("Server Name", placeholder="e.g. Render Node 2")
             new_url = st.text_input("URL", placeholder="http://192.168.1.50:8188")
-            
             if st.form_submit_button("Add Instance"):
                 if new_name and new_url:
                     instances.append({"name": new_name, "url": new_url})
                     st.session_state.config["comfy_instances"] = instances
+                    
+                    # SAVE TO DISK IMMEDIATELY
+                    save_config(
+                        st.session_state.current_dir, 
+                        st.session_state.config['favorites'], 
+                        {"comfy_instances": instances}
+                    )
                     st.success("Server Added!")
                     st.rerun()
                 else:
