@@ -55,22 +55,21 @@ class HistoryTree:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     def generate_horizontal_graph(self):
-        """Generates a Compact, White-Background Horizontal Graph."""
+        """Generates a Fixed-Size, Compact Horizontal Graph."""
         dot = [
             'digraph History {',
             '  rankdir=LR;',
-            # 1. Force White Background (Fixes the black/transparent issue)
-            '  bgcolor="white";',
+            '  bgcolor="white";', # Clean background
             
-            # 2. TIGHT Layout settings (Fixes "Too Big")
-            '  nodesep=0.2;',  # Closer together horizontally
-            '  ranksep=0.3;',  # Closer together vertically
-            '  ratio=compress;', # Try to compress the drawing
+            # --- COMPACT LAYOUT SETTINGS ---
+            '  nodesep=0.15;',   # Horizontal gap between nodes
+            '  ranksep=0.25;',   # Vertical gap between branches
             
-            # 3. Small Node Styling
-            # height=0 forces node to fit text exactly
-            # margin=0.05 removes internal padding
-            '  node [shape=box, style="filled,rounded", fillcolor="#f9f9f9", fontname="Arial", fontsize=9, height=0, margin="0.05,0.05"];',
+            # --- FIXED SIZE NODES (The Key Fix) ---
+            # fixedsize=true: Ignores text length, forces the width/height below.
+            # width=1.2: Sets box width to ~100px
+            # height=0.4: Sets box height to ~30px
+            '  node [shape=box, style="filled,rounded", fillcolor="#f9f9f9", fontname="Arial", fontsize=9, fixedsize=true, width=1.3, height=0.45];',
             '  edge [color="#666666", arrowsize=0.5, penwidth=1.0];'
         ]
         
@@ -79,26 +78,22 @@ class HistoryTree:
         for n in sorted_nodes:
             nid = n["id"]
             
-            # 4. Aggressive Text Truncation
+            # Truncate text to fit in the 1.3 inch box
             full_note = n.get('note', 'Step')
-            # Keep only first 12 chars to keep box small
-            short_note = (full_note[:12] + '..') if len(full_note) > 12 else full_note
+            short_note = (full_note[:10] + '..') if len(full_note) > 10 else full_note
             
-            # Use simple label
             label = f"{short_note}\\n{nid[:4]}"
             
-            # Styling
-            color = "#f0f0f0" # Light Grey default
+            # Colors
+            color = "#f0f0f0" 
             penwidth = "1"
             
-            # Active Node (HEAD) - Yellow
             if nid == self.head_id:
-                color = "#fff6cd" 
+                color = "#fff6cd" # Yellow for Active
                 penwidth = "2"
             
-            # Branch Tips - Light Green
             if nid in self.branches.values():
-                if color == "#f0f0f0": color = "#e6ffe6" 
+                if color == "#f0f0f0": color = "#e6ffe6" # Green for Branch Tips
             
             dot.append(f'  "{nid}" [label="{label}", fillcolor="{color}", penwidth="{penwidth}"];')
             
