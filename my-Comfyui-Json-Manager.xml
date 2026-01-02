@@ -15,7 +15,7 @@
   <TemplateURL/>
   <Icon/>
   <ExtraParams/>
-  <PostArgs>/bin/sh -c "pip install streamlit opencv-python-headless && cd /app && streamlit run app.py --server.headless true --server.port 8501""</PostArgs>
+  <PostArgs>/bin/sh -c "apt-get update && apt-get install -y graphviz && pip install streamlit opencv-python-headless graphviz streamlit-agraph && cd /app && streamlit run app.py --server.headless true --server.port 8501"</PostArgs>
   <CPUset/>
   <DateInstalled>1767096338</DateInstalled>
   <DonateText/>
