@@ -7,7 +7,6 @@ class HistoryTree:
         self.branches = raw_data.get("branches", {"main": None}) 
         self.head_id = raw_data.get("head_id", None)
         
-        # Migration for legacy list-based history
         if "prompt_history" in raw_data and isinstance(raw_data["prompt_history"], list) and not self.nodes:
             self._migrate_legacy(raw_data["prompt_history"])
 
@@ -26,14 +25,12 @@ class HistoryTree:
     def commit(self, data, note="Snapshot"):
         new_id = str(uuid.uuid4())[:8]
         
-        # Logic: Are we at the tip of a branch?
         active_branch = None
         for b_name, tip_id in self.branches.items():
             if tip_id == self.head_id:
                 active_branch = b_name
                 break
         
-        # If not at a tip, we must FORK a new branch
         if not active_branch:
             base_name = "branch"
             count = 1
@@ -58,34 +55,39 @@ class HistoryTree:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     def generate_horizontal_graph(self):
-        """Generates a Fusion 360-style Horizontal Graph."""
+        """Generates a Compact Fusion 360-style Horizontal Graph."""
         dot = [
             'digraph History {',
-            '  rankdir=LR;',  # Left-to-Right layout
-            '  node [shape=rect, style="filled,rounded", fontname="Arial", margin=0.2];',
-            '  edge [color="#888888", arrowsize=0.8];'
+            '  rankdir=LR;',
+            '  bgcolor="transparent";',
+            # COMPACT STYLING
+            '  nodesep=0.3;', 
+            '  ranksep=0.4;',
+            '  node [shape=rect, style="filled,rounded", fontname="Arial", fontsize=10, height=0.4, margin="0.1,0.05"];',
+            '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
         ]
         
-        # Sort by time for linear flow
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
         
         for n in sorted_nodes:
             nid = n["id"]
-            note = n.get('note', 'Step')
-            label = f"{note}\\nid: {nid}"
+            # TRUNCATE LABEL to keep box small
+            full_note = n.get('note', 'Step')
+            short_note = (full_note[:15] + '..') if len(full_note) > 15 else full_note
+            
+            label = f"{short_note}\\n<{nid[:4]}>"
             
             # Styling
-            color = "#e0e0e0" # Default Grey
+            color = "#e0e0e0" 
             penwidth = "1"
             
-            # Active Node (HEAD) - Yellow
             if nid == self.head_id:
-                color = "#ffeba0" 
-                penwidth = "3"
+                color = "#ffeba0" # Active Yellow
+                penwidth = "2"
             
-            # Branch Tips - Green
             if nid in self.branches.values():
-                color = "#d0f0c0"
+                # Branch tips get slightly darker border
+                if color == "#e0e0e0": color = "#d0f0c0" 
             
             dot.append(f'  "{nid}" [label="{label}", fillcolor="{color}", penwidth="{penwidth}"];')
             
