@@ -45,6 +45,10 @@ def load_json(path):
     try:
         with open(path, 'r') as f:
             data = json.load(f)
+            
+        # Ensure migration happens if loading old file
+        # We don't change structure here, HistoryTree class handles logic
+        
         return data, get_file_mtime(path)
     except:
         return DEFAULTS.copy(), 0
