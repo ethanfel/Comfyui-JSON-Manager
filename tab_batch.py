@@ -112,38 +112,76 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
         with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
-            b1, b2, b3 = st.columns([1, 1, 2])
+            # --- NEW: ACTION ROW WITH CLONING ---
+            act_c1, act_c2, act_c3, act_c4 = st.columns([1.2, 1.8, 1.2, 0.5])
             
-            if b1.button(f"📥 Copy {src_name}", key=f"{prefix}_copy"):
-                item = DEFAULTS.copy()
-                flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
-                item.update(flat)
-                item["sequence_number"] = seq_num
+            # 1. Copy Source
+            with act_c1:
+                if st.button(f"📥 Copy {src_name}", key=f"{prefix}_copy", use_container_width=True):
+                    item = DEFAULTS.copy()
+                    flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
+                    item.update(flat)
+                    item["sequence_number"] = seq_num
+                    for k in ["prompt_history", "history_tree"]: 
+                        if k in item: del item[k]
+                    batch_list[i] = item
+                    data["batch_data"] = batch_list
+                    save_json(file_path, data)
+                    st.session_state.ui_reset_token += 1 
+                    st.toast("Copied!", icon="📥")
+                    st.rerun()
+
+            # 2. Cloning Tools (Next / End)
+            with act_c2:
+                cl_1, cl_2 = st.columns(2)
                 
-                for k in ["prompt_history", "history_tree"]: 
-                    if k in item: del item[k]
+                # Clone Next
+                if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
+                    new_seq = seq.copy()
+                    # Calculate new max sequence number
+                    max_sn = 0
+                    for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
+                    new_seq["sequence_number"] = max_sn + 1
                     
-                batch_list[i] = item
-                data["batch_data"] = batch_list
-                save_json(file_path, data)
-                st.session_state.ui_reset_token += 1 
-                st.toast("Copied!", icon="📥")
-                st.rerun()
+                    batch_list.insert(i + 1, new_seq)
+                    data["batch_data"] = batch_list
+                    save_json(file_path, data)
+                    st.session_state.ui_reset_token += 1
+                    st.toast("Cloned to Next!", icon="👯")
+                    st.rerun()
 
-            if b2.button("↖️ Promote to Single", key=f"{prefix}_prom"):
-                single_data = seq.copy()
-                single_data["prompt_history"] = data.get("prompt_history", [])
-                single_data["history_tree"] = data.get("history_tree", {})
-                if "sequence_number" in single_data: del single_data["sequence_number"]
-                save_json(file_path, single_data)
-                st.toast("Converted to Single!", icon="✅")
-                st.rerun()
+                # Clone End
+                if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
+                    new_seq = seq.copy()
+                    max_sn = 0
+                    for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
+                    new_seq["sequence_number"] = max_sn + 1
+                    
+                    batch_list.append(new_seq)
+                    data["batch_data"] = batch_list
+                    save_json(file_path, data)
+                    st.session_state.ui_reset_token += 1
+                    st.toast("Cloned to End!", icon="⏬")
+                    st.rerun()
 
-            if b3.button("🗑️ Remove", key=f"{prefix}_del"):
-                batch_list.pop(i)
-                data["batch_data"] = batch_list
-                save_json(file_path, data)
-                st.rerun()
+            # 3. Promote
+            with act_c3:
+                if st.button("↖️ Promote", key=f"{prefix}_prom", help="Save as Single File", use_container_width=True):
+                    single_data = seq.copy()
+                    single_data["prompt_history"] = data.get("prompt_history", [])
+                    single_data["history_tree"] = data.get("history_tree", {})
+                    if "sequence_number" in single_data: del single_data["sequence_number"]
+                    save_json(file_path, single_data)
+                    st.toast("Converted to Single!", icon="✅")
+                    st.rerun()
+
+            # 4. Remove
+            with act_c4:
+                if st.button("🗑️", key=f"{prefix}_del", use_container_width=True):
+                    batch_list.pop(i)
+                    data["batch_data"] = batch_list
+                    save_json(file_path, data)
+                    st.rerun()
 
             st.markdown("---")
             c1, c2 = st.columns([2, 1])
