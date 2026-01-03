@@ -75,7 +75,8 @@ def render_timeline_wip(data, file_path):
     st.subheader("✨ Interactive Timeline")
     st.caption("Click a node to view its settings below.")
     
-    selected_id = agraph(nodes=nodes, edges=edges, config=config, key="interactive_timeline")
+    # --- FIX: REMOVED 'key' ARGUMENT ---
+    selected_id = agraph(nodes=nodes, edges=edges, config=config)
 
     st.markdown("---")
 
