@@ -40,39 +40,25 @@ def render_timeline_tab(data, file_path):
     elif view_mode == "📜 Linear Log":
         st.caption("A simple chronological list of all snapshots.")
         all_nodes = list(htree.nodes.values())
-        # Sort newest first
         all_nodes.sort(key=lambda x: x["timestamp"], reverse=True)
         
         for n in all_nodes:
             is_head = (n["id"] == htree.head_id)
-            
-            # Card-like container
             with st.container():
                 c1, c2, c3 = st.columns([0.5, 4, 1])
-                
-                # Column 1: Icon
                 with c1:
-                    if is_head:
-                        st.markdown("### 📍")
-                    else:
-                        st.markdown("### ⚫")
-                
-                # Column 2: Details
+                    st.markdown("### 📍" if is_head else "### ⚫")
                 with c2:
                     note_txt = n.get('note', 'Step')
                     ts = time.strftime('%H:%M:%S', time.localtime(n['timestamp']))
-                    
                     if is_head:
                         st.markdown(f"**{note_txt}** (Current)")
                     else:
                         st.write(f"**{note_txt}**")
                     st.caption(f"ID: {n['id'][:6]} • Time: {ts}")
-
-                # Column 3: Restore Button
                 with c3:
                     if not is_head:
                         if st.button("⏪", key=f"log_rst_{n['id']}", help="Restore this version"):
-                            # Logic duplicated from below to enable quick restore
                             data.update(n["data"])
                             htree.head_id = n['id']
                             data["history_tree"] = htree.to_dict()
@@ -86,7 +72,7 @@ def render_timeline_tab(data, file_path):
 
     st.markdown("---")
 
-    # --- INSPECTOR (Common to all views) ---
+    # --- ACTIONS & SELECTION ---
     col_sel, col_act = st.columns([3, 1])
     
     all_nodes = list(htree.nodes.values())
@@ -103,7 +89,7 @@ def render_timeline_tab(data, file_path):
                 break
                 
         selected_node = st.selectbox(
-            "Inspect Node Details:", 
+            "Select Version to Manage:", 
             all_nodes, 
             format_func=fmt_node,
             index=current_idx
@@ -112,43 +98,17 @@ def render_timeline_tab(data, file_path):
     if selected_node:
         node_data = selected_node["data"]
         
-        # --- DIFF VIEWER ---
-        with st.expander(f"🔎 Compare '{selected_node.get('note')}' with Current State", expanded=True):
-            diffs = []
-            all_keys = set(data.keys()) | set(node_data.keys())
-            ignore_keys = {"history_tree", "prompt_history", "batch_data", "ui_reset_token"}
-            
-            for k in all_keys:
-                if k in ignore_keys: continue
-                val_now = data.get(k, "N/A")
-                val_then = node_data.get(k, "N/A")
-                if str(val_now) != str(val_then):
-                    diffs.append((k, val_now, val_then))
-
-            if not diffs:
-                st.caption("✅ Identical to current state")
-            else:
-                for k, v_now, v_then in diffs:
-                    dc1, dc2, dc3 = st.columns([1, 2, 2])
-                    dc1.markdown(f"**{k}**")
-                    dc2.markdown(f"🔴 `{str(v_now)[:30]}`")
-                    dc3.markdown(f"🟢 `{str(v_then)[:30]}`")
-
         # --- ACTIONS ---
         with col_act:
             st.write(""); st.write("")
-            if st.button("⏪ Restore", type="primary", use_container_width=True):
+            if st.button("⏪ Restore Version", type="primary", use_container_width=True):
                 data.update(node_data)
                 htree.head_id = selected_node['id']
-                
                 data["history_tree"] = htree.to_dict()
                 save_json(file_path, data)
-                
                 st.session_state.ui_reset_token += 1
-                
                 label = f"{selected_node.get('note')} ({selected_node['id'][:4]})"
                 st.session_state.restored_indicator = label
-                
                 st.toast(f"Restored!", icon="🔄")
                 st.rerun()
 
@@ -164,22 +124,19 @@ def render_timeline_tab(data, file_path):
         # --- DANGER ZONE ---
         st.markdown("---")
         with st.expander("⚠️ Danger Zone (Delete)"):
-            st.warning("Deleting a node cannot be undone. If this node has branches, they might become disconnected.")
+            st.warning("Deleting a node cannot be undone.")
             if st.button("🗑️ Delete This Node", type="primary"):
                 if selected_node['id'] in htree.nodes:
                     del htree.nodes[selected_node['id']]
-                    
                     for b, tip in list(htree.branches.items()):
                         if tip == selected_node['id']:
                             del htree.branches[b] 
-                    
                     if htree.head_id == selected_node['id']:
                         if htree.nodes:
                             fallback = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])[-1]
                             htree.head_id = fallback["id"]
                         else:
                             htree.head_id = None
-
                     data["history_tree"] = htree.to_dict()
                     save_json(file_path, data)
                     st.toast("Node Deleted", icon="🗑️")
