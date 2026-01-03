@@ -179,7 +179,7 @@ if selected_file_name:
         "📝 Single Editor", 
         "🚀 Batch Processor", 
         "🕒 Timeline", 
-        "🧪 WIP Timeline",
+        "🧪 Interactive Timeline",
         "🔌 Comfy Monitor"
     ]
     
@@ -207,7 +207,7 @@ if selected_file_name:
     elif current_tab == "🕒 Timeline":
         render_timeline_tab(data, file_path)
         
-    elif current_tab == "🧪 WIP Timeline":
+    elif current_tab == "🧪 Interactive Timeline":
         render_timeline_wip(data, file_path)
 
     elif current_tab == "🔌 Comfy Monitor":
