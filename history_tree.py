@@ -54,13 +54,17 @@ class HistoryTree:
     def to_dict(self):
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
-    def generate_horizontal_graph(self):
-        """Generates a Compact, Readable Horizontal Graph using HTML Labels."""
+    # --- UPDATED GRAPH GENERATOR ---
+    def generate_graph(self, direction="LR"):
+        """
+        Generates Graphviz source.
+        direction: "LR" (Horizontal) or "TB" (Vertical)
+        """
         dot = [
             'digraph History {',
-            '  rankdir=LR;',
+            f'  rankdir={direction};',  # Dynamic Direction
             '  bgcolor="white";', 
-            '  splines=ortho;', # Clean right-angle lines
+            '  splines=ortho;', 
             
             # TIGHT SPACING
             '  nodesep=0.2;',
@@ -77,8 +81,6 @@ class HistoryTree:
             nid = n["id"]
             full_note = n.get('note', 'Step')
             
-            # Truncate slightly for display, but keep enough to read
-            # HTML Labels allow distinct styling for Title vs ID
             display_note = (full_note[:15] + '..') if len(full_note) > 15 else full_note
             
             # COLORS
@@ -94,8 +96,7 @@ class HistoryTree:
                 bg_color = "#e6ffe6" # Green for Tips
                 border_color = "#66aa66"
 
-            # HTML LABEL (Table)
-            # This is the trick to make it compact but readable
+            # HTML LABEL
             label = (
                 f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4" BGCOLOR="{bg_color}" COLOR="{border_color}">'
                 f'<TR><TD><B><FONT POINT-SIZE="10">{display_note}</FONT></B></TD></TR>'
@@ -103,7 +104,6 @@ class HistoryTree:
                 f'</TABLE>>'
             )
             
-            # Tooltip shows full text on hover
             safe_tooltip = full_note.replace('"', "'")
             dot.append(f'  "{nid}" [label={label}, tooltip="{safe_tooltip}"];')
             
