@@ -75,13 +75,11 @@ def render_timeline_wip(data, file_path):
     st.subheader("✨ Interactive Timeline")
     st.caption("Click a node to view its settings below.")
     
-    # Render Graph
-    selected_id = agraph(nodes=nodes, edges=edges, config=config)
+    selected_id = agraph(nodes=nodes, edges=edges, config=config, key="interactive_timeline")
 
     st.markdown("---")
 
     # --- 2. DETERMINE TARGET ---
-    # Default to HEAD if nothing clicked
     target_node_id = selected_id if selected_id else htree.head_id
 
     if target_node_id and target_node_id in htree.nodes:
@@ -110,52 +108,67 @@ def render_timeline_wip(data, file_path):
                 st.toast(f"Restored {target_node_id}!", icon="🔄")
                 st.rerun()
 
-        # --- 3. PREVIEW PANELS (DYNAMIC KEYS FIX) ---
-        # We append target_node_id to every key to force a hard refresh
+        # --- 3. PREVIEW LOGIC (BATCH VS SINGLE) ---
         
-        # A. Prompts
-        p_col1, p_col2 = st.columns(2)
-        with p_col1:
-            val_gp = node_data.get("general_prompt", "")
-            st.text_area("General Positive", value=val_gp, height=80, disabled=True, key=f"p_gp_{target_node_id}")
-            
-            val_sp = node_data.get("current_prompt", "") or node_data.get("prompt", "")
-            st.text_area("Specific Positive", value=val_sp, height=80, disabled=True, key=f"p_sp_{target_node_id}")
-            
-        with p_col2:
-            val_gn = node_data.get("general_negative", "")
-            st.text_area("General Negative", value=val_gn, height=80, disabled=True, key=f"p_gn_{target_node_id}")
-            
-            val_sn = node_data.get("negative", "")
-            st.text_area("Specific Negative", value=val_sn, height=80, disabled=True, key=f"p_sn_{target_node_id}")
+        # Helper to render one set of inputs
+        def render_preview_fields(item_data, prefix):
+            # A. Prompts
+            p_col1, p_col2 = st.columns(2)
+            with p_col1:
+                val_gp = item_data.get("general_prompt", "")
+                st.text_area("General Positive", value=val_gp, height=80, disabled=True, key=f"{prefix}_gp")
+                
+                val_sp = item_data.get("current_prompt", "") or item_data.get("prompt", "")
+                st.text_area("Specific Positive", value=val_sp, height=80, disabled=True, key=f"{prefix}_sp")
+            with p_col2:
+                val_gn = item_data.get("general_negative", "")
+                st.text_area("General Negative", value=val_gn, height=80, disabled=True, key=f"{prefix}_gn")
+                
+                val_sn = item_data.get("negative", "")
+                st.text_area("Specific Negative", value=val_sn, height=80, disabled=True, key=f"{prefix}_sn")
 
-        # B. Key Settings
-        st.caption("⚙️ Core Settings")
-        s_col1, s_col2, s_col3 = st.columns(3)
-        s_col1.text_input("Camera", value=str(node_data.get("camera", "static")), disabled=True, key=f"p_cam_{target_node_id}")
-        s_col2.text_input("FLF", value=str(node_data.get("flf", "0.0")), disabled=True, key=f"p_flf_{target_node_id}")
-        s_col3.text_input("Seed", value=str(node_data.get("seed", "-1")), disabled=True, key=f"p_seed_{target_node_id}")
+            # B. Settings
+            s_col1, s_col2, s_col3 = st.columns(3)
+            s_col1.text_input("Camera", value=str(item_data.get("camera", "static")), disabled=True, key=f"{prefix}_cam")
+            s_col2.text_input("FLF", value=str(item_data.get("flf", "0.0")), disabled=True, key=f"{prefix}_flf")
+            s_col3.text_input("Seed", value=str(item_data.get("seed", "-1")), disabled=True, key=f"{prefix}_seed")
 
-        # C. LoRAs
-        with st.expander("💊 LoRA Configuration", expanded=False):
-            l1, l2, l3 = st.columns(3)
-            with l1:
-                st.text_input("LoRA 1 Name", value=node_data.get("lora 1 high", ""), disabled=True, key=f"p_l1h_{target_node_id}")
-                st.text_input("LoRA 1 Str", value=str(node_data.get("lora 1 low", "")), disabled=True, key=f"p_l1l_{target_node_id}")
-            with l2:
-                st.text_input("LoRA 2 Name", value=node_data.get("lora 2 high", ""), disabled=True, key=f"p_l2h_{target_node_id}")
-                st.text_input("LoRA 2 Str", value=str(node_data.get("lora 2 low", "")), disabled=True, key=f"p_l2l_{target_node_id}")
-            with l3:
-                st.text_input("LoRA 3 Name", value=node_data.get("lora 3 high", ""), disabled=True, key=f"p_l3h_{target_node_id}")
-                st.text_input("LoRA 3 Str", value=str(node_data.get("lora 3 low", "")), disabled=True, key=f"p_l3l_{target_node_id}")
+            # C. LoRAs
+            with st.expander("💊 LoRA Configuration", expanded=False):
+                l1, l2, l3 = st.columns(3)
+                with l1:
+                    st.text_input("L1 Name", value=item_data.get("lora 1 high", ""), disabled=True, key=f"{prefix}_l1h")
+                    st.text_input("L1 Str", value=str(item_data.get("lora 1 low", "")), disabled=True, key=f"{prefix}_l1l")
+                with l2:
+                    st.text_input("L2 Name", value=item_data.get("lora 2 high", ""), disabled=True, key=f"{prefix}_l2h")
+                    st.text_input("L2 Str", value=str(item_data.get("lora 2 low", "")), disabled=True, key=f"{prefix}_l2l")
+                with l3:
+                    st.text_input("L3 Name", value=item_data.get("lora 3 high", ""), disabled=True, key=f"{prefix}_l3h")
+                    st.text_input("L3 Str", value=str(item_data.get("lora 3 low", "")), disabled=True, key=f"{prefix}_l3l")
+            
+            # D. VACE
+            vace_keys = ["frame_to_skip", "vace schedule", "video file path"]
+            has_vace = any(k in item_data for k in vace_keys)
+            if has_vace:
+                with st.expander("🎞️ VACE / I2V Settings", expanded=False):
+                    v1, v2, v3 = st.columns(3)
+                    v1.text_input("Skip Frames", value=str(item_data.get("frame_to_skip", "")), disabled=True, key=f"{prefix}_fts")
+                    v2.text_input("Schedule", value=str(item_data.get("vace schedule", "")), disabled=True, key=f"{prefix}_vsc")
+                    v3.text_input("Video Path", value=str(item_data.get("video file path", "")), disabled=True, key=f"{prefix}_vid")
 
-        # D. VACE / I2V Specifics
-        vace_keys = ["frame_to_skip", "vace schedule", "video file path"]
-        has_vace = any(k in node_data for k in vace_keys)
+        # --- DETECT BATCH VS SINGLE ---
+        batch_list = node_data.get("batch_data", [])
         
-        if has_vace:
-            with st.expander("🎞️ VACE / I2V Settings", expanded=True):
-                v1, v2, v3 = st.columns(3)
-                v1.text_input("Skip Frames", value=str(node_data.get("frame_to_skip", "")), disabled=True, key=f"p_fts_{target_node_id}")
-                v2.text_input("Schedule", value=str(node_data.get("vace schedule", "")), disabled=True, key=f"p_vsc_{target_node_id}")
-                v3.text_input("Video Path", value=str(node_data.get("video file path", "")), disabled=True, key=f"p_vid_{target_node_id}")
+        if batch_list and isinstance(batch_list, list) and len(batch_list) > 0:
+            st.info(f"📚 This snapshot contains {len(batch_list)} sequences.")
+            
+            for i, seq_data in enumerate(batch_list):
+                seq_num = seq_data.get("sequence_number", i+1)
+                with st.expander(f"🎬 Sequence #{seq_num}", expanded=(i==0)):
+                    # Unique prefix for every sequence in every node
+                    prefix = f"p_{target_node_id}_s{i}"
+                    render_preview_fields(seq_data, prefix)
+        else:
+            # Single File Preview
+            prefix = f"p_{target_node_id}_single"
+            render_preview_fields(node_data, prefix)
