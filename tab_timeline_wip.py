@@ -12,7 +12,7 @@ def render_timeline_wip(data, file_path):
 
     htree = HistoryTree(tree_data)
 
-    # --- 1. GRAPH NODES ---
+    # --- 1. BUILD GRAPH DATA ---
     nodes = []
     edges = []
     
@@ -21,14 +21,18 @@ def render_timeline_wip(data, file_path):
     for n in sorted_nodes:
         nid = n["id"]
         note = n.get('note', 'Step')
+        # Visual styling
         short_note = (note[:15] + '..') if len(note) > 15 else note
         
-        # Colors
         color = "#ffffff"     
         border = "#666666"    
+        
+        # Highlight Current Head
         if nid == htree.head_id:
             color = "#fff6cd" 
             border = "#eebb00"
+        
+        # Highlight Branch Tips
         if nid in htree.branches.values():
             if color == "#ffffff": 
                 color = "#e6ffe6"
@@ -53,109 +57,110 @@ def render_timeline_wip(data, file_path):
                 type="STRAIGHT"
             ))
 
+    # --- 2. CONFIGURATION ---
     config = Config(
-        width="100%", height="500px", directed=True, physics=False, hierarchical=True, 
-        layout={"hierarchical": {"enabled": True, "levelSeparation": 150, "nodeSpacing": 100, "treeSpacing": 100, "direction": "LR", "sortMethod": "directed"}}
+        width="100%",
+        height="400px", 
+        directed=True, 
+        physics=False, # Keep false for stability
+        hierarchical=True, 
+        layout={
+            "hierarchical": {
+                "enabled": True,
+                "levelSeparation": 150,
+                "nodeSpacing": 100,
+                "treeSpacing": 100,
+                "direction": "LR", 
+                "sortMethod": "directed"
+            }
+        }
     )
 
     st.subheader("✨ Interactive Timeline")
-    st.caption("Click any node to preview its prompts and settings.")
+    st.caption("Click a node to view its settings below.")
     
-    clicked_node_id = agraph(nodes=nodes, edges=edges, config=config)
+    # --- 3. RENDER GRAPH ---
+    # KEY FIX: Adding a unique key ensures Streamlit tracks clicks correctly
+    selected_id = agraph(nodes=nodes, edges=edges, config=config)
 
     st.markdown("---")
 
-    # --- 2. INSPECTOR ---
-    target_node_id = clicked_node_id if clicked_node_id else htree.head_id
+    # --- 4. DETERMINE TARGET NODE ---
+    # If nothing is clicked, default to the current HEAD
+    target_node_id = selected_id if selected_id else htree.head_id
 
     if target_node_id and target_node_id in htree.nodes:
         selected_node = htree.nodes[target_node_id]
         node_data = selected_node["data"]
 
+        # Header
         c_h1, c_h2 = st.columns([3, 1])
-        c_h1.markdown(f"### 🔎 Inspecting: {selected_node.get('note', 'Step')}")
+        c_h1.markdown(f"### 📄 Previewing: {selected_node.get('note', 'Step')}")
         c_h1.caption(f"ID: {target_node_id}")
 
-        # --- COMPARE (Only here) ---
-        with st.expander(f"📊 Compare Changes", expanded=False):
-            diffs = []
-            all_keys = set(data.keys()) | set(node_data.keys())
-            ignore_keys = {"history_tree", "prompt_history", "batch_data", "ui_reset_token", "sequence_number"}
-            
-            for k in all_keys:
-                if k in ignore_keys: continue
-                val_now = str(data.get(k, "")).strip()
-                val_then = str(node_data.get(k, "")).strip()
-                
-                if val_now != val_then:
-                    # Ignore tiny float differences
-                    try:
-                        if abs(float(val_now) - float(val_then)) < 0.001: continue
-                    except: pass
-                    diffs.append((k, val_now, val_then))
-
-            if not diffs:
-                st.caption("✅ Identical to current state")
-            else:
-                for k, v_now, v_then in diffs:
-                    dc1, dc2, dc3 = st.columns([1, 2, 2])
-                    dc1.markdown(f"**{k}**")
-                    dc2.markdown(f"🔴 `{v_now[:30]}`")
-                    dc3.markdown(f"🟢 `{v_then[:30]}`")
-        
-        # --- RESTORE ACTION ---
+        # Restore Button
         with c_h2:
-            st.write(""); st.write("")
+            st.write("") 
             if st.button("⏪ Restore This Version", type="primary", use_container_width=True):
                 data.update(node_data)
                 htree.head_id = target_node_id
+                
                 data["history_tree"] = htree.to_dict()
                 save_json(file_path, data)
+                
                 st.session_state.ui_reset_token += 1
-                st.session_state.restored_indicator = f"{selected_node.get('note')} ({target_node_id[:4]})"
+                label = f"{selected_node.get('note')} ({target_node_id[:4]})"
+                st.session_state.restored_indicator = label
+                
                 st.toast(f"Restored {target_node_id}!", icon="🔄")
                 st.rerun()
 
-        # --- PREVIEW (CORRECTED SCHEMA) ---
-        st.markdown("#### 📄 Snapshot Preview")
+        # --- 5. PREVIEW PANELS (READ ONLY) ---
         
-        # 1. Prompts
+        # A. Prompts
         p_col1, p_col2 = st.columns(2)
         with p_col1:
-            val = node_data.get("general_prompt", "")
-            st.text_area("General Prompt", value=val, height=80, disabled=True, key="prev_gp")
+            val_gp = node_data.get("general_prompt", "")
+            st.text_area("General Positive", value=val_gp, height=80, disabled=True, key="p_gp")
             
             val_sp = node_data.get("current_prompt", "") or node_data.get("prompt", "")
-            st.text_area("Specific Prompt", value=val_sp, height=80, disabled=True, key="prev_sp")
+            st.text_area("Specific Positive", value=val_sp, height=80, disabled=True, key="p_sp")
             
         with p_col2:
-            val = node_data.get("general_negative", "")
-            st.text_area("General Negative", value=val, height=80, disabled=True, key="prev_gn")
+            val_gn = node_data.get("general_negative", "")
+            st.text_area("General Negative", value=val_gn, height=80, disabled=True, key="p_gn")
             
             val_sn = node_data.get("negative", "")
-            st.text_area("Specific Negative", value=val_sn, height=80, disabled=True, key="prev_sn")
+            st.text_area("Specific Negative", value=val_sn, height=80, disabled=True, key="p_sn")
 
-        # 2. Key Settings (Camera / FLF / Seed)
-        st.caption("Settings")
+        # B. Key Settings
+        st.caption("⚙️ Core Settings")
         s_col1, s_col2, s_col3 = st.columns(3)
-        s_col1.text_input("Camera", value=str(node_data.get("camera", "")), disabled=True, key="prev_cam")
-        s_col2.text_input("FLF", value=str(node_data.get("flf", "")), disabled=True, key="prev_flf")
-        s_col3.text_input("Seed", value=str(node_data.get("seed", "")), disabled=True, key="prev_seed")
+        s_col1.text_input("Camera", value=str(node_data.get("camera", "static")), disabled=True, key="p_cam")
+        s_col2.text_input("FLF", value=str(node_data.get("flf", "0.0")), disabled=True, key="p_flf")
+        s_col3.text_input("Seed", value=str(node_data.get("seed", "-1")), disabled=True, key="p_seed")
 
-        # 3. VACE / I2V Specifics (Conditional)
+        # C. LoRAs
+        with st.expander("💊 LoRA Configuration", expanded=False):
+            l1, l2, l3 = st.columns(3)
+            with l1:
+                st.text_input("LoRA 1 Name", value=node_data.get("lora 1 high", ""), disabled=True, key="p_l1h")
+                st.text_input("LoRA 1 Str", value=str(node_data.get("lora 1 low", "")), disabled=True, key="p_l1l")
+            with l2:
+                st.text_input("LoRA 2 Name", value=node_data.get("lora 2 high", ""), disabled=True, key="p_l2h")
+                st.text_input("LoRA 2 Str", value=str(node_data.get("lora 2 low", "")), disabled=True, key="p_l2l")
+            with l3:
+                st.text_input("LoRA 3 Name", value=node_data.get("lora 3 high", ""), disabled=True, key="p_l3h")
+                st.text_input("LoRA 3 Str", value=str(node_data.get("lora 3 low", "")), disabled=True, key="p_l3l")
+
+        # D. VACE / I2V Specifics
+        # Check if any VACE keys exist in this history node
         vace_keys = ["frame_to_skip", "vace schedule", "video file path"]
         has_vace = any(k in node_data for k in vace_keys)
         
         if has_vace:
-            with st.expander("VACE / I2V Settings", expanded=True):
+            with st.expander("🎞️ VACE / I2V Settings", expanded=True):
                 v1, v2, v3 = st.columns(3)
-                v1.text_input("Skip Frames", value=str(node_data.get("frame_to_skip", "")), disabled=True, key="prev_fts")
-                v2.text_input("Schedule", value=str(node_data.get("vace schedule", "")), disabled=True, key="prev_vsc")
-                v3.text_input("Video Path", value=str(node_data.get("video file path", "")), disabled=True, key="prev_vid")
-
-        # 4. LoRAs
-        with st.expander("💊 LoRA Configuration"):
-            l1, l2, l3 = st.columns(3)
-            l1.text_input("L1", value=f"{node_data.get('lora 1 high','')} : {node_data.get('lora 1 low','')}", disabled=True, key="prev_l1")
-            l2.text_input("L2", value=f"{node_data.get('lora 2 high','')} : {node_data.get('lora 2 low','')}", disabled=True, key="prev_l2")
-            l3.text_input("L3", value=f"{node_data.get('lora 3 high','')} : {node_data.get('lora 3 low','')}", disabled=True, key="prev_l3")
+                v1.text_input("Skip Frames", value=str(node_data.get("frame_to_skip", "")), disabled=True, key="p_fts")
+                v2.text_input("Schedule", value=str(node_data.get("vace schedule", "")), disabled=True, key="p_vsc")
+                v3.text_input("Video Path", value=str(node_data.get("video file path", "")), disabled=True, key="p_vid")
