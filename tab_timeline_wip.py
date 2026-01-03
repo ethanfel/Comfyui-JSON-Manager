@@ -16,26 +16,26 @@ def render_timeline_wip(data, file_path):
     nodes = []
     edges = []
     
-    # Sort nodes to ensure consistent rendering order
     sorted_nodes = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])
     
     for n in sorted_nodes:
         nid = n["id"]
         note = n.get('note', 'Step')
-        # Shorten text for the bubble
         short_note = (note[:15] + '..') if len(note) > 15 else note
         
-        # Color Logic
-        color = "#ffffff"     # Default White
-        border = "#666666"    # Grey border
+        # Styles
+        color = "#ffffff"     
+        border = "#666666"    
         
+        # Highlight Head
         if nid == htree.head_id:
-            color = "#fff6cd" # Yellow (Current)
+            color = "#fff6cd" 
             border = "#eebb00"
         
+        # Highlight Tips
         if nid in htree.branches.values():
             if color == "#ffffff": 
-                color = "#e6ffe6" # Green (Tips)
+                color = "#e6ffe6"
                 border = "#44aa44"
 
         nodes.append(Node(
@@ -46,7 +46,6 @@ def render_timeline_wip(data, file_path):
             color=color,
             borderWidth=1,
             borderColor=border,
-            # Force text to black so it's readable
             font={'color': 'black', 'face': 'Arial', 'size': 14}
         ))
         
@@ -55,16 +54,15 @@ def render_timeline_wip(data, file_path):
                 source=n["parent"],
                 target=nid,
                 color="#aaaaaa",
-                type="STRAIGHT" # Keeps lines clean
+                type="STRAIGHT"
             ))
 
-    # --- 2. ROBUST CONFIGURATION ---
-    # This specific config block is key to fixing the blank screen
+    # --- 2. CONFIGURATION ---
     config = Config(
         width="100%",
-        height="500px",  # MUST be string with px
+        height="500px", 
         directed=True, 
-        physics=False,   # False = Rigid Tree (Better for timelines)
+        physics=False, 
         hierarchical=True, 
         layout={
             "hierarchical": {
@@ -72,23 +70,22 @@ def render_timeline_wip(data, file_path):
                 "levelSeparation": 150,
                 "nodeSpacing": 100,
                 "treeSpacing": 100,
-                "direction": "LR", # Left-to-Right
+                "direction": "LR", 
                 "sortMethod": "directed"
             }
         }
     )
 
-    st.subheader("🧪 Interactive Playground")
-    st.caption("Click any node to load it into the inspector below.")
+    st.subheader("✨ Interactive Timeline")
+    st.caption("Click any node to inspect changes.")
     
-    # Render Graph
-    # This returns the ID of the node you click
+    # RENDER GRAPH
+    # key="interactive_graph" ensures the selection persists
     clicked_node_id = agraph(nodes=nodes, edges=edges, config=config)
 
     st.markdown("---")
 
-    # --- 3. INTERACTIVE INSPECTOR ---
-    # Determine which node to show
+    # --- 3. IMPROVED INSPECTOR ---
     target_node_id = clicked_node_id if clicked_node_id else htree.head_id
 
     if target_node_id and target_node_id in htree.nodes:
@@ -99,32 +96,63 @@ def render_timeline_wip(data, file_path):
         c_h1.markdown(f"### 🔎 Inspecting: {selected_node.get('note', 'Step')}")
         c_h1.caption(f"ID: {target_node_id}")
 
-        # Diff View
+        # --- BETTER DIFF LOGIC ---
         with st.expander(f"Compare with Current State", expanded=True):
             diffs = []
+            
+            # 1. Gather all unique keys from both sides
             all_keys = set(data.keys()) | set(node_data.keys())
-            ignore_keys = {"history_tree", "prompt_history", "batch_data", "ui_reset_token"}
+            
+            # 2. Define keys to strictly ignore (System / Metadata)
+            ignore_keys = {
+                "history_tree", "prompt_history", "batch_data", 
+                "ui_reset_token", "sequence_number", 
+                "input_a_frames", "input_b_frames" # Add any other noisy keys here
+            }
             
             for k in all_keys:
                 if k in ignore_keys: continue
-                val_now = data.get(k, "N/A")
-                val_then = node_data.get(k, "N/A")
-                if str(val_now) != str(val_then):
-                    diffs.append((k, val_now, val_then))
+                
+                # 3. Get values, treating Missing as Empty String for comparison
+                val_now = data.get(k, "")
+                val_then = node_data.get(k, "")
+                
+                # 4. Normalize types (float 1.0 == int 1 == str "1")
+                # We convert everything to string and strip whitespace
+                str_now = str(val_now).strip()
+                str_then = str(val_then).strip()
+                
+                # Handle Float/Int mismatch (e.g., "20" vs "20.0")
+                if str_now != str_then:
+                    try:
+                        # Try converting both to float and compare with tolerance
+                        f_now = float(str_now)
+                        f_then = float(str_then)
+                        if abs(f_now - f_then) < 0.001:
+                            continue # They are effectively the same number
+                    except ValueError:
+                        pass # Not numbers, so the string difference is real
+                    
+                    # If we get here, they are different
+                    diffs.append((k, str_now, str_then))
 
             if not diffs:
-                st.caption("✅ Identical to current state")
+                st.caption("✅ Identical to current state (or only ignored keys differ)")
             else:
                 for k, v_now, v_then in diffs:
                     dc1, dc2, dc3 = st.columns([1, 2, 2])
                     dc1.markdown(f"**{k}**")
-                    dc2.markdown(f"🔴 `{str(v_now)[:30]}`")
-                    dc3.markdown(f"🟢 `{str(v_then)[:30]}`")
+                    # Highlight 'Missing' or empty values clearly
+                    disp_now = v_now if v_now else "*(empty)*"
+                    disp_then = v_then if v_then else "*(empty)*"
+                    
+                    dc2.markdown(f"🔴 Current: `{disp_now[:30]}`")
+                    dc3.markdown(f"🟢 Selected: `{disp_then[:30]}`")
 
         # Actions
         with c_h2:
             st.write(""); st.write("")
-            if st.button("⏪ Restore This Version", type="primary", use_container_width=True):
+            if st.button("⏪ Restore Version", type="primary", use_container_width=True):
                 data.update(node_data)
                 htree.head_id = target_node_id
                 
