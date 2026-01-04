@@ -54,18 +54,21 @@ def render_timeline_wip(data, file_path):
                 type="STRAIGHT"
             ))
 
+    # --- UPDATED CONFIGURATION ---
     config = Config(
         width="100%",
-        height="800px", 
+        # Increased height from 400px to 600px for better visibility
+        height="600px", 
         directed=True, 
         physics=False, 
         hierarchical=True, 
         layout={
             "hierarchical": {
                 "enabled": True,
-                "levelSeparation": 150,
-                "nodeSpacing": 100,
-                "treeSpacing": 100,
+                # Increased separation to widen the tree structure
+                "levelSeparation": 200,  # Was 150
+                "nodeSpacing": 150,      # Was 100
+                "treeSpacing": 150,      # Was 100
                 "direction": "LR", 
                 "sortMethod": "directed"
             }
