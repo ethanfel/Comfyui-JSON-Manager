@@ -56,7 +56,7 @@ def render_timeline_wip(data, file_path):
 
     config = Config(
         width="100%",
-        height="400px", 
+        height="800px", 
         directed=True, 
         physics=False, 
         hierarchical=True, 
