@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import copy  # <--- NEW IMPORT
 from utils import DEFAULTS, save_json, load_json
 from history_tree import HistoryTree 
 
@@ -289,8 +290,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             tree_data = data.get("history_tree", {})
             htree = HistoryTree(tree_data)
             
-            snapshot_payload = data.copy()
+            # --- FIX: DEEPCOPY TO PREVENT SHARED REFERENCES ---
+            snapshot_payload = copy.deepcopy(data) 
             if "history_tree" in snapshot_payload: del snapshot_payload["history_tree"]
+            # --------------------------------------------------
             
             htree.commit(snapshot_payload, note=commit_msg if commit_msg else "Batch Update")
             
