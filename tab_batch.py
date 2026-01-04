@@ -69,6 +69,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         
         batch_list.append(new_item)
         data["batch_data"] = batch_list
+        
+        # ### FIX: Update Cache
+        st.session_state.data_cache = data 
+        
         save_json(file_path, data)
         st.session_state.ui_reset_token += 1
         st.rerun()
@@ -112,7 +116,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
         with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
-            # --- NEW: ACTION ROW WITH CLONING ---
+            # --- ACTION ROW ---
             act_c1, act_c2, act_c3, act_c4 = st.columns([1.2, 1.8, 1.2, 0.5])
             
             # 1. Copy Source
@@ -126,31 +130,31 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                         if k in item: del item[k]
                     batch_list[i] = item
                     data["batch_data"] = batch_list
+                    
+                    st.session_state.data_cache = data # ### FIX
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1 
                     st.toast("Copied!", icon="📥")
                     st.rerun()
 
-            # 2. Cloning Tools (Next / End)
+            # 2. Cloning Tools
             with act_c2:
                 cl_1, cl_2 = st.columns(2)
-                
-                # Clone Next
                 if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
                     new_seq = seq.copy()
-                    # Calculate new max sequence number
                     max_sn = 0
                     for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
                     new_seq["sequence_number"] = max_sn + 1
                     
                     batch_list.insert(i + 1, new_seq)
                     data["batch_data"] = batch_list
+                    
+                    st.session_state.data_cache = data # ### FIX
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
                     st.toast("Cloned to Next!", icon="👯")
                     st.rerun()
 
-                # Clone End
                 if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
                     new_seq = seq.copy()
                     max_sn = 0
@@ -159,6 +163,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     
                     batch_list.append(new_seq)
                     data["batch_data"] = batch_list
+                    
+                    st.session_state.data_cache = data # ### FIX
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
                     st.toast("Cloned to End!", icon="⏬")
@@ -180,6 +186,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if st.button("🗑️", key=f"{prefix}_del", use_container_width=True):
                     batch_list.pop(i)
                     data["batch_data"] = batch_list
+                    
+                    st.session_state.data_cache = data # ### FIX
                     save_json(file_path, data)
                     st.rerun()
 
@@ -225,7 +233,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"{prefix}_ri2")
                     seq["flf image path"] = st.text_input("FLF Img", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
 
-            # --- LoRA Settings (Reverted to plain text) ---
+            # --- LoRA Settings ---
             with st.expander("💊 LoRA Settings"):
                 lc1, lc2, lc3 = st.columns(3)
                 with lc1:
@@ -238,7 +246,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     seq["lora 3 high"] = st.text_input("LoRA 3 Name", value=seq.get("lora 3 high", ""), key=f"{prefix}_l3h")
                     seq["lora 3 low"] = st.text_input("LoRA 3 Strength", value=str(seq.get("lora 3 low", "")), key=f"{prefix}_l3l")
 
-            # --- CUSTOM PARAMETERS ---
+            # --- CUSTOM PARAMETERS (FIXED) ---
             st.markdown("---")
             st.caption("🔧 Custom Parameters")
             
@@ -263,20 +271,28 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if st.button("Add", key=f"{prefix}_add_cust"):
                     if new_k and new_k not in seq:
                         seq[new_k] = new_v
+                        
+                        # ### FIX: Explicitly update cache so new key persists on rerun
+                        st.session_state.data_cache = data 
                         save_json(file_path, data)
+                        
                         st.session_state.ui_reset_token += 1
                         st.rerun()
 
             if keys_to_remove:
                 for k in keys_to_remove:
                     del seq[k]
+                
+                # ### FIX: Explicitly update cache here too
+                st.session_state.data_cache = data 
                 save_json(file_path, data)
+                
                 st.session_state.ui_reset_token += 1
                 st.rerun()
 
     st.markdown("---")
     
-    # --- SAVE ACTIONS WITH HISTORY COMMIT ---
+    # --- SAVE ACTIONS ---
     col_save, col_note = st.columns([1, 2])
     
     with col_note:
@@ -295,6 +311,9 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             htree.commit(snapshot_payload, note=commit_msg if commit_msg else "Batch Update")
             
             data["history_tree"] = htree.to_dict()
+            
+            # ### FIX: Update Cache
+            st.session_state.data_cache = data 
             save_json(file_path, data)
             
             if 'restored_indicator' in st.session_state:
