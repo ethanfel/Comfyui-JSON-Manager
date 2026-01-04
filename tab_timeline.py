@@ -59,6 +59,11 @@ def render_timeline_tab(data, file_path):
                 with c3:
                     if not is_head:
                         if st.button("⏪", key=f"log_rst_{n['id']}", help="Restore this version"):
+                            # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
+                            if "batch_data" not in n["data"] and "batch_data" in data:
+                                del data["batch_data"]
+                            # -------------------------------------------------------------
+                            
                             data.update(n["data"])
                             htree.head_id = n['id']
                             data["history_tree"] = htree.to_dict()
@@ -102,6 +107,11 @@ def render_timeline_tab(data, file_path):
         with col_act:
             st.write(""); st.write("")
             if st.button("⏪ Restore Version", type="primary", use_container_width=True):
+                # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
+                if "batch_data" not in node_data and "batch_data" in data:
+                    del data["batch_data"]
+                # -------------------------------------------------------------
+
                 data.update(node_data)
                 htree.head_id = selected_node['id']
                 data["history_tree"] = htree.to_dict()
