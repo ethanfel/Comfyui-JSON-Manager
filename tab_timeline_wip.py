@@ -96,6 +96,11 @@ def render_timeline_wip(data, file_path):
         with c_h2:
             st.write(""); st.write("")
             if st.button("⏪ Restore This Version", type="primary", use_container_width=True, key=f"rst_{target_node_id}"):
+                # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
+                if "batch_data" not in node_data and "batch_data" in data:
+                    del data["batch_data"]
+                # -------------------------------------------------------------
+
                 data.update(node_data)
                 htree.head_id = target_node_id
                 
