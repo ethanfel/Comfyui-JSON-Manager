@@ -12,7 +12,7 @@ from tab_batch import render_batch_processor
 from tab_timeline import render_timeline_tab
 from tab_timeline_wip import render_timeline_wip
 from tab_comfy import render_comfy_monitor
-from tab_raw import render_raw_editor  # <--- NEW IMPORT
+from tab_raw import render_raw_editor
 
 # ==========================================
 # 1. PAGE CONFIGURATION
@@ -140,6 +140,10 @@ with st.sidebar:
         st.session_state.file_selector = json_files[0].name
     
     selected_file_name = st.radio("Select File", [f.name for f in json_files], key="file_selector")
+    
+    # --- GLOBAL MONITOR TOGGLE (NEW) ---
+    st.markdown("---")
+    show_monitor = st.checkbox("Show Comfy Monitor", value=True)
 
 # ==========================================
 # 4. MAIN APP LOGIC
@@ -161,8 +165,6 @@ if selected_file_name:
         st.session_state.edit_history_idx = None
         
         # --- AUTO-SWITCH TAB LOGIC ---
-        # If the file has 'batch_data' or is a list, force Batch tab.
-        # Otherwise, force Single tab.
         is_batch = "batch_data" in data or isinstance(data, list)
         if is_batch:
             st.session_state.active_tab_name = "🚀 Batch Processor"
@@ -174,32 +176,30 @@ if selected_file_name:
 
     st.title(f"Editing: {selected_file_name}")
 
-    # --- CONTROLLED NAVIGATION (REPLACES ST.TABS) ---
-    # Added "Raw Editor" to the list
+    # --- CONTROLLED NAVIGATION ---
+    # Removed "🔌 Comfy Monitor" from this list
     tabs_list = [
         "📝 Single Editor", 
         "🚀 Batch Processor", 
         "🕒 Timeline", 
         "🧪 Interactive Timeline",
-        "💻 Raw Editor",
-        "🔌 Comfy Monitor"
+        "💻 Raw Editor"
     ]
     
-    # Ensure active tab is valid (safety check)
     if st.session_state.active_tab_name not in tabs_list:
         st.session_state.active_tab_name = tabs_list[0]
 
     current_tab = st.radio(
         "Navigation", 
         tabs_list,
-        key="active_tab_name", # Binds to session state
+        key="active_tab_name", 
         horizontal=True,
         label_visibility="collapsed"
     )
     
     st.markdown("---")
 
-    # --- RENDER SELECTED TAB ---
+    # --- RENDER EDITOR TABS ---
     if current_tab == "📝 Single Editor":
         render_single_editor(data, file_path)
         
@@ -215,5 +215,8 @@ if selected_file_name:
     elif current_tab == "💻 Raw Editor":
         render_raw_editor(data, file_path)
 
-    elif current_tab == "🔌 Comfy Monitor":
-        render_comfy_monitor()
+    # --- GLOBAL PERSISTENT MONITOR ---
+    if show_monitor:
+        st.markdown("---")
+        with st.expander("🔌 ComfyUI Monitor", expanded=True):
+            render_comfy_monitor()
