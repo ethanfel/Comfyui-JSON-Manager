@@ -5,11 +5,6 @@ from io import BytesIO
 import urllib.parse
 from utils import save_config
 
-# Constants for Neko/Browser instance
-NEKO_IP = "192.168.1.51"
-NEKO_PORT = "8080"
-NEKO_BASE = f"http://{NEKO_IP}:{NEKO_PORT}"
-
 def render_single_instance(instance_config, index, all_instances):
     url = instance_config.get("url", "http://127.0.0.1:8188")
     name = instance_config.get("name", f"Server {index+1}")
@@ -35,7 +30,7 @@ def render_single_instance(instance_config, index, all_instances):
             save_config(
                 st.session_state.current_dir, 
                 st.session_state.config['favorites'], 
-                {"comfy_instances": all_instances}
+                st.session_state.config # Save full config including new keys
             )
             st.toast("Server config saved!", icon="💾")
             st.rerun()
@@ -47,11 +42,11 @@ def render_single_instance(instance_config, index, all_instances):
             save_config(
                 st.session_state.current_dir, 
                 st.session_state.config['favorites'], 
-                {"comfy_instances": all_instances}
+                st.session_state.config
             )
             st.rerun()
 
-    # --- 1. STATUS DASHBOARD (Still uses direct API fetch) ---
+    # --- 1. STATUS DASHBOARD ---
     with st.expander("📊 Server Status", expanded=True):
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         try:
@@ -71,14 +66,12 @@ def render_single_instance(instance_config, index, all_instances):
             col2.metric("Pending", "-")
             col3.metric("Running", "-")
             st.error(f"Could not connect to API at {COMFY_URL}")
-            # If API fails, we still show the browser because the user might be able to debug via Neko
     
-    # --- 2. LIVE VIEW (VIA NEKO) ---
+    # --- 2. LIVE VIEW (VIA REMOTE BROWSER) ---
     st.write("") 
     c_label, c_ctrl = st.columns([1, 2])
-    c_label.subheader("📺 Live View (Neko)")
+    c_label.subheader("📺 Live View")
     
-    # LIVE PREVIEW TOGGLE
     enable_preview = c_ctrl.checkbox("Enable Live Preview", value=True, key=f"live_toggle_{index}")
     
     if enable_preview:
@@ -89,18 +82,15 @@ def render_single_instance(instance_config, index, all_instances):
             key=f"h_slider_{index}"
         )
 
-        # Construct Neko URL
-        # Neko usually takes a url parameter. 
-        # Adjust query logic if your specific Neko docker uses a different format (e.g. ?url=...)
-        encoded_url = urllib.parse.quote(COMFY_URL)
-        neko_target = f"{NEKO_BASE}/?url={encoded_url}"
+        # Get Configured Viewer URL
+        viewer_base = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
         
-        # If your neko setup just opens a browser session where you type the URL manually,
-        # just use NEKO_BASE. 
-        # Assuming typical "browser-in-browser" behavior here:
-        final_src = NEKO_BASE
+        # Most Firefox containers (like jlesage/firefox) act as VNC clients and don't take ?url=
+        # So we just frame the VNC/Web interface.
+        final_src = viewer_base
 
-        st.info(f"Viewing via Neko at: `{final_src}` targeting `{COMFY_URL}`")
+        st.info(f"Viewing via Remote Browser: `{final_src}`")
+        st.caption(f"🎯 Target ComfyUI: `{COMFY_URL}` (You may need to type this into the remote browser manually)")
 
         st.markdown(
             f"""
@@ -110,8 +100,6 @@ def render_single_instance(instance_config, index, all_instances):
             """,
             unsafe_allow_html=True
         )
-        
-        st.caption("💡 Note: You may need to type the ComfyUI IP into the Neko browser address bar manually if it doesn't auto-load.")
     else:
         st.info("Live Preview is disabled.")
 
@@ -152,6 +140,22 @@ def render_single_instance(instance_config, index, all_instances):
             st.error(f"Error fetching image: {e}")
 
 def render_comfy_monitor():
+    # --- GLOBAL SETTINGS FOR MONITOR ---
+    with st.expander("🔧 Monitor Settings (Remote Browser)", expanded=False):
+        current_viewer = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
+        new_viewer = st.text_input("Remote Browser URL (Firefox/Neko)", value=current_viewer, help="e.g., http://192.168.1.51:5800 or http://localhost:8080")
+        
+        if st.button("💾 Save Monitor Settings"):
+            st.session_state.config["viewer_url"] = new_viewer
+            save_config(
+                st.session_state.current_dir, 
+                st.session_state.config['favorites'], 
+                st.session_state.config
+            )
+            st.success("Monitor settings saved!")
+            st.rerun()
+
+    # --- INSTANCE MANAGEMENT ---
     if "comfy_instances" not in st.session_state.config:
         st.session_state.config["comfy_instances"] = [
             {"name": "Main Server", "url": "http://192.168.1.100:8188"}
@@ -178,7 +182,7 @@ def render_comfy_monitor():
                     save_config(
                         st.session_state.current_dir, 
                         st.session_state.config['favorites'], 
-                        {"comfy_instances": instances}
+                        st.session_state.config
                     )
                     st.success("Server Added!")
                     st.rerun()
