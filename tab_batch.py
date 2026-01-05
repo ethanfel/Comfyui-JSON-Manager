@@ -1,6 +1,6 @@
 import streamlit as st
 import random
-import copy  # <--- NEW IMPORT
+import copy
 from utils import DEFAULTS, save_json, load_json
 from history_tree import HistoryTree 
 
@@ -193,7 +193,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["negative"] = st.text_area("Specific Negative", value=seq.get("negative", ""), height=60, key=f"{prefix}_sn")
             
             with c2:
-                seq["sequence_number"] = st.number_input("Seq Num", value=int(seq_num), key=f"{prefix}_sn_val")
+                seq["sequence_number"] = st.number_input("Sequence Number", value=int(seq_num), key=f"{prefix}_sn_val")
                 
                 s_row1, s_row2 = st.columns([3, 1])
                 seed_key = f"{prefix}_seed"
@@ -212,21 +212,23 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 
                 if "video file path" in seq or "vace" in selected_file_name:
-                    seq["video file path"] = st.text_input("Video Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
+                    seq["video file path"] = st.text_input("Video File Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
                     with st.expander("VACE Settings"):
-                        seq["frame_to_skip"] = st.number_input("Skip", value=int(seq.get("frame_to_skip", 81)), key=f"{prefix}_fts")
-                        seq["input_a_frames"] = st.number_input("In A", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
-                        seq["input_b_frames"] = st.number_input("In B", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
-                        seq["reference switch"] = st.number_input("Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
-                        seq["vace schedule"] = st.number_input("Sched", value=int(seq.get("vace schedule", 1)), key=f"{prefix}_vsc")
-                        seq["reference path"] = st.text_input("Ref Path", value=seq.get("reference path", ""), key=f"{prefix}_rp")
-                        seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"{prefix}_rip")
+                        # --- UPDATED: Full labels for VACE settings ---
+                        seq["frame_to_skip"] = st.number_input("Frame to Skip", value=int(seq.get("frame_to_skip", 81)), key=f"{prefix}_fts")
+                        seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
+                        seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
+                        seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
+                        seq["vace schedule"] = st.number_input("VACE Schedule", value=int(seq.get("vace schedule", 1)), key=f"{prefix}_vsc")
+                        seq["reference path"] = st.text_input("Reference Path", value=seq.get("reference path", ""), key=f"{prefix}_rp")
+                        seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"{prefix}_rip")
                 
                 if "i2v" in selected_file_name and "vace" not in selected_file_name:
-                    seq["reference image path"] = st.text_input("Ref Img", value=seq.get("reference image path", ""), key=f"{prefix}_ri2")
-                    seq["flf image path"] = st.text_input("FLF Img", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
+                    # --- UPDATED: Full labels for I2V settings ---
+                    seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"{prefix}_ri2")
+                    seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
 
-            # --- LoRA Settings (Reverted to plain text) ---
+            # --- LoRA Settings ---
             with st.expander("💊 LoRA Settings"):
                 lc1, lc2, lc3 = st.columns(3)
                 with lc1:
@@ -290,10 +292,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             tree_data = data.get("history_tree", {})
             htree = HistoryTree(tree_data)
             
-            # --- FIX: DEEPCOPY TO PREVENT SHARED REFERENCES ---
-            snapshot_payload = copy.deepcopy(data) 
+            snapshot_payload = copy.deepcopy(data)
             if "history_tree" in snapshot_payload: del snapshot_payload["history_tree"]
-            # --------------------------------------------------
             
             htree.commit(snapshot_payload, note=commit_msg if commit_msg else "Batch Update")
             
