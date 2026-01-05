@@ -2,7 +2,13 @@ import streamlit as st
 import requests
 from PIL import Image
 from io import BytesIO
+import urllib.parse
 from utils import save_config
+
+# Constants for Neko/Browser instance
+NEKO_IP = "192.168.1.51"
+NEKO_PORT = "8080"
+NEKO_BASE = f"http://{NEKO_IP}:{NEKO_PORT}"
 
 def render_single_instance(instance_config, index, all_instances):
     url = instance_config.get("url", "http://127.0.0.1:8188")
@@ -45,7 +51,7 @@ def render_single_instance(instance_config, index, all_instances):
             )
             st.rerun()
 
-    # --- 1. STATUS DASHBOARD ---
+    # --- 1. STATUS DASHBOARD (Still uses direct API fetch) ---
     with st.expander("📊 Server Status", expanded=True):
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         try:
@@ -64,13 +70,13 @@ def render_single_instance(instance_config, index, all_instances):
             col1.metric("Status", "🔴 Offline")
             col2.metric("Pending", "-")
             col3.metric("Running", "-")
-            st.error(f"Could not connect to {COMFY_URL}")
-            return 
-
-    # --- 2. LIVE VIEW (WITH TOGGLE) ---
+            st.error(f"Could not connect to API at {COMFY_URL}")
+            # If API fails, we still show the browser because the user might be able to debug via Neko
+    
+    # --- 2. LIVE VIEW (VIA NEKO) ---
     st.write("") 
     c_label, c_ctrl = st.columns([1, 2])
-    c_label.subheader("📺 Live View")
+    c_label.subheader("📺 Live View (Neko)")
     
     # LIVE PREVIEW TOGGLE
     enable_preview = c_ctrl.checkbox("Enable Live Preview", value=True, key=f"live_toggle_{index}")
@@ -83,16 +89,31 @@ def render_single_instance(instance_config, index, all_instances):
             key=f"h_slider_{index}"
         )
 
+        # Construct Neko URL
+        # Neko usually takes a url parameter. 
+        # Adjust query logic if your specific Neko docker uses a different format (e.g. ?url=...)
+        encoded_url = urllib.parse.quote(COMFY_URL)
+        neko_target = f"{NEKO_BASE}/?url={encoded_url}"
+        
+        # If your neko setup just opens a browser session where you type the URL manually,
+        # just use NEKO_BASE. 
+        # Assuming typical "browser-in-browser" behavior here:
+        final_src = NEKO_BASE
+
+        st.info(f"Viewing via Neko at: `{final_src}` targeting `{COMFY_URL}`")
+
         st.markdown(
             f"""
-            <iframe src="{COMFY_URL}" width="100%" height="{iframe_h}px" 
-                style="border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <iframe src="{final_src}" width="100%" height="{iframe_h}px" 
+                style="border: 2px solid #666; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
             </iframe>
             """,
             unsafe_allow_html=True
         )
+        
+        st.caption("💡 Note: You may need to type the ComfyUI IP into the Neko browser address bar manually if it doesn't auto-load.")
     else:
-        st.info("Live Preview is disabled. Enable it above to see the interface.")
+        st.info("Live Preview is disabled.")
 
     st.markdown("---")
 
