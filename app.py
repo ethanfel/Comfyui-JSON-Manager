@@ -12,6 +12,7 @@ from tab_batch import render_batch_processor
 from tab_timeline import render_timeline_tab
 from tab_timeline_wip import render_timeline_wip
 from tab_comfy import render_comfy_monitor
+from tab_raw import render_raw_editor  # <--- NEW IMPORT
 
 # ==========================================
 # 1. PAGE CONFIGURATION
@@ -174,12 +175,13 @@ if selected_file_name:
     st.title(f"Editing: {selected_file_name}")
 
     # --- CONTROLLED NAVIGATION (REPLACES ST.TABS) ---
-    # Using radio buttons allows us to change 'active_tab_name' programmatically above.
+    # Added "Raw Editor" to the list
     tabs_list = [
         "📝 Single Editor", 
         "🚀 Batch Processor", 
         "🕒 Timeline", 
         "🧪 Interactive Timeline",
+        "💻 Raw Editor",
         "🔌 Comfy Monitor"
     ]
     
@@ -209,6 +211,9 @@ if selected_file_name:
         
     elif current_tab == "🧪 Interactive Timeline":
         render_timeline_wip(data, file_path)
+        
+    elif current_tab == "💻 Raw Editor":
+        render_raw_editor(data, file_path)
 
     elif current_tab == "🔌 Comfy Monitor":
         render_comfy_monitor()
