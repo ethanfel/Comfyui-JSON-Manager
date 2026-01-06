@@ -97,6 +97,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     st.markdown("---")
     st.info(f"Batch contains {len(batch_list)} sequences.")
 
+    # Updated LoRA keys to match new logic
     lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
     standard_keys = {
         "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
@@ -113,7 +114,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
         with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
-            # --- NEW: ACTION ROW WITH CLONING ---
+            # --- ACTION ROW ---
             act_c1, act_c2, act_c3, act_c4 = st.columns([1.2, 1.8, 1.2, 0.5])
             
             # 1. Copy Source
@@ -132,18 +133,14 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     st.toast("Copied!", icon="📥")
                     st.rerun()
 
-            # 2. Cloning Tools (Next / End)
+            # 2. Cloning Tools
             with act_c2:
                 cl_1, cl_2 = st.columns(2)
-                
-                # Clone Next
                 if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
                     new_seq = seq.copy()
-                    # Calculate new max sequence number
                     max_sn = 0
                     for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
                     new_seq["sequence_number"] = max_sn + 1
-                    
                     batch_list.insert(i + 1, new_seq)
                     data["batch_data"] = batch_list
                     save_json(file_path, data)
@@ -151,13 +148,11 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     st.toast("Cloned to Next!", icon="👯")
                     st.rerun()
 
-                # Clone End
                 if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
                     new_seq = seq.copy()
                     max_sn = 0
                     for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
                     new_seq["sequence_number"] = max_sn + 1
-                    
                     batch_list.append(new_seq)
                     data["batch_data"] = batch_list
                     save_json(file_path, data)
@@ -214,7 +209,6 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if "video file path" in seq or "vace" in selected_file_name:
                     seq["video file path"] = st.text_input("Video File Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
                     with st.expander("VACE Settings"):
-                        # --- UPDATED: Full labels for VACE settings ---
                         seq["frame_to_skip"] = st.number_input("Frame to Skip", value=int(seq.get("frame_to_skip", 81)), key=f"{prefix}_fts")
                         seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
                         seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
@@ -224,22 +218,55 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                         seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"{prefix}_rip")
                 
                 if "i2v" in selected_file_name and "vace" not in selected_file_name:
-                    # --- UPDATED: Full labels for I2V settings ---
                     seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"{prefix}_ri2")
                     seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
 
-            # --- LoRA Settings ---
+            # --- UPDATED: LoRA Settings with Tag Wrapping ---
             with st.expander("💊 LoRA Settings"):
                 lc1, lc2, lc3 = st.columns(3)
-                with lc1:
-                    seq["lora 1 high"] = st.text_input("LoRA 1 Name", value=seq.get("lora 1 high", ""), key=f"{prefix}_l1h")
-                    seq["lora 1 low"] = st.text_input("LoRA 1 Strength", value=str(seq.get("lora 1 low", "")), key=f"{prefix}_l1l")
-                with lc2:
-                    seq["lora 2 high"] = st.text_input("LoRA 2 Name", value=seq.get("lora 2 high", ""), key=f"{prefix}_l2h")
-                    seq["lora 2 low"] = st.text_input("LoRA 2 Strength", value=str(seq.get("lora 2 low", "")), key=f"{prefix}_l2l")
-                with lc3:
-                    seq["lora 3 high"] = st.text_input("LoRA 3 Name", value=seq.get("lora 3 high", ""), key=f"{prefix}_l3h")
-                    seq["lora 3 low"] = st.text_input("LoRA 3 Strength", value=str(seq.get("lora 3 low", "")), key=f"{prefix}_l3l")
+                
+                # Helper to render the tag wrapper UI
+                def render_lora_col(col_obj, lora_idx):
+                    with col_obj:
+                        st.caption(f"**LoRA {lora_idx}**")
+                        
+                        # --- HIGH ---
+                        k_high = f"lora {lora_idx} high"
+                        raw_h = str(seq.get(k_high, ""))
+                        # Strip tags for display
+                        disp_h = raw_h.replace("<lora:", "").replace(">", "")
+                        
+                        st.write("High:")
+                        rh1, rh2, rh3 = st.columns([0.25, 1, 0.1])
+                        rh1.markdown("<div style='text-align: right; padding-top: 8px;'><code>&lt;lora:</code></div>", unsafe_allow_html=True)
+                        val_h = rh2.text_input(f"L{lora_idx}H", value=disp_h, key=f"{prefix}_l{lora_idx}h", label_visibility="collapsed")
+                        rh3.markdown("<div style='padding-top: 8px;'><code>&gt;</code></div>", unsafe_allow_html=True)
+                        
+                        if val_h:
+                            seq[k_high] = f"<lora:{val_h}>"
+                        else:
+                            seq[k_high] = ""
+
+                        # --- LOW ---
+                        k_low = f"lora {lora_idx} low"
+                        raw_l = str(seq.get(k_low, ""))
+                        # Strip tags for display
+                        disp_l = raw_l.replace("<lora:", "").replace(">", "")
+                        
+                        st.write("Low:")
+                        rl1, rl2, rl3 = st.columns([0.25, 1, 0.1])
+                        rl1.markdown("<div style='text-align: right; padding-top: 8px;'><code>&lt;lora:</code></div>", unsafe_allow_html=True)
+                        val_l = rl2.text_input(f"L{lora_idx}L", value=disp_l, key=f"{prefix}_l{lora_idx}l", label_visibility="collapsed")
+                        rl3.markdown("<div style='padding-top: 8px;'><code>&gt;</code></div>", unsafe_allow_html=True)
+                        
+                        if val_l:
+                            seq[k_low] = f"<lora:{val_l}>"
+                        else:
+                            seq[k_low] = ""
+
+                render_lora_col(lc1, 1)
+                render_lora_col(lc2, 2)
+                render_lora_col(lc3, 3)
 
             # --- CUSTOM PARAMETERS ---
             st.markdown("---")
