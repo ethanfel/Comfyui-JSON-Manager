@@ -3,14 +3,30 @@ import requests
 from PIL import Image
 from io import BytesIO
 import urllib.parse
+import time  # <--- NEW IMPORT
 from utils import save_config
 
-def render_single_instance(instance_config, index, all_instances):
+def render_single_instance(instance_config, index, all_instances, timeout_minutes):
     url = instance_config.get("url", "http://127.0.0.1:8188")
     name = instance_config.get("name", f"Server {index+1}")
     
     COMFY_URL = url.rstrip("/")
     
+    # --- TIMEOUT LOGIC ---
+    # Generate unique keys for session state
+    toggle_key = f"live_toggle_{index}"
+    start_time_key = f"live_start_{index}"
+    
+    # Check if we need to auto-close
+    if st.session_state.get(toggle_key, False) and timeout_minutes > 0:
+        start_time = st.session_state.get(start_time_key, 0)
+        elapsed = time.time() - start_time
+        if elapsed > (timeout_minutes * 60):
+            st.session_state[toggle_key] = False
+            # We don't need st.rerun() here because the fragment loop will pick up the state change on the next pass
+            # but an explicit rerun makes it snappy.
+            st.rerun()
+
     c_head, c_set = st.columns([3, 1])
     c_head.markdown(f"### 🔌 {name}")
     
@@ -30,7 +46,7 @@ def render_single_instance(instance_config, index, all_instances):
             save_config(
                 st.session_state.current_dir, 
                 st.session_state.config['favorites'], 
-                st.session_state.config # Save full config including new keys
+                st.session_state.config 
             )
             st.toast("Server config saved!", icon="💾")
             st.rerun()
@@ -72,9 +88,25 @@ def render_single_instance(instance_config, index, all_instances):
     c_label, c_ctrl = st.columns([1, 2])
     c_label.subheader("📺 Live View")
     
-    enable_preview = c_ctrl.checkbox("Enable Live Preview", value=True, key=f"live_toggle_{index}")
+    # Capture the toggle interaction to set start time
+    def on_toggle_change():
+        if st.session_state[toggle_key]:
+            st.session_state[start_time_key] = time.time()
+
+    enable_preview = c_ctrl.checkbox(
+        "Enable Live Preview", 
+        value=False, 
+        key=toggle_key,
+        on_change=on_toggle_change
+    )
     
     if enable_preview:
+        # Display Countdown if timeout is active
+        if timeout_minutes > 0:
+            elapsed = time.time() - st.session_state.get(start_time_key, time.time())
+            remaining = (timeout_minutes * 60) - elapsed
+            st.caption(f"⏱️ Auto-off in: **{int(remaining)}s**")
+
         # Height Slider
         iframe_h = st.slider(
             "Height (px)", 
@@ -84,14 +116,9 @@ def render_single_instance(instance_config, index, all_instances):
 
         # Get Configured Viewer URL
         viewer_base = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
-        
-        # Most Firefox containers (like jlesage/firefox) act as VNC clients and don't take ?url=
-        # So we just frame the VNC/Web interface.
         final_src = viewer_base
 
         st.info(f"Viewing via Remote Browser: `{final_src}`")
-        st.caption(f"🎯 Target ComfyUI: `{COMFY_URL}` (You may need to type this into the remote browser manually)")
-
         st.markdown(
             f"""
             <iframe src="{final_src}" width="100%" height="{iframe_h}px" 
@@ -139,20 +166,39 @@ def render_single_instance(instance_config, index, all_instances):
         except Exception as e:
             st.error(f"Error fetching image: {e}")
 
-def render_comfy_monitor():
+# Check for fragment support (Streamlit 1.37+)
+if hasattr(st, "fragment"):
+    # This decorator ensures this function re-runs every 10 seconds automatically
+    # allowing it to catch the timeout even if you are away from the keyboard.
+    @st.fragment(run_every=10)
+    def _monitor_fragment():
+        _render_content()
+else:
+    # Fallback for older Streamlit versions (Won't auto-refresh while idle)
+    def _monitor_fragment():
+        _render_content()
+
+def _render_content():
     # --- GLOBAL SETTINGS FOR MONITOR ---
-    with st.expander("🔧 Monitor Settings (Remote Browser)", expanded=False):
-        current_viewer = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
-        new_viewer = st.text_input("Remote Browser URL (Firefox/Neko)", value=current_viewer, help="e.g., http://192.168.1.51:5800 or http://localhost:8080")
+    with st.expander("🔧 Monitor Settings", expanded=False):
+        c_set1, c_set2 = st.columns(2)
         
+        current_viewer = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
+        new_viewer = c_set1.text_input("Remote Browser URL", value=current_viewer, help="e.g., http://192.168.1.51:5800")
+        
+        # New Timeout Slider
+        current_timeout = st.session_state.config.get("monitor_timeout", 0)
+        new_timeout = c_set2.slider("Live Preview Timeout (Minutes)", 0, 60, value=current_timeout, help="0 = Always On. Sets how long the preview stays open before auto-closing.")
+
         if st.button("💾 Save Monitor Settings"):
             st.session_state.config["viewer_url"] = new_viewer
+            st.session_state.config["monitor_timeout"] = new_timeout
             save_config(
                 st.session_state.current_dir, 
                 st.session_state.config['favorites'], 
                 st.session_state.config
             )
-            st.success("Monitor settings saved!")
+            st.success("Settings saved!")
             st.rerun()
 
     # --- INSTANCE MANAGEMENT ---
@@ -165,9 +211,11 @@ def render_comfy_monitor():
     tab_names = [i["name"] for i in instances] + ["➕ Add Server"]
     tabs = st.tabs(tab_names)
     
+    timeout_val = st.session_state.config.get("monitor_timeout", 0)
+
     for i, tab in enumerate(tabs[:-1]):
         with tab:
-            render_single_instance(instances[i], i, instances)
+            render_single_instance(instances[i], i, instances, timeout_val)
             
     with tabs[-1]:
         st.header("Add New ComfyUI Instance")
@@ -188,3 +236,7 @@ def render_comfy_monitor():
                     st.rerun()
                 else:
                     st.error("Please fill in both Name and URL.")
+
+def render_comfy_monitor():
+    # We call the wrapper which decides if it's a fragment or not
+    _monitor_fragment()
