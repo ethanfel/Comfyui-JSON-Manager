@@ -170,7 +170,7 @@ def render_single_instance(instance_config, index, all_instances, timeout_minute
 if hasattr(st, "fragment"):
     # This decorator ensures this function re-runs every 10 seconds automatically
     # allowing it to catch the timeout even if you are away from the keyboard.
-    @st.fragment(run_every=10)
+    @st.fragment(run_every=300)
     def _monitor_fragment():
         _render_content()
 else:
