@@ -1,10 +1,9 @@
 import streamlit as st
 import copy
-import json
-import graphviz
 import time
 from history_tree import HistoryTree
 from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
+
 
 def render_timeline_tab(data, file_path):
     tree_data = data.get(KEY_HISTORY_TREE, {})
@@ -20,13 +19,17 @@ def render_timeline_tab(data, file_path):
     # --- VIEW SWITCHER ---
     c_title, c_view = st.columns([2, 1])
     c_title.subheader("🕰️ Version History")
-    
+
     view_mode = c_view.radio(
-        "View Mode", 
-        ["🌳 Horizontal", "🌲 Vertical", "📜 Linear Log"], 
+        "View Mode",
+        ["🌳 Horizontal", "🌲 Vertical", "📜 Linear Log"],
         horizontal=True,
         label_visibility="collapsed"
     )
+
+    # --- Build sorted node list (shared by all views) ---
+    all_nodes = list(htree.nodes.values())
+    all_nodes.sort(key=lambda x: x["timestamp"], reverse=True)
 
     # --- RENDER GRAPH VIEWS ---
     if view_mode in ["🌳 Horizontal", "🌲 Vertical"]:
@@ -36,13 +39,11 @@ def render_timeline_tab(data, file_path):
             st.graphviz_chart(graph_dot, use_container_width=True)
         except Exception as e:
             st.error(f"Graph Error: {e}")
-            
+
     # --- RENDER LINEAR LOG VIEW ---
     elif view_mode == "📜 Linear Log":
         st.caption("A simple chronological list of all snapshots.")
-        all_nodes = list(htree.nodes.values())
-        all_nodes.sort(key=lambda x: x["timestamp"], reverse=True)
-        
+
         for n in all_nodes:
             is_head = (n["id"] == htree.head_id)
             with st.container():
@@ -51,41 +52,26 @@ def render_timeline_tab(data, file_path):
                     st.markdown("### 📍" if is_head else "### ⚫")
                 with c2:
                     note_txt = n.get('note', 'Step')
-                    ts = time.strftime('%H:%M:%S', time.localtime(n['timestamp']))
+                    ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
                     if is_head:
                         st.markdown(f"**{note_txt}** (Current)")
                     else:
                         st.write(f"**{note_txt}**")
-                    st.caption(f"ID: {n['id'][:6]} • Time: {ts}")
+                    st.caption(f"ID: {n['id'][:6]} • {ts}")
                 with c3:
                     if not is_head:
                         if st.button("⏪", key=f"log_rst_{n['id']}", help="Restore this version"):
-                            # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
-                            if KEY_BATCH_DATA not in n["data"] and KEY_BATCH_DATA in data:
-                                del data[KEY_BATCH_DATA]
-                            # -------------------------------------------------------------
-                            
-                            data.update(n["data"])
-                            htree.head_id = n['id']
-                            data[KEY_HISTORY_TREE] = htree.to_dict()
-                            save_json(file_path, data)
-                            st.session_state.ui_reset_token += 1
-                            label = f"{n.get('note')} ({n['id'][:4]})"
-                            st.session_state.restored_indicator = label
-                            st.toast(f"Restored!", icon="🔄")
-                            st.rerun()
+                            _restore_node(data, n, htree, file_path)
             st.divider()
 
     st.markdown("---")
 
-    # --- ACTIONS & SELECTION ---
+    # --- NODE SELECTOR ---
     col_sel, col_act = st.columns([3, 1])
-    
-    all_nodes = list(htree.nodes.values())
-    all_nodes.sort(key=lambda x: x["timestamp"], reverse=True) 
-    
+
     def fmt_node(n):
-        return f"{n.get('note', 'Step')} ({n['id']})"
+        ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+        return f"{n.get('note', 'Step')} • {ts} ({n['id'][:6]})"
 
     with col_sel:
         current_idx = 0
@@ -93,66 +79,127 @@ def render_timeline_tab(data, file_path):
             if n["id"] == htree.head_id:
                 current_idx = i
                 break
-                
+
         selected_node = st.selectbox(
-            "Select Version to Manage:", 
-            all_nodes, 
+            "Select Version to Manage:",
+            all_nodes,
             format_func=fmt_node,
             index=current_idx
         )
 
-    if selected_node:
-        node_data = selected_node["data"]
-        
-        # --- ACTIONS ---
-        with col_act:
-            st.write(""); st.write("")
-            if st.button("⏪ Restore Version", type="primary", use_container_width=True):
-                # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
-                if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
-                    del data[KEY_BATCH_DATA]
-                # -------------------------------------------------------------
+    if not selected_node:
+        return
 
-                data.update(node_data)
-                htree.head_id = selected_node['id']
+    node_data = selected_node["data"]
+
+    # --- RESTORE ---
+    with col_act:
+        st.write(""); st.write("")
+        if st.button("⏪ Restore Version", type="primary", use_container_width=True):
+            _restore_node(data, selected_node, htree, file_path)
+
+    # --- RENAME ---
+    rn_col1, rn_col2 = st.columns([3, 1])
+    new_label = rn_col1.text_input("Rename Label", value=selected_node.get("note", ""))
+    if rn_col2.button("Update Label"):
+        selected_node["note"] = new_label
+        data[KEY_HISTORY_TREE] = htree.to_dict()
+        save_json(file_path, data)
+        st.rerun()
+
+    # --- DANGER ZONE ---
+    st.markdown("---")
+    with st.expander("⚠️ Danger Zone (Delete)"):
+        st.warning("Deleting a node cannot be undone.")
+        if st.button("🗑️ Delete This Node", type="primary"):
+            if selected_node['id'] in htree.nodes:
+                if "history_tree_backup" not in data:
+                    data["history_tree_backup"] = []
+                data["history_tree_backup"].append(copy.deepcopy(htree.to_dict()))
+                del htree.nodes[selected_node['id']]
+                for b, tip in list(htree.branches.items()):
+                    if tip == selected_node['id']:
+                        del htree.branches[b]
+                if htree.head_id == selected_node['id']:
+                    if htree.nodes:
+                        fallback = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])[-1]
+                        htree.head_id = fallback["id"]
+                    else:
+                        htree.head_id = None
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
-                st.session_state.ui_reset_token += 1
-                label = f"{selected_node.get('note')} ({selected_node['id'][:4]})"
-                st.session_state.restored_indicator = label
-                st.toast(f"Restored!", icon="🔄")
+                st.toast("Node Deleted", icon="🗑️")
                 st.rerun()
 
-        # --- RENAME ---
-        rn_col1, rn_col2 = st.columns([3, 1])
-        new_label = rn_col1.text_input("Rename Label", value=selected_node.get("note", ""))
-        if rn_col2.button("Update Label"):
-            selected_node["note"] = new_label
-            data[KEY_HISTORY_TREE] = htree.to_dict()
-            save_json(file_path, data)
-            st.rerun()
+    # --- DATA PREVIEW ---
+    st.markdown("---")
+    with st.expander("🔍 Data Preview", expanded=False):
+        batch_list = node_data.get(KEY_BATCH_DATA, [])
 
-        # --- DANGER ZONE ---
-        st.markdown("---")
-        with st.expander("⚠️ Danger Zone (Delete)"):
-            st.warning("Deleting a node cannot be undone.")
-            if st.button("🗑️ Delete This Node", type="primary"):
-                if selected_node['id'] in htree.nodes:
-                    # Backup current tree state before destructive operation
-                    if "history_tree_backup" not in data:
-                        data["history_tree_backup"] = []
-                    data["history_tree_backup"].append(copy.deepcopy(htree.to_dict()))
-                    del htree.nodes[selected_node['id']]
-                    for b, tip in list(htree.branches.items()):
-                        if tip == selected_node['id']:
-                            del htree.branches[b] 
-                    if htree.head_id == selected_node['id']:
-                        if htree.nodes:
-                            fallback = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])[-1]
-                            htree.head_id = fallback["id"]
-                        else:
-                            htree.head_id = None
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
-                    save_json(file_path, data)
-                    st.toast("Node Deleted", icon="🗑️")
-                    st.rerun()
+        if batch_list and isinstance(batch_list, list) and len(batch_list) > 0:
+            st.info(f"📚 This snapshot contains {len(batch_list)} sequences.")
+            for i, seq_data in enumerate(batch_list):
+                seq_num = seq_data.get("sequence_number", i + 1)
+                with st.expander(f"🎬 Sequence #{seq_num}", expanded=(i == 0)):
+                    prefix = f"p_{selected_node['id']}_s{i}"
+                    _render_preview_fields(seq_data, prefix)
+        else:
+            prefix = f"p_{selected_node['id']}_single"
+            _render_preview_fields(node_data, prefix)
+
+
+def _restore_node(data, node, htree, file_path):
+    """Restore a history node as the current version."""
+    node_data = node["data"]
+    if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
+        del data[KEY_BATCH_DATA]
+    data.update(node_data)
+    htree.head_id = node['id']
+    data[KEY_HISTORY_TREE] = htree.to_dict()
+    save_json(file_path, data)
+    st.session_state.ui_reset_token += 1
+    label = f"{node.get('note')} ({node['id'][:4]})"
+    st.session_state.restored_indicator = label
+    st.toast("Restored!", icon="🔄")
+    st.rerun()
+
+
+def _render_preview_fields(item_data, prefix):
+    """Render a read-only preview of prompts, settings, and LoRAs."""
+    # Prompts
+    p_col1, p_col2 = st.columns(2)
+    with p_col1:
+        st.text_area("General Positive", value=item_data.get("general_prompt", ""), height=80, disabled=True, key=f"{prefix}_gp")
+        val_sp = item_data.get("current_prompt", "") or item_data.get("prompt", "")
+        st.text_area("Specific Positive", value=val_sp, height=80, disabled=True, key=f"{prefix}_sp")
+    with p_col2:
+        st.text_area("General Negative", value=item_data.get("general_negative", ""), height=80, disabled=True, key=f"{prefix}_gn")
+        st.text_area("Specific Negative", value=item_data.get("negative", ""), height=80, disabled=True, key=f"{prefix}_sn")
+
+    # Settings
+    s_col1, s_col2, s_col3 = st.columns(3)
+    s_col1.text_input("Camera", value=str(item_data.get("camera", "static")), disabled=True, key=f"{prefix}_cam")
+    s_col2.text_input("FLF", value=str(item_data.get("flf", "0.0")), disabled=True, key=f"{prefix}_flf")
+    s_col3.text_input("Seed", value=str(item_data.get("seed", "-1")), disabled=True, key=f"{prefix}_seed")
+
+    # LoRAs
+    with st.expander("💊 LoRA Configuration", expanded=False):
+        l1, l2, l3 = st.columns(3)
+        with l1:
+            st.text_input("L1 Name", value=item_data.get("lora 1 high", ""), disabled=True, key=f"{prefix}_l1h")
+            st.text_input("L1 Str", value=str(item_data.get("lora 1 low", "")), disabled=True, key=f"{prefix}_l1l")
+        with l2:
+            st.text_input("L2 Name", value=item_data.get("lora 2 high", ""), disabled=True, key=f"{prefix}_l2h")
+            st.text_input("L2 Str", value=str(item_data.get("lora 2 low", "")), disabled=True, key=f"{prefix}_l2l")
+        with l3:
+            st.text_input("L3 Name", value=item_data.get("lora 3 high", ""), disabled=True, key=f"{prefix}_l3h")
+            st.text_input("L3 Str", value=str(item_data.get("lora 3 low", "")), disabled=True, key=f"{prefix}_l3l")
+
+    # VACE
+    vace_keys = ["frame_to_skip", "vace schedule", "video file path"]
+    if any(k in item_data for k in vace_keys):
+        with st.expander("🎞️ VACE / I2V Settings", expanded=False):
+            v1, v2, v3 = st.columns(3)
+            v1.text_input("Skip Frames", value=str(item_data.get("frame_to_skip", "")), disabled=True, key=f"{prefix}_fts")
+            v2.text_input("Schedule", value=str(item_data.get("vace schedule", "")), disabled=True, key=f"{prefix}_vsc")
+            v3.text_input("Video Path", value=str(item_data.get("video file path", "")), disabled=True, key=f"{prefix}_vid")

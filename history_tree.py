@@ -75,55 +75,78 @@ class HistoryTree:
         Generates Graphviz source.
         direction: "LR" (Horizontal) or "TB" (Vertical)
         """
+        node_count = len(self.nodes)
+        if node_count <= 5:
+            nodesep, ranksep = 0.5, 0.6
+        elif node_count <= 15:
+            nodesep, ranksep = 0.3, 0.4
+        else:
+            nodesep, ranksep = 0.15, 0.25
+
+        # Build reverse lookup: branch tip -> branch name(s)
+        tip_to_branches: dict[str, list[str]] = {}
+        for b_name, tip_id in self.branches.items():
+            if tip_id:
+                tip_to_branches.setdefault(tip_id, []).append(b_name)
+
         dot = [
             'digraph History {',
-            f'  rankdir={direction};',  # Dynamic Direction
-            '  bgcolor="white";', 
-            '  splines=ortho;', 
-            
-            # TIGHT SPACING
-            '  nodesep=0.2;',
-            '  ranksep=0.3;',
-            
-            # GLOBAL STYLES
-            '  node [shape=plain, fontname="Arial"];', 
+            f'  rankdir={direction};',
+            '  bgcolor="white";',
+            '  splines=ortho;',
+            f'  nodesep={nodesep};',
+            f'  ranksep={ranksep};',
+            '  node [shape=plain, fontname="Arial"];',
             '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
         ]
-        
+
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
-        
+
         for n in sorted_nodes:
             nid = n["id"]
             full_note = n.get('note', 'Step')
-            
-            display_note = (full_note[:15] + '..') if len(full_note) > 15 else full_note
-            
+
+            display_note = (full_note[:25] + '..') if len(full_note) > 25 else full_note
+
+            ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+
+            # Branch label for tip nodes
+            branch_label = ""
+            if nid in tip_to_branches:
+                branch_label = ", ".join(tip_to_branches[nid])
+
             # COLORS
             bg_color = "#f9f9f9"
             border_color = "#999999"
             border_width = "1"
-            
+
             if nid == self.head_id:
-                bg_color = "#fff6cd" # Yellow for Current
+                bg_color = "#fff6cd"
                 border_color = "#eebb00"
                 border_width = "2"
             elif nid in self.branches.values():
-                bg_color = "#e6ffe6" # Green for Tips
+                bg_color = "#e6ffe6"
                 border_color = "#66aa66"
 
             # HTML LABEL
+            rows = [
+                f'<TR><TD><B><FONT POINT-SIZE="10">{display_note}</FONT></B></TD></TR>',
+                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#555555">{ts} • {nid[:4]}</FONT></TD></TR>',
+            ]
+            if branch_label:
+                rows.append(f'<TR><TD><FONT POINT-SIZE="8" COLOR="#4488cc"><I>{branch_label}</I></FONT></TD></TR>')
+
             label = (
                 f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4" BGCOLOR="{bg_color}" COLOR="{border_color}">'
-                f'<TR><TD><B><FONT POINT-SIZE="10">{display_note}</FONT></B></TD></TR>'
-                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#555555">{nid[:4]}</FONT></TD></TR>'
-                f'</TABLE>>'
+                + "".join(rows)
+                + '</TABLE>>'
             )
-            
+
             safe_tooltip = full_note.replace('"', "'")
             dot.append(f'  "{nid}" [label={label}, tooltip="{safe_tooltip}"];')
-            
+
             if n["parent"] and n["parent"] in self.nodes:
                 dot.append(f'  "{n["parent"]}" -> "{nid}";')
-                
+
         dot.append("}")
         return "\n".join(dot)

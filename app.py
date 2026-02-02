@@ -11,7 +11,6 @@ from utils import (
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
 from tab_timeline import render_timeline_tab
-from tab_timeline_wip import render_timeline_wip
 from tab_comfy import render_comfy_monitor
 from tab_raw import render_raw_editor
 
@@ -197,10 +196,9 @@ if selected_file_name:
     # --- CONTROLLED NAVIGATION ---
     # Removed "🔌 Comfy Monitor" from this list
     tabs_list = [
-        "📝 Single Editor", 
-        "🚀 Batch Processor", 
-        "🕒 Timeline", 
-        "🧪 Interactive Timeline",
+        "📝 Single Editor",
+        "🚀 Batch Processor",
+        "🕒 Timeline",
         "💻 Raw Editor"
     ]
     
@@ -226,10 +224,7 @@ if selected_file_name:
         
     elif current_tab == "🕒 Timeline":
         render_timeline_tab(data, file_path)
-        
-    elif current_tab == "🧪 Interactive Timeline":
-        render_timeline_wip(data, file_path)
-        
+
     elif current_tab == "💻 Raw Editor":
         render_raw_editor(data, file_path)
 
