@@ -147,13 +147,18 @@ with st.sidebar:
             st.rerun()
 
     # --- File Selector ---
-    if 'file_selector' not in st.session_state:
-        st.session_state.file_selector = json_files[0].name if json_files else None
-    if st.session_state.file_selector not in [f.name for f in json_files] and json_files:
-        st.session_state.file_selector = json_files[0].name
-    
-    selected_file_name = st.radio("Select File", [f.name for f in json_files], key="file_selector")
-    
+    selected_file_name = None
+    if json_files:
+        file_names = [f.name for f in json_files]
+        if 'file_selector' not in st.session_state:
+            st.session_state.file_selector = file_names[0]
+        if st.session_state.file_selector not in file_names:
+            st.session_state.file_selector = file_names[0]
+
+        selected_file_name = st.radio("Select File", file_names, key="file_selector")
+    else:
+        st.info("No JSON files in this folder.")
+
     # --- GLOBAL MONITOR TOGGLE (NEW) ---
     st.markdown("---")
     show_monitor = st.checkbox("Show Comfy Monitor", value=True)
