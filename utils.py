@@ -1,7 +1,16 @@
 import json
+import logging
 import time
 from pathlib import Path
 import streamlit as st
+
+# Configure logging for the application
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # Default structure for new files
 DEFAULTS = {
@@ -43,14 +52,17 @@ DEFAULTS = {
 CONFIG_FILE = Path(".editor_config.json")
 SNIPPETS_FILE = Path(".editor_snippets.json")
 
+# Restrict directory navigation to this base path (resolve symlinks)
+ALLOWED_BASE_DIR = Path.cwd().resolve()
+
 def load_config():
     """Loads the main editor configuration (Favorites, Last Dir, Servers)."""
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 return json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load config: {e}")
     return {"favorites": [], "last_dir": str(Path.cwd()), "comfy_instances": []}
 
 def save_config(current_dir, favorites, extra_data=None):
@@ -76,8 +88,8 @@ def load_snippets():
         try:
             with open(SNIPPETS_FILE, 'r') as f:
                 return json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load snippets: {e}")
     return {}
 
 def save_snippets(snippets):

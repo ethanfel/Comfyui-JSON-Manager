@@ -3,6 +3,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 import urllib.parse
+import html
 import time  # <--- NEW IMPORT
 from utils import save_config
 
@@ -115,18 +116,24 @@ def render_single_instance(instance_config, index, all_instances, timeout_minute
         )
 
         # Get Configured Viewer URL
-        viewer_base = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
-        final_src = viewer_base
+        viewer_base = st.session_state.config.get("viewer_url", "")
+        final_src = viewer_base.strip()
 
-        st.info(f"Viewing via Remote Browser: `{final_src}`")
-        st.markdown(
-            f"""
-            <iframe src="{final_src}" width="100%" height="{iframe_h}px" 
-                style="border: 2px solid #666; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-            </iframe>
-            """,
-            unsafe_allow_html=True
-        )
+        # Validate URL scheme before embedding
+        parsed = urllib.parse.urlparse(final_src)
+        if final_src and parsed.scheme in ("http", "https"):
+            safe_src = html.escape(final_src, quote=True)
+            st.info(f"Viewing via Remote Browser: `{final_src}`")
+            st.markdown(
+                f"""
+                <iframe src="{safe_src}" width="100%" height="{iframe_h}px"
+                    style="border: 2px solid #666; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                </iframe>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.warning("No valid viewer URL configured. Set one in Monitor Settings below.")
     else:
         st.info("Live Preview is disabled.")
 
@@ -183,8 +190,8 @@ def _render_content():
     with st.expander("🔧 Monitor Settings", expanded=False):
         c_set1, c_set2 = st.columns(2)
         
-        current_viewer = st.session_state.config.get("viewer_url", "http://192.168.1.51:5800")
-        new_viewer = c_set1.text_input("Remote Browser URL", value=current_viewer, help="e.g., http://192.168.1.51:5800")
+        current_viewer = st.session_state.config.get("viewer_url", "")
+        new_viewer = c_set1.text_input("Remote Browser URL", value=current_viewer, help="e.g., http://localhost:5800")
         
         # New Timeout Slider
         current_timeout = st.session_state.config.get("monitor_timeout", 0)

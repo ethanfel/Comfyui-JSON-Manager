@@ -85,13 +85,19 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     if bc3.button("➕ From History", use_container_width=True, disabled=not src_hist):
         if sel_hist:
-            idx = int(sel_hist.split(":")[0].replace("#", "")) - 1
-            item = DEFAULTS.copy()
-            h_item = src_hist[idx]
-            item.update(h_item)
-            if "loras" in h_item and isinstance(h_item["loras"], dict):
-                item.update(h_item["loras"])
-            add_sequence(item)
+            try:
+                idx = int(sel_hist.split(":")[0].replace("#", "")) - 1
+                if idx < 0 or idx >= len(src_hist):
+                    st.error(f"History index {idx + 1} out of range.")
+                else:
+                    item = DEFAULTS.copy()
+                    h_item = src_hist[idx]
+                    item.update(h_item)
+                    if "loras" in h_item and isinstance(h_item["loras"], dict):
+                        item.update(h_item["loras"])
+                    add_sequence(item)
+            except (ValueError, IndexError) as e:
+                st.error(f"Could not parse history selection: {e}")
 
     # --- RENDER LIST ---
     st.markdown("---")

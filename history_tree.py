@@ -24,7 +24,18 @@ class HistoryTree:
 
     def commit(self, data, note="Snapshot"):
         new_id = str(uuid.uuid4())[:8]
-        
+
+        # Cycle detection: walk parent chain from head to verify no cycle
+        if self.head_id:
+            visited = set()
+            current = self.head_id
+            while current:
+                if current in visited:
+                    raise ValueError(f"Cycle detected in history tree at node {current}")
+                visited.add(current)
+                node = self.nodes.get(current)
+                current = node["parent"] if node else None
+
         active_branch = None
         for b_name, tip_id in self.branches.items():
             if tip_id == self.head_id:

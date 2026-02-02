@@ -1,17 +1,45 @@
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+def to_float(val):
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+def to_int(val):
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return 0
+
+def get_batch_item(data, sequence_number):
+    """Resolve batch item by sequence_number, clamping to valid range."""
+    if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
+        idx = max(0, min(sequence_number - 1, len(data["batch_data"]) - 1))
+        if sequence_number - 1 != idx:
+            logger.warning(f"Sequence {sequence_number} out of range (1-{len(data['batch_data'])}), clamped to {idx + 1}")
+        return data["batch_data"][idx]
+    return data
 
 # --- Shared Helper ---
 def read_json_data(json_path):
     if not os.path.exists(json_path):
-        print(f"[JSON Loader] Warning: File not found at {json_path}")
+        logger.warning(f"File not found at {json_path}")
         return {}
     try:
         with open(json_path, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"[JSON Loader] Error: {e}")
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.warning(f"Error reading {json_path}: {e}")
         return {}
+    if not isinstance(data, dict):
+        logger.warning(f"Expected dict from {json_path}, got {type(data).__name__}")
+        return {}
+    return data
 
 # ==========================================
 # 1. STANDARD NODES (Single File)
@@ -47,12 +75,7 @@ class JSONLoaderStandard:
 
     def load_standard(self, json_path):
         data = read_json_data(json_path)
-        def to_float(val):
-            try: return float(val)
-            except: return 0.0
-        def to_int(val):
-            try: return int(float(val))
-            except: return 0
+
 
         return (
             str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
@@ -74,12 +97,7 @@ class JSONLoaderVACE:
 
     def load_vace(self, json_path):
         data = read_json_data(json_path)
-        def to_float(val):
-            try: return float(val)
-            except: return 0.0
-        def to_int(val):
-            try: return int(float(val))
-            except: return 0
+
 
         return (
             str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
@@ -107,10 +125,7 @@ class JSONLoaderBatchLoRA:
 
     def load_batch_loras(self, json_path, sequence_number):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
+        target_data = get_batch_item(data, sequence_number)
         return (
             str(target_data.get("lora 1 high", "")), str(target_data.get("lora 1 low", "")),
             str(target_data.get("lora 2 high", "")), str(target_data.get("lora 2 low", "")),
@@ -128,16 +143,8 @@ class JSONLoaderBatchI2V:
 
     def load_batch_i2v(self, json_path, sequence_number):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
-        def to_float(val):
-            try: return float(val)
-            except: return 0.0
-        def to_int(val):
-            try: return int(float(val))
-            except: return 0
+        target_data = get_batch_item(data, sequence_number)
+
         return (
             str(target_data.get("general_prompt", "")), str(target_data.get("general_negative", "")),
             str(target_data.get("current_prompt", "")), str(target_data.get("negative", "")),
@@ -157,16 +164,8 @@ class JSONLoaderBatchVACE:
 
     def load_batch_vace(self, json_path, sequence_number):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
-        def to_float(val):
-            try: return float(val)
-            except: return 0.0
-        def to_int(val):
-            try: return int(float(val))
-            except: return 0
+        target_data = get_batch_item(data, sequence_number)
+
         return (
             str(target_data.get("general_prompt", "")), str(target_data.get("general_negative", "")),
             str(target_data.get("current_prompt", "")), str(target_data.get("negative", "")),
@@ -199,10 +198,7 @@ class JSONLoaderCustom1:
 
     def load_custom(self, json_path, sequence_number, key_1=""):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
+        target_data = get_batch_item(data, sequence_number)
         return (str(target_data.get(key_1, "")),)
 
 class JSONLoaderCustom3:
@@ -226,10 +222,7 @@ class JSONLoaderCustom3:
 
     def load_custom(self, json_path, sequence_number, key_1="", key_2="", key_3=""):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
+        target_data = get_batch_item(data, sequence_number)
         return (
             str(target_data.get(key_1, "")),
             str(target_data.get(key_2, "")),
@@ -260,10 +253,7 @@ class JSONLoaderCustom6:
 
     def load_custom(self, json_path, sequence_number, key_1="", key_2="", key_3="", key_4="", key_5="", key_6=""):
         data = read_json_data(json_path)
-        target_data = data
-        if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-            idx = (sequence_number - 1) % len(data["batch_data"])
-            target_data = data["batch_data"][idx]
+        target_data = get_batch_item(data, sequence_number)
         return (
             str(target_data.get(key_1, "")), str(target_data.get(key_2, "")),
             str(target_data.get(key_3, "")), str(target_data.get(key_4, "")),

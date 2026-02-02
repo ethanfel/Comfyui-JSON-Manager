@@ -4,8 +4,8 @@ from pathlib import Path
 
 # --- Import Custom Modules ---
 from utils import (
-    load_config, save_config, load_snippets, save_snippets, 
-    load_json, save_json, generate_templates, DEFAULTS
+    load_config, save_config, load_snippets, save_snippets,
+    load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -22,31 +22,23 @@ st.set_page_config(layout="wide", page_title="AI Settings Manager")
 # ==========================================
 # 2. SESSION STATE INITIALIZATION
 # ==========================================
+_SESSION_DEFAULTS = {
+    "snippets": load_snippets,
+    "loaded_file": lambda: None,
+    "last_mtime": lambda: 0,
+    "edit_history_idx": lambda: None,
+    "single_editor_cache": lambda: DEFAULTS.copy(),
+    "ui_reset_token": lambda: 0,
+    "active_tab_name": lambda: "📝 Single Editor",
+}
+
 if 'config' not in st.session_state:
     st.session_state.config = load_config()
     st.session_state.current_dir = Path(st.session_state.config.get("last_dir", Path.cwd()))
 
-if 'snippets' not in st.session_state: 
-    st.session_state.snippets = load_snippets()
-
-if 'loaded_file' not in st.session_state: 
-    st.session_state.loaded_file = None
-
-if 'last_mtime' not in st.session_state: 
-    st.session_state.last_mtime = 0
-
-if 'edit_history_idx' not in st.session_state: 
-    st.session_state.edit_history_idx = None
-
-if 'single_editor_cache' not in st.session_state: 
-    st.session_state.single_editor_cache = DEFAULTS.copy()
-
-if 'ui_reset_token' not in st.session_state: 
-    st.session_state.ui_reset_token = 0
-
-# Track the active tab state for programmatic switching
-if 'active_tab_name' not in st.session_state:
-    st.session_state.active_tab_name = "📝 Single Editor"
+for key, factory in _SESSION_DEFAULTS.items():
+    if key not in st.session_state:
+        st.session_state[key] = factory()
 
 # ==========================================
 # 3. SIDEBAR (NAVIGATOR & TOOLS)
@@ -57,12 +49,18 @@ with st.sidebar:
     # --- Path Navigator ---
     new_path = st.text_input("Current Path", value=str(st.session_state.current_dir))
     if new_path != str(st.session_state.current_dir):
-        p = Path(new_path)
+        p = Path(new_path).resolve()
         if p.exists() and p.is_dir():
-            st.session_state.current_dir = p
-            st.session_state.config['last_dir'] = str(p)
-            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
-            st.rerun()
+            # Restrict navigation to the allowed base directory
+            try:
+                p.relative_to(ALLOWED_BASE_DIR)
+            except ValueError:
+                st.error(f"Access denied: path must be under {ALLOWED_BASE_DIR}")
+            else:
+                st.session_state.current_dir = p
+                st.session_state.config['last_dir'] = str(p)
+                save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+                st.rerun()
 
     # --- Favorites System ---
     if st.button("📌 Pin Current Folder"):

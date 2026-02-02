@@ -2,9 +2,17 @@ import streamlit as st
 import json
 from history_tree import HistoryTree
 from utils import save_json
-from streamlit_agraph import agraph, Node, Edge, Config
+
+try:
+    from streamlit_agraph import agraph, Node, Edge, Config
+    _HAS_AGRAPH = True
+except ImportError:
+    _HAS_AGRAPH = False
 
 def render_timeline_wip(data, file_path):
+    if not _HAS_AGRAPH:
+        st.error("The `streamlit-agraph` package is required for this tab. Install it with: `pip install streamlit-agraph`")
+        return
     tree_data = data.get("history_tree", {})
     if not tree_data:
         st.info("No history timeline exists.")

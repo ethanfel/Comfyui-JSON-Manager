@@ -1,4 +1,5 @@
 import streamlit as st
+import copy
 import json
 import graphviz
 import time
@@ -137,6 +138,10 @@ def render_timeline_tab(data, file_path):
             st.warning("Deleting a node cannot be undone.")
             if st.button("🗑️ Delete This Node", type="primary"):
                 if selected_node['id'] in htree.nodes:
+                    # Backup current tree state before destructive operation
+                    if "history_tree_backup" not in data:
+                        data["history_tree_backup"] = []
+                    data["history_tree_backup"].append(copy.deepcopy(htree.to_dict()))
                     del htree.nodes[selected_node['id']]
                     for b, tip in list(htree.branches.items()):
                         if tip == selected_node['id']:
