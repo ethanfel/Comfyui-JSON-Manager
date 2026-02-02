@@ -1,32 +1,36 @@
 import json
 import os
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-def to_float(val):
+KEY_BATCH_DATA = "batch_data"
+
+
+def to_float(val: Any) -> float:
     try:
         return float(val)
     except (ValueError, TypeError):
         return 0.0
 
-def to_int(val):
+def to_int(val: Any) -> int:
     try:
         return int(float(val))
     except (ValueError, TypeError):
         return 0
 
-def get_batch_item(data, sequence_number):
+def get_batch_item(data: dict[str, Any], sequence_number: int) -> dict[str, Any]:
     """Resolve batch item by sequence_number, clamping to valid range."""
-    if "batch_data" in data and isinstance(data["batch_data"], list) and len(data["batch_data"]) > 0:
-        idx = max(0, min(sequence_number - 1, len(data["batch_data"]) - 1))
+    if KEY_BATCH_DATA in data and isinstance(data[KEY_BATCH_DATA], list) and len(data[KEY_BATCH_DATA]) > 0:
+        idx = max(0, min(sequence_number - 1, len(data[KEY_BATCH_DATA]) - 1))
         if sequence_number - 1 != idx:
-            logger.warning(f"Sequence {sequence_number} out of range (1-{len(data['batch_data'])}), clamped to {idx + 1}")
-        return data["batch_data"][idx]
+            logger.warning(f"Sequence {sequence_number} out of range (1-{len(data[KEY_BATCH_DATA])}), clamped to {idx + 1}")
+        return data[KEY_BATCH_DATA][idx]
     return data
 
 # --- Shared Helper ---
-def read_json_data(json_path):
+def read_json_data(json_path: str) -> dict[str, Any]:
     if not os.path.exists(json_path):
         logger.warning(f"File not found at {json_path}")
         return {}

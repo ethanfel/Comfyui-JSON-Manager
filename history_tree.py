@@ -1,16 +1,20 @@
 import time
 import uuid
+from typing import Any
+
+KEY_PROMPT_HISTORY = "prompt_history"
+
 
 class HistoryTree:
-    def __init__(self, raw_data):
-        self.nodes = raw_data.get("nodes", {})
-        self.branches = raw_data.get("branches", {"main": None}) 
-        self.head_id = raw_data.get("head_id", None)
-        
-        if "prompt_history" in raw_data and isinstance(raw_data["prompt_history"], list) and not self.nodes:
-            self._migrate_legacy(raw_data["prompt_history"])
+    def __init__(self, raw_data: dict[str, Any]) -> None:
+        self.nodes: dict[str, dict[str, Any]] = raw_data.get("nodes", {})
+        self.branches: dict[str, str | None] = raw_data.get("branches", {"main": None})
+        self.head_id: str | None = raw_data.get("head_id", None)
 
-    def _migrate_legacy(self, old_list):
+        if KEY_PROMPT_HISTORY in raw_data and isinstance(raw_data[KEY_PROMPT_HISTORY], list) and not self.nodes:
+            self._migrate_legacy(raw_data[KEY_PROMPT_HISTORY])
+
+    def _migrate_legacy(self, old_list: list[dict[str, Any]]) -> None:
         parent = None
         for item in reversed(old_list):
             node_id = str(uuid.uuid4())[:8]
@@ -22,7 +26,7 @@ class HistoryTree:
         self.branches["main"] = parent
         self.head_id = parent
 
-    def commit(self, data, note="Snapshot"):
+    def commit(self, data: dict[str, Any], note: str = "Snapshot") -> str:
         new_id = str(uuid.uuid4())[:8]
 
         # Cycle detection: walk parent chain from head to verify no cycle
@@ -56,17 +60,17 @@ class HistoryTree:
         self.head_id = new_id
         return new_id
 
-    def checkout(self, node_id):
+    def checkout(self, node_id: str) -> dict[str, Any] | None:
         if node_id in self.nodes:
             self.head_id = node_id
             return self.nodes[node_id]["data"]
         return None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
     # --- UPDATED GRAPH GENERATOR ---
-    def generate_graph(self, direction="LR"):
+    def generate_graph(self, direction: str = "LR") -> str:
         """
         Generates Graphviz source.
         direction: "LR" (Horizontal) or "TB" (Vertical)

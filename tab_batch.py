@@ -1,8 +1,8 @@
 import streamlit as st
 import random
 import copy
-from utils import DEFAULTS, save_json, load_json
-from history_tree import HistoryTree 
+from utils import DEFAULTS, save_json, load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER
+from history_tree import HistoryTree
 
 def create_batch_callback(original_filename, current_data, current_dir):
     new_name = f"batch_{original_filename}"
@@ -13,15 +13,15 @@ def create_batch_callback(original_filename, current_data, current_dir):
         return
 
     first_item = current_data.copy()
-    if "prompt_history" in first_item: del first_item["prompt_history"]
-    if "history_tree" in first_item: del first_item["history_tree"] 
-    
-    first_item["sequence_number"] = 1
-    
+    if KEY_PROMPT_HISTORY in first_item: del first_item[KEY_PROMPT_HISTORY]
+    if KEY_HISTORY_TREE in first_item: del first_item[KEY_HISTORY_TREE]
+
+    first_item[KEY_SEQUENCE_NUMBER] = 1
+
     new_data = {
-        "batch_data": [first_item], 
-        "history_tree": {},
-        "prompt_history": [] 
+        KEY_BATCH_DATA: [first_item],
+        KEY_HISTORY_TREE: {},
+        KEY_PROMPT_HISTORY: []
     }
     
     save_json(new_path, new_data)
@@ -30,7 +30,7 @@ def create_batch_callback(original_filename, current_data, current_dir):
 
 
 def render_batch_processor(data, file_path, json_files, current_dir, selected_file_name):
-    is_batch_file = "batch_data" in data or isinstance(data, list)
+    is_batch_file = KEY_BATCH_DATA in data or isinstance(data, list)
     
     if not is_batch_file:
         st.warning("This is a Single file. To use Batch mode, create a copy.")
@@ -40,7 +40,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     if 'restored_indicator' in st.session_state and st.session_state.restored_indicator:
         st.info(f"📍 Editing Restored Version: **{st.session_state.restored_indicator}**")
 
-    batch_list = data.get("batch_data", [])
+    batch_list = data.get(KEY_BATCH_DATA, [])
     
     # --- ADD NEW SEQUENCE AREA ---
     st.subheader("Add New Sequence")
@@ -53,7 +53,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         src_data, _ = load_json(current_dir / src_name)
 
     with ac2:
-        src_hist = src_data.get("prompt_history", [])
+        src_hist = src_data.get(KEY_PROMPT_HISTORY, [])
         h_opts = [f"#{i+1}: {h.get('note', 'No Note')} ({h.get('prompt', '')[:15]}...)" for i, h in enumerate(src_hist)] if src_hist else []
         sel_hist = st.selectbox("History Entry (Legacy):", h_opts, key="batch_src_hist")
 
@@ -62,14 +62,14 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     def add_sequence(new_item):
         max_seq = 0
         for s in batch_list:
-            if "sequence_number" in s: max_seq = max(max_seq, int(s["sequence_number"]))
-        new_item["sequence_number"] = max_seq + 1
-        
-        for k in ["prompt_history", "history_tree", "note", "loras"]: 
+            if KEY_SEQUENCE_NUMBER in s: max_seq = max(max_seq, int(s[KEY_SEQUENCE_NUMBER]))
+        new_item[KEY_SEQUENCE_NUMBER] = max_seq + 1
+
+        for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, "note", "loras"]:
             if k in new_item: del new_item[k]
         
         batch_list.append(new_item)
-        data["batch_data"] = batch_list
+        data[KEY_BATCH_DATA] = batch_list
         save_json(file_path, data)
         st.session_state.ui_reset_token += 1
         st.rerun()
@@ -79,7 +79,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     if bc2.button("➕ From File", use_container_width=True, help=f"Copy {src_name}"):
         item = DEFAULTS.copy()
-        flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
+        flat = src_data[KEY_BATCH_DATA][0] if KEY_BATCH_DATA in src_data and src_data[KEY_BATCH_DATA] else src_data
         item.update(flat)
         add_sequence(item)
 
@@ -107,7 +107,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
     standard_keys = {
         "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
-        "camera", "flf", "sequence_number"
+        "camera", "flf", KEY_SEQUENCE_NUMBER
     }
     standard_keys.update(lora_keys)
     standard_keys.update([
@@ -116,7 +116,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     ])
 
     for i, seq in enumerate(batch_list):
-        seq_num = seq.get("sequence_number", i+1)
+        seq_num = seq.get(KEY_SEQUENCE_NUMBER, i+1)
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
         with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
@@ -127,13 +127,13 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with act_c1:
                 if st.button(f"📥 Copy {src_name}", key=f"{prefix}_copy", use_container_width=True):
                     item = DEFAULTS.copy()
-                    flat = src_data["batch_data"][0] if "batch_data" in src_data and src_data["batch_data"] else src_data
+                    flat = src_data[KEY_BATCH_DATA][0] if KEY_BATCH_DATA in src_data and src_data[KEY_BATCH_DATA] else src_data
                     item.update(flat)
-                    item["sequence_number"] = seq_num
-                    for k in ["prompt_history", "history_tree"]: 
+                    item[KEY_SEQUENCE_NUMBER] = seq_num
+                    for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE]:
                         if k in item: del item[k]
                     batch_list[i] = item
-                    data["batch_data"] = batch_list
+                    data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1 
                     st.toast("Copied!", icon="📥")
@@ -145,10 +145,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
                     new_seq = seq.copy()
                     max_sn = 0
-                    for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
-                    new_seq["sequence_number"] = max_sn + 1
+                    for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
+                    new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
                     batch_list.insert(i + 1, new_seq)
-                    data["batch_data"] = batch_list
+                    data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
                     st.toast("Cloned to Next!", icon="👯")
@@ -157,10 +157,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
                     new_seq = seq.copy()
                     max_sn = 0
-                    for s in batch_list: max_sn = max(max_sn, int(s.get("sequence_number", 0)))
-                    new_seq["sequence_number"] = max_sn + 1
+                    for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
+                    new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
                     batch_list.append(new_seq)
-                    data["batch_data"] = batch_list
+                    data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
                     st.toast("Cloned to End!", icon="⏬")
@@ -170,9 +170,9 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with act_c3:
                 if st.button("↖️ Promote", key=f"{prefix}_prom", help="Save as Single File", use_container_width=True):
                     single_data = seq.copy()
-                    single_data["prompt_history"] = data.get("prompt_history", [])
-                    single_data["history_tree"] = data.get("history_tree", {})
-                    if "sequence_number" in single_data: del single_data["sequence_number"]
+                    single_data[KEY_PROMPT_HISTORY] = data.get(KEY_PROMPT_HISTORY, [])
+                    single_data[KEY_HISTORY_TREE] = data.get(KEY_HISTORY_TREE, {})
+                    if KEY_SEQUENCE_NUMBER in single_data: del single_data[KEY_SEQUENCE_NUMBER]
                     save_json(file_path, single_data)
                     st.toast("Converted to Single!", icon="✅")
                     st.rerun()
@@ -181,7 +181,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with act_c4:
                 if st.button("🗑️", key=f"{prefix}_del", use_container_width=True):
                     batch_list.pop(i)
-                    data["batch_data"] = batch_list
+                    data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.rerun()
 
@@ -194,7 +194,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["negative"] = st.text_area("Specific Negative", value=seq.get("negative", ""), height=60, key=f"{prefix}_sn")
             
             with c2:
-                seq["sequence_number"] = st.number_input("Sequence Number", value=int(seq_num), key=f"{prefix}_sn_val")
+                seq[KEY_SEQUENCE_NUMBER] = st.number_input("Sequence Number", value=int(seq_num), key=f"{prefix}_sn_val")
                 
                 s_row1, s_row2 = st.columns([3, 1])
                 seed_key = f"{prefix}_seed"
@@ -320,17 +320,17 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         
     with col_save:
         if st.button("💾 Save & Snap", use_container_width=True):
-            data["batch_data"] = batch_list
+            data[KEY_BATCH_DATA] = batch_list
             
-            tree_data = data.get("history_tree", {})
+            tree_data = data.get(KEY_HISTORY_TREE, {})
             htree = HistoryTree(tree_data)
             
             snapshot_payload = copy.deepcopy(data)
-            if "history_tree" in snapshot_payload: del snapshot_payload["history_tree"]
+            if KEY_HISTORY_TREE in snapshot_payload: del snapshot_payload[KEY_HISTORY_TREE]
             
             htree.commit(snapshot_payload, note=commit_msg if commit_msg else "Batch Update")
             
-            data["history_tree"] = htree.to_dict()
+            data[KEY_HISTORY_TREE] = htree.to_dict()
             save_json(file_path, data)
             
             if 'restored_indicator' in st.session_state:

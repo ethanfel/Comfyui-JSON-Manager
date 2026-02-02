@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import copy
-from utils import save_json, get_file_mtime
+from utils import save_json, get_file_mtime, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY
 
 def render_raw_editor(data, file_path):
     st.subheader(f"💻 Raw Editor: {file_path.name}")
@@ -20,8 +20,8 @@ def render_raw_editor(data, file_path):
     if hide_history:
         display_data = copy.deepcopy(data)
         # Safely remove heavy keys for the view only
-        if "history_tree" in display_data: del display_data["history_tree"]
-        if "prompt_history" in display_data: del display_data["prompt_history"]
+        if KEY_HISTORY_TREE in display_data: del display_data[KEY_HISTORY_TREE]
+        if KEY_PROMPT_HISTORY in display_data: del display_data[KEY_PROMPT_HISTORY]
     else:
         display_data = data
 
@@ -51,10 +51,10 @@ def render_raw_editor(data, file_path):
             
             # 2. If we were in Safe Mode, we must merge the hidden history back in
             if hide_history:
-                if "history_tree" in data:
-                    input_data["history_tree"] = data["history_tree"]
-                if "prompt_history" in data:
-                    input_data["prompt_history"] = data["prompt_history"]
+                if KEY_HISTORY_TREE in data:
+                    input_data[KEY_HISTORY_TREE] = data[KEY_HISTORY_TREE]
+                if KEY_PROMPT_HISTORY in data:
+                    input_data[KEY_PROMPT_HISTORY] = data[KEY_PROMPT_HISTORY]
             
             # 3. Save to Disk
             save_json(file_path, input_data)

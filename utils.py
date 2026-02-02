@@ -1,8 +1,17 @@
 import json
 import logging
+import os
 import time
 from pathlib import Path
+from typing import Any
+
 import streamlit as st
+
+# --- Magic String Keys ---
+KEY_BATCH_DATA = "batch_data"
+KEY_HISTORY_TREE = "history_tree"
+KEY_PROMPT_HISTORY = "prompt_history"
+KEY_SEQUENCE_NUMBER = "sequence_number"
 
 # Configure logging for the application
 logging.basicConfig(
@@ -52,8 +61,8 @@ DEFAULTS = {
 CONFIG_FILE = Path(".editor_config.json")
 SNIPPETS_FILE = Path(".editor_snippets.json")
 
-# Restrict directory navigation to this base path (resolve symlinks)
-ALLOWED_BASE_DIR = Path.cwd().resolve()
+# No restriction on directory navigation
+ALLOWED_BASE_DIR = Path("/").resolve()
 
 def load_config():
     """Loads the main editor configuration (Favorites, Last Dir, Servers)."""
@@ -96,7 +105,7 @@ def save_snippets(snippets):
     with open(SNIPPETS_FILE, 'w') as f:
         json.dump(snippets, f, indent=4)
 
-def load_json(path):
+def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
     path = Path(path)
     if not path.exists():
         return DEFAULTS.copy(), 0
@@ -108,20 +117,23 @@ def load_json(path):
         st.error(f"Error loading JSON: {e}")
         return DEFAULTS.copy(), 0
 
-def save_json(path, data):
-    with open(path, 'w') as f:
+def save_json(path: str | Path, data: dict[str, Any]) -> None:
+    path = Path(path)
+    tmp = path.with_suffix('.json.tmp')
+    with open(tmp, 'w') as f:
         json.dump(data, f, indent=4)
+    os.replace(tmp, path)
 
-def get_file_mtime(path):
+def get_file_mtime(path: str | Path) -> float:
     """Returns the modification time of a file, or 0 if it doesn't exist."""
     path = Path(path)
     if path.exists():
         return path.stat().st_mtime
     return 0
 
-def generate_templates(current_dir):
+def generate_templates(current_dir: Path) -> None:
     """Creates dummy template files if folder is empty."""
     save_json(current_dir / "template_i2v.json", DEFAULTS)
-    
-    batch_data = {"batch_data": [DEFAULTS.copy(), DEFAULTS.copy()]}
+
+    batch_data = {KEY_BATCH_DATA: [DEFAULTS.copy(), DEFAULTS.copy()]}
     save_json(current_dir / "template_batch.json", batch_data)

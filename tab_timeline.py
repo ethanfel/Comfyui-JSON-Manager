@@ -4,10 +4,10 @@ import json
 import graphviz
 import time
 from history_tree import HistoryTree
-from utils import save_json
+from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 def render_timeline_tab(data, file_path):
-    tree_data = data.get("history_tree", {})
+    tree_data = data.get(KEY_HISTORY_TREE, {})
     if not tree_data:
         st.info("No history timeline exists. Make some changes in the Editor first!")
         return
@@ -61,13 +61,13 @@ def render_timeline_tab(data, file_path):
                     if not is_head:
                         if st.button("⏪", key=f"log_rst_{n['id']}", help="Restore this version"):
                             # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
-                            if "batch_data" not in n["data"] and "batch_data" in data:
-                                del data["batch_data"]
+                            if KEY_BATCH_DATA not in n["data"] and KEY_BATCH_DATA in data:
+                                del data[KEY_BATCH_DATA]
                             # -------------------------------------------------------------
                             
                             data.update(n["data"])
                             htree.head_id = n['id']
-                            data["history_tree"] = htree.to_dict()
+                            data[KEY_HISTORY_TREE] = htree.to_dict()
                             save_json(file_path, data)
                             st.session_state.ui_reset_token += 1
                             label = f"{n.get('note')} ({n['id'][:4]})"
@@ -109,13 +109,13 @@ def render_timeline_tab(data, file_path):
             st.write(""); st.write("")
             if st.button("⏪ Restore Version", type="primary", use_container_width=True):
                 # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
-                if "batch_data" not in node_data and "batch_data" in data:
-                    del data["batch_data"]
+                if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
+                    del data[KEY_BATCH_DATA]
                 # -------------------------------------------------------------
 
                 data.update(node_data)
                 htree.head_id = selected_node['id']
-                data["history_tree"] = htree.to_dict()
+                data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
                 st.session_state.ui_reset_token += 1
                 label = f"{selected_node.get('note')} ({selected_node['id'][:4]})"
@@ -128,7 +128,7 @@ def render_timeline_tab(data, file_path):
         new_label = rn_col1.text_input("Rename Label", value=selected_node.get("note", ""))
         if rn_col2.button("Update Label"):
             selected_node["note"] = new_label
-            data["history_tree"] = htree.to_dict()
+            data[KEY_HISTORY_TREE] = htree.to_dict()
             save_json(file_path, data)
             st.rerun()
 
@@ -152,7 +152,7 @@ def render_timeline_tab(data, file_path):
                             htree.head_id = fallback["id"]
                         else:
                             htree.head_id = None
-                    data["history_tree"] = htree.to_dict()
+                    data[KEY_HISTORY_TREE] = htree.to_dict()
                     save_json(file_path, data)
                     st.toast("Node Deleted", icon="🗑️")
                     st.rerun()

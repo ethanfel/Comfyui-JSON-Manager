@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 from history_tree import HistoryTree
-from utils import save_json
+from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 try:
     from streamlit_agraph import agraph, Node, Edge, Config
@@ -13,7 +13,7 @@ def render_timeline_wip(data, file_path):
     if not _HAS_AGRAPH:
         st.error("The `streamlit-agraph` package is required for this tab. Install it with: `pip install streamlit-agraph`")
         return
-    tree_data = data.get("history_tree", {})
+    tree_data = data.get(KEY_HISTORY_TREE, {})
     if not tree_data:
         st.info("No history timeline exists.")
         return
@@ -108,14 +108,14 @@ def render_timeline_wip(data, file_path):
             st.write(""); st.write("")
             if st.button("⏪ Restore This Version", type="primary", use_container_width=True, key=f"rst_{target_node_id}"):
                 # --- FIX: Cleanup 'batch_data' if restoring a Single File ---
-                if "batch_data" not in node_data and "batch_data" in data:
-                    del data["batch_data"]
+                if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
+                    del data[KEY_BATCH_DATA]
                 # -------------------------------------------------------------
 
                 data.update(node_data)
                 htree.head_id = target_node_id
                 
-                data["history_tree"] = htree.to_dict()
+                data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
                 
                 st.session_state.ui_reset_token += 1
@@ -174,7 +174,7 @@ def render_timeline_wip(data, file_path):
                     v3.text_input("Video Path", value=str(item_data.get("video file path", "")), disabled=True, key=f"{prefix}_vid")
 
         # --- DETECT BATCH VS SINGLE ---
-        batch_list = node_data.get("batch_data", [])
+        batch_list = node_data.get(KEY_BATCH_DATA, [])
         
         if batch_list and isinstance(batch_list, list) and len(batch_list) > 0:
             st.info(f"📚 This snapshot contains {len(batch_list)} sequences.")

@@ -5,7 +5,8 @@ from pathlib import Path
 # --- Import Custom Modules ---
 from utils import (
     load_config, save_config, load_snippets, save_snippets,
-    load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR
+    load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR,
+    KEY_BATCH_DATA, KEY_PROMPT_HISTORY,
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -47,37 +48,51 @@ with st.sidebar:
     st.header("📂 Navigator")
     
     # --- Path Navigator ---
-    new_path = st.text_input("Current Path", value=str(st.session_state.current_dir))
+    # Sync widget key with current_dir so the text input always reflects the actual path
+    if "nav_path_input" not in st.session_state:
+        st.session_state.nav_path_input = str(st.session_state.current_dir)
+
+    new_path = st.text_input("Current Path", key="nav_path_input")
     if new_path != str(st.session_state.current_dir):
         p = Path(new_path).resolve()
         if p.exists() and p.is_dir():
-            # Restrict navigation to the allowed base directory
-            try:
-                p.relative_to(ALLOWED_BASE_DIR)
-            except ValueError:
-                st.error(f"Access denied: path must be under {ALLOWED_BASE_DIR}")
-            else:
-                st.session_state.current_dir = p
-                st.session_state.config['last_dir'] = str(p)
+            st.session_state.current_dir = p
+            st.session_state.config['last_dir'] = str(p)
+            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+            st.rerun()
+        elif new_path.strip():
+            st.error(f"Path does not exist or is not a directory: {new_path}")
+
+    # --- Favorites System ---
+    pin_col, unpin_col = st.columns(2)
+    with pin_col:
+        if st.button("📌 Pin Folder", use_container_width=True):
+            if str(st.session_state.current_dir) not in st.session_state.config['favorites']:
+                st.session_state.config['favorites'].append(str(st.session_state.current_dir))
                 save_config(st.session_state.current_dir, st.session_state.config['favorites'])
                 st.rerun()
 
-    # --- Favorites System ---
-    if st.button("📌 Pin Current Folder"):
-        if str(st.session_state.current_dir) not in st.session_state.config['favorites']:
-            st.session_state.config['favorites'].append(str(st.session_state.current_dir))
-            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+    favorites = st.session_state.config['favorites']
+    if favorites:
+        fav_selection = st.radio(
+            "Jump to:",
+            ["Select..."] + favorites,
+            index=0,
+            label_visibility="collapsed"
+        )
+        if fav_selection != "Select..." and fav_selection != str(st.session_state.current_dir):
+            st.session_state.current_dir = Path(fav_selection)
+            st.session_state.nav_path_input = fav_selection
             st.rerun()
 
-    fav_selection = st.radio(
-        "Jump to:", 
-        ["Select..."] + st.session_state.config['favorites'], 
-        index=0, 
-        label_visibility="collapsed"
-    )
-    if fav_selection != "Select..." and fav_selection != str(st.session_state.current_dir):
-        st.session_state.current_dir = Path(fav_selection)
-        st.rerun()
+        # Unpin buttons for each favorite
+        for fav in favorites:
+            fc1, fc2 = st.columns([4, 1])
+            fc1.caption(fav)
+            if fc2.button("❌", key=f"unpin_{fav}"):
+                st.session_state.config['favorites'].remove(fav)
+                save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+                st.rerun()
 
     st.markdown("---")
     
@@ -123,7 +138,7 @@ with st.sidebar:
             if not new_filename.endswith(".json"): new_filename += ".json"
             path = st.session_state.current_dir / new_filename
             if is_batch:
-                data = {"batch_data": []}
+                data = {KEY_BATCH_DATA: []}
             else:
                 data = DEFAULTS.copy()
                 if "vace" in new_filename: data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
@@ -163,7 +178,7 @@ if selected_file_name:
         st.session_state.edit_history_idx = None
         
         # --- AUTO-SWITCH TAB LOGIC ---
-        is_batch = "batch_data" in data or isinstance(data, list)
+        is_batch = KEY_BATCH_DATA in data or isinstance(data, list)
         if is_batch:
             st.session_state.active_tab_name = "🚀 Batch Processor"
         else:

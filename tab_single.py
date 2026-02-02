@@ -1,9 +1,9 @@
 import streamlit as st
 import random
-from utils import DEFAULTS, save_json, get_file_mtime
+from utils import DEFAULTS, save_json, get_file_mtime, KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER
 
 def render_single_editor(data, file_path):
-    is_batch_file = "batch_data" in data or isinstance(data, list)
+    is_batch_file = KEY_BATCH_DATA in data or isinstance(data, list)
     
     if is_batch_file:
         st.info("This is a batch file. Switch to the 'Batch Processor' tab.")
@@ -63,7 +63,7 @@ def render_single_editor(data, file_path):
         # Explicitly track standard setting keys to exclude them from custom list
         standard_keys = {
             "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
-            "camera", "flf", "batch_data", "prompt_history", "sequence_number", "ui_reset_token",
+            "camera", "flf", KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER, "ui_reset_token",
             "model_name", "vae_name", "steps", "cfg", "denoise", "sampler_name", "scheduler"
         }
         standard_keys.update(lora_keys)
@@ -169,8 +169,8 @@ def render_single_editor(data, file_path):
             archive_note = st.text_input("Archive Note")
             if st.button("📦 Snapshot to History", use_container_width=True):
                 entry = {"note": archive_note if archive_note else "Snapshot", **current_state}
-                if "prompt_history" not in data: data["prompt_history"] = []
-                data["prompt_history"].insert(0, entry)
+                if KEY_PROMPT_HISTORY not in data: data[KEY_PROMPT_HISTORY] = []
+                data[KEY_PROMPT_HISTORY].insert(0, entry)
                 data.update(entry)
                 save_json(file_path, data)
                 st.session_state.last_mtime = get_file_mtime(file_path)
@@ -181,7 +181,7 @@ def render_single_editor(data, file_path):
         # --- FULL HISTORY PANEL ---
         st.markdown("---")
         st.subheader("History")
-        history = data.get("prompt_history", [])
+        history = data.get(KEY_PROMPT_HISTORY, [])
         
         if not history:
             st.caption("No history yet.")
