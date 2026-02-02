@@ -48,42 +48,42 @@ with st.sidebar:
     st.header("📂 Navigator")
     
     # --- Path Navigator ---
-    # Sync widget key with current_dir so the text input always reflects the actual path
-    if "nav_path_input" not in st.session_state:
-        st.session_state.nav_path_input = str(st.session_state.current_dir)
+    # Always sync the widget value to current_dir BEFORE the widget renders
+    st.session_state.nav_path_input = str(st.session_state.current_dir)
 
-    new_path = st.text_input("Current Path", key="nav_path_input")
-    if new_path != str(st.session_state.current_dir):
-        p = Path(new_path).resolve()
-        if p.exists() and p.is_dir():
-            st.session_state.current_dir = p
-            st.session_state.config['last_dir'] = str(p)
-            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
-            st.rerun()
-        elif new_path.strip():
-            st.error(f"Path does not exist or is not a directory: {new_path}")
+    def _on_path_change():
+        new_path = st.session_state.nav_path_input
+        if new_path != str(st.session_state.current_dir):
+            p = Path(new_path).resolve()
+            if p.exists() and p.is_dir():
+                st.session_state.current_dir = p
+                st.session_state.config['last_dir'] = str(p)
+                save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+
+    st.text_input("Current Path", key="nav_path_input", on_change=_on_path_change)
 
     # --- Favorites System ---
-    pin_col, unpin_col = st.columns(2)
-    with pin_col:
-        if st.button("📌 Pin Folder", use_container_width=True):
-            if str(st.session_state.current_dir) not in st.session_state.config['favorites']:
-                st.session_state.config['favorites'].append(str(st.session_state.current_dir))
-                save_config(st.session_state.current_dir, st.session_state.config['favorites'])
-                st.rerun()
+    if st.button("📌 Pin Folder", use_container_width=True):
+        if str(st.session_state.current_dir) not in st.session_state.config['favorites']:
+            st.session_state.config['favorites'].append(str(st.session_state.current_dir))
+            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+            st.rerun()
 
     favorites = st.session_state.config['favorites']
     if favorites:
-        fav_selection = st.radio(
+        def _on_fav_jump():
+            sel = st.session_state._fav_radio
+            if sel != "Select..." and sel != str(st.session_state.current_dir):
+                st.session_state.current_dir = Path(sel)
+
+        st.radio(
             "Jump to:",
             ["Select..."] + favorites,
             index=0,
-            label_visibility="collapsed"
+            key="_fav_radio",
+            label_visibility="collapsed",
+            on_change=_on_fav_jump,
         )
-        if fav_selection != "Select..." and fav_selection != str(st.session_state.current_dir):
-            st.session_state.current_dir = Path(fav_selection)
-            st.session_state.nav_path_input = fav_selection
-            st.rerun()
 
         # Unpin buttons for each favorite
         for fav in favorites:
