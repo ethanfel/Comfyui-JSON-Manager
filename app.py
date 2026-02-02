@@ -6,7 +6,7 @@ from pathlib import Path
 from utils import (
     load_config, save_config, load_snippets, save_snippets,
     load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR,
-    KEY_BATCH_DATA, KEY_PROMPT_HISTORY,
+    KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -138,11 +138,11 @@ with st.sidebar:
             if not new_filename.endswith(".json"): new_filename += ".json"
             path = st.session_state.current_dir / new_filename
             if is_batch:
-                data = {KEY_BATCH_DATA: []}
+                first_item = DEFAULTS.copy()
+                first_item[KEY_SEQUENCE_NUMBER] = 1
+                data = {KEY_BATCH_DATA: [first_item]}
             else:
                 data = DEFAULTS.copy()
-                if "vace" in new_filename: data.update({"frame_to_skip": 81, "vace schedule": 1, "video file path": ""})
-                elif "i2v" in new_filename: data.update({"reference image path": "", "flf image path": ""})
             save_json(path, data)
             st.rerun()
 
