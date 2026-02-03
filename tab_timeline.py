@@ -36,9 +36,13 @@ def render_timeline_tab(data, file_path):
         direction = "LR" if view_mode == "🌳 Horizontal" else "TB"
         try:
             graph_dot = htree.generate_graph(direction=direction)
-            # Vertical mode: don't stretch to container width (keeps nodes small)
-            use_full_width = (direction == "LR")
-            st.graphviz_chart(graph_dot, use_container_width=use_full_width)
+            if direction == "LR":
+                st.graphviz_chart(graph_dot, use_container_width=True)
+            else:
+                # Vertical mode: center the graph
+                _, col_center, _ = st.columns([1, 2, 1])
+                with col_center:
+                    st.graphviz_chart(graph_dot, use_container_width=True)
         except Exception as e:
             st.error(f"Graph Error: {e}")
 
