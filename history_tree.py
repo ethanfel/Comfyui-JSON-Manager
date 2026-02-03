@@ -76,12 +76,23 @@ class HistoryTree:
         direction: "LR" (Horizontal) or "TB" (Vertical)
         """
         node_count = len(self.nodes)
-        if node_count <= 5:
-            nodesep, ranksep = 0.5, 0.6
-        elif node_count <= 15:
-            nodesep, ranksep = 0.3, 0.4
+        is_vertical = direction == "TB"
+
+        # Vertical mode uses much tighter spacing
+        if is_vertical:
+            if node_count <= 5:
+                nodesep, ranksep = 0.3, 0.2
+            elif node_count <= 15:
+                nodesep, ranksep = 0.2, 0.15
+            else:
+                nodesep, ranksep = 0.1, 0.1
         else:
-            nodesep, ranksep = 0.15, 0.25
+            if node_count <= 5:
+                nodesep, ranksep = 0.5, 0.6
+            elif node_count <= 15:
+                nodesep, ranksep = 0.3, 0.4
+            else:
+                nodesep, ranksep = 0.15, 0.25
 
         # Build reverse lookup: branch tip -> branch name(s)
         tip_to_branches: dict[str, list[str]] = {}
@@ -102,11 +113,23 @@ class HistoryTree:
 
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
 
+        # Font sizes and padding - smaller for vertical
+        if is_vertical:
+            note_font_size = 8
+            meta_font_size = 7
+            cell_padding = 2
+            max_note_len = 18
+        else:
+            note_font_size = 10
+            meta_font_size = 8
+            cell_padding = 4
+            max_note_len = 25
+
         for n in sorted_nodes:
             nid = n["id"]
             full_note = n.get('note', 'Step')
 
-            display_note = (full_note[:25] + '..') if len(full_note) > 25 else full_note
+            display_note = (full_note[:max_note_len] + '..') if len(full_note) > max_note_len else full_note
 
             ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
 
@@ -130,14 +153,14 @@ class HistoryTree:
 
             # HTML LABEL
             rows = [
-                f'<TR><TD><B><FONT POINT-SIZE="10">{display_note}</FONT></B></TD></TR>',
-                f'<TR><TD><FONT POINT-SIZE="8" COLOR="#555555">{ts} • {nid[:4]}</FONT></TD></TR>',
+                f'<TR><TD><B><FONT POINT-SIZE="{note_font_size}">{display_note}</FONT></B></TD></TR>',
+                f'<TR><TD><FONT POINT-SIZE="{meta_font_size}" COLOR="#555555">{ts} • {nid[:4]}</FONT></TD></TR>',
             ]
             if branch_label:
-                rows.append(f'<TR><TD><FONT POINT-SIZE="8" COLOR="#4488cc"><I>{branch_label}</I></FONT></TD></TR>')
+                rows.append(f'<TR><TD><FONT POINT-SIZE="{meta_font_size}" COLOR="#4488cc"><I>{branch_label}</I></FONT></TD></TR>')
 
             label = (
-                f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4" BGCOLOR="{bg_color}" COLOR="{border_color}">'
+                f'<<TABLE BORDER="{border_width}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{cell_padding}" BGCOLOR="{bg_color}" COLOR="{border_color}">'
                 + "".join(rows)
                 + '</TABLE>>'
             )
