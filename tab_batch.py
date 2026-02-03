@@ -4,6 +4,73 @@ import copy
 from utils import DEFAULTS, save_json, load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER
 from history_tree import HistoryTree
 
+def _render_mass_update(batch_list, data, file_path, key_prefix):
+    """Render the mass update UI section."""
+    with st.expander("🔄 Mass Update", expanded=False):
+        if len(batch_list) < 2:
+            st.info("Need at least 2 sequences for mass update.")
+            return
+
+        # Source sequence selector
+        source_idx = st.selectbox(
+            "Copy from sequence:",
+            range(len(batch_list)),
+            format_func=lambda i: f"Sequence #{batch_list[i].get('sequence_number', i+1)}",
+            key=f"{key_prefix}_mass_src"
+        )
+        source_seq = batch_list[source_idx]
+
+        # Field multi-select (exclude sequence_number)
+        available_keys = [k for k in source_seq.keys() if k != "sequence_number"]
+        selected_keys = st.multiselect("Fields to copy:", available_keys, key=f"{key_prefix}_mass_fields")
+
+        if not selected_keys:
+            return
+
+        # Target sequence checkboxes
+        st.write("Apply to:")
+        select_all = st.checkbox("Select All", key=f"{key_prefix}_mass_all")
+
+        target_indices = []
+        target_cols = st.columns(min(4, len(batch_list) - 1)) if len(batch_list) > 1 else [st]
+        col_idx = 0
+        for i, seq in enumerate(batch_list):
+            if i == source_idx:
+                continue
+            seq_num = seq.get("sequence_number", i + 1)
+            with target_cols[col_idx % len(target_cols)]:
+                checked = select_all or st.checkbox(f"#{seq_num}", key=f"{key_prefix}_mass_t{i}")
+            if checked:
+                target_indices.append(i)
+            col_idx += 1
+
+        # Preview
+        if target_indices and selected_keys:
+            with st.expander("Preview changes", expanded=True):
+                for key in selected_keys:
+                    val = source_seq.get(key, "")
+                    display_val = str(val)[:100] + "..." if len(str(val)) > 100 else str(val)
+                    st.caption(f"**{key}**: {display_val}")
+
+            # Apply button
+            if st.button("Apply Changes", type="primary", key=f"{key_prefix}_mass_apply"):
+                for i in target_indices:
+                    for key in selected_keys:
+                        batch_list[i][key] = source_seq.get(key)
+
+                # Save with history snapshot
+                data[KEY_BATCH_DATA] = batch_list
+                htree = HistoryTree(data.get(KEY_HISTORY_TREE, {}))
+                snapshot_payload = copy.deepcopy(data)
+                if KEY_HISTORY_TREE in snapshot_payload:
+                    del snapshot_payload[KEY_HISTORY_TREE]
+                htree.commit(snapshot_payload, f"Mass update: {', '.join(selected_keys)}")
+                data[KEY_HISTORY_TREE] = htree.to_dict()
+                save_json(file_path, data)
+                st.toast(f"Updated {len(target_indices)} sequences", icon="✅")
+                st.rerun()
+
+
 def create_batch_callback(original_filename, current_data, current_dir):
     new_name = f"batch_{original_filename}"
     new_path = current_dir / new_name
@@ -102,6 +169,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     # --- RENDER LIST ---
     st.markdown("---")
     st.info(f"Batch contains {len(batch_list)} sequences.")
+
+    # --- MASS UPDATE SECTION ---
+    ui_reset_token = st.session_state.get("ui_reset_token", 0)
+    _render_mass_update(batch_list, data, file_path, f"{selected_file_name}_v{ui_reset_token}")
 
     # Updated LoRA keys to match new logic
     lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
