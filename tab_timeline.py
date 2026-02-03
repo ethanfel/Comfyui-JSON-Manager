@@ -4,6 +4,12 @@ import time
 from history_tree import HistoryTree
 from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
+try:
+    from streamlit_agraph import agraph, Node, Edge, Config
+    AGRAPH_AVAILABLE = True
+except ImportError:
+    AGRAPH_AVAILABLE = False
+
 
 def render_timeline_tab(data, file_path):
     tree_data = data.get(KEY_HISTORY_TREE, {})
@@ -34,17 +40,27 @@ def render_timeline_tab(data, file_path):
     # --- RENDER GRAPH VIEWS ---
     if view_mode in ["🌳 Horizontal", "🌲 Vertical"]:
         direction = "LR" if view_mode == "🌳 Horizontal" else "TB"
-        try:
-            graph_dot = htree.generate_graph(direction=direction)
-            if direction == "LR":
-                st.graphviz_chart(graph_dot, use_container_width=True)
-            else:
-                # Vertical mode: center the graph
-                _, col_center, _ = st.columns([1, 2, 1])
-                with col_center:
+
+        if AGRAPH_AVAILABLE:
+            # Interactive graph with streamlit-agraph
+            clicked_node = _render_interactive_graph(htree, direction)
+            if clicked_node and clicked_node in htree.nodes:
+                node = htree.nodes[clicked_node]
+                if clicked_node != htree.head_id:
+                    _restore_node(data, node, htree, file_path)
+        else:
+            # Fallback to static graphviz
+            try:
+                graph_dot = htree.generate_graph(direction=direction)
+                if direction == "LR":
                     st.graphviz_chart(graph_dot, use_container_width=True)
-        except Exception as e:
-            st.error(f"Graph Error: {e}")
+                else:
+                    _, col_center, _ = st.columns([1, 2, 1])
+                    with col_center:
+                        st.graphviz_chart(graph_dot, use_container_width=True)
+            except Exception as e:
+                st.error(f"Graph Error: {e}")
+            st.caption("💡 Install `streamlit-agraph` for interactive click-to-restore")
 
     # --- RENDER LINEAR LOG VIEW ---
     elif view_mode == "📜 Linear Log":
@@ -152,6 +168,76 @@ def render_timeline_tab(data, file_path):
         else:
             prefix = f"p_{selected_node['id']}_single"
             _render_preview_fields(node_data, prefix)
+
+
+def _render_interactive_graph(htree, direction):
+    """Render an interactive graph using streamlit-agraph. Returns clicked node id."""
+    # Build reverse lookup: branch tip -> branch name(s)
+    tip_to_branches = {}
+    for b_name, tip_id in htree.branches.items():
+        if tip_id:
+            tip_to_branches.setdefault(tip_id, []).append(b_name)
+
+    sorted_nodes = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])
+
+    nodes = []
+    edges = []
+
+    for n in sorted_nodes:
+        nid = n["id"]
+        full_note = n.get('note', 'Step')
+        display_note = (full_note[:20] + '..') if len(full_note) > 20 else full_note
+        ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+
+        # Branch label
+        branch_label = ""
+        if nid in tip_to_branches:
+            branch_label = f"\n[{', '.join(tip_to_branches[nid])}]"
+
+        label = f"{display_note}\n{ts}{branch_label}"
+
+        # Colors
+        if nid == htree.head_id:
+            color = "#eebb00"  # Current head - yellow
+        elif nid in htree.branches.values():
+            color = "#66aa66"  # Branch tip - green
+        else:
+            color = "#888888"  # Normal - gray
+
+        nodes.append(Node(
+            id=nid,
+            label=label,
+            size=20,
+            color=color,
+            font={"size": 10}
+        ))
+
+        if n["parent"] and n["parent"] in htree.nodes:
+            edges.append(Edge(source=n["parent"], target=nid))
+
+    # Config based on direction
+    is_horizontal = direction == "LR"
+    config = Config(
+        width="100%",
+        height=400 if is_horizontal else 600,
+        directed=True,
+        hierarchical=True,
+        physics=False,
+        nodeHighlightBehavior=True,
+        highlightColor="#ffcc00",
+        collapsible=False,
+        layout={
+            "hierarchical": {
+                "enabled": True,
+                "direction": "LR" if is_horizontal else "UD",
+                "sortMethod": "directed",
+                "levelSeparation": 150 if is_horizontal else 80,
+                "nodeSpacing": 100 if is_horizontal else 60,
+            }
+        }
+    )
+
+    return agraph(nodes=nodes, edges=edges, config=config)
 
 
 def _restore_node(data, node, htree, file_path):
