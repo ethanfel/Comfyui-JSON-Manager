@@ -196,24 +196,24 @@ def _render_interactive_graph(htree, direction):
 
         label = f"{display_note}\n{ts}{branch_label}"
 
-        # Colors
+        # Colors - bright for dark backgrounds
         if nid == htree.head_id:
-            color = "#eebb00"  # Current head - yellow
+            color = "#ffdd44"  # Current head - bright yellow
         elif nid in htree.branches.values():
-            color = "#66aa66"  # Branch tip - green
+            color = "#66dd66"  # Branch tip - bright green
         else:
-            color = "#888888"  # Normal - gray
+            color = "#aaccff"  # Normal - light blue
 
         nodes.append(Node(
             id=nid,
             label=label,
             size=20,
             color=color,
-            font={"size": 10}
+            font={"size": 10, "color": "#ffffff"}
         ))
 
         if n["parent"] and n["parent"] in htree.nodes:
-            edges.append(Edge(source=n["parent"], target=nid))
+            edges.append(Edge(source=n["parent"], target=nid, color="#888888"))
 
     # Config based on direction
     is_horizontal = direction == "LR"
