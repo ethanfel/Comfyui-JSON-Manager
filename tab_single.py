@@ -26,7 +26,7 @@ def render_single_editor(data, file_path):
             current_prompt_val = (current_prompt_val.strip() + ", " + st.session_state.append_prompt).strip(', ')
             del st.session_state.append_prompt 
             
-        new_prompt = st.text_area("Specific Prompt", value=current_prompt_val, height=150, key=f"{fk}_sp")
+        new_prompt = st.text_area("Specific Prompt", value=current_prompt_val, height=250, key=f"{fk}_sp")
         new_negative = st.text_area("Specific Negative", value=data.get("negative", ""), height=100, key=f"{fk}_sn")
 
         # Seed
