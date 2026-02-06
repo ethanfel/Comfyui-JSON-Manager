@@ -67,6 +67,7 @@ def _render_mass_update(batch_list, data, file_path, key_prefix):
                 htree.commit(snapshot_payload, f"Mass update: {', '.join(selected_keys)}")
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
+                st.session_state.ui_reset_token += 1
                 st.toast(f"Updated {len(target_indices)} sequences", icon="✅")
                 st.rerun()
 
