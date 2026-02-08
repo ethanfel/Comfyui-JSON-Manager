@@ -56,7 +56,7 @@ def _render_mass_update(batch_list, data, file_path, key_prefix):
             if st.button("Apply Changes", type="primary", key=f"{key_prefix}_mass_apply"):
                 for i in target_indices:
                     for key in selected_keys:
-                        batch_list[i][key] = source_seq.get(key)
+                        batch_list[i][key] = copy.deepcopy(source_seq.get(key))
 
                 # Save with history snapshot
                 data[KEY_BATCH_DATA] = batch_list
@@ -216,7 +216,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with act_c2:
                 cl_1, cl_2 = st.columns(2)
                 if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
-                    new_seq = seq.copy()
+                    new_seq = copy.deepcopy(seq)
                     max_sn = 0
                     for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
                     new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
@@ -228,7 +228,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     st.rerun()
 
                 if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
-                    new_seq = seq.copy()
+                    new_seq = copy.deepcopy(seq)
                     max_sn = 0
                     for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
                     new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
@@ -247,6 +247,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     single_data[KEY_HISTORY_TREE] = data.get(KEY_HISTORY_TREE, {})
                     if KEY_SEQUENCE_NUMBER in single_data: del single_data[KEY_SEQUENCE_NUMBER]
                     save_json(file_path, single_data)
+                    st.session_state.data_cache = single_data
+                    st.session_state.ui_reset_token += 1
                     st.toast("Converted to Single!", icon="✅")
                     st.rerun()
 
@@ -256,6 +258,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     batch_list.pop(i)
                     data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
+                    st.session_state.ui_reset_token += 1
                     st.rerun()
 
             st.markdown("---")
