@@ -45,6 +45,33 @@ def render_timeline_tab(data, file_path):
     all_nodes = list(htree.nodes.values())
     all_nodes.sort(key=lambda x: x["timestamp"], reverse=True)
 
+    # --- MULTISELECT PICKER (shown when selection mode is on) ---
+    if selection_mode:
+        def _fmt_node_option(nid):
+            n = htree.nodes[nid]
+            ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+            note = n.get('note', 'Step')
+            head = " (HEAD)" if nid == htree.head_id else ""
+            return f"{note} • {ts} ({nid[:6]}){head}"
+
+        all_ids = [n["id"] for n in all_nodes]
+        current_selection = [nid for nid in all_ids if nid in st.session_state.timeline_selected_nodes]
+        picked = st.multiselect(
+            "Select nodes to delete:",
+            options=all_ids,
+            default=current_selection,
+            format_func=_fmt_node_option,
+        )
+        st.session_state.timeline_selected_nodes = set(picked)
+
+        c_all, c_none, _ = st.columns([1, 1, 4])
+        if c_all.button("Select All", use_container_width=True):
+            st.session_state.timeline_selected_nodes = set(all_ids)
+            st.rerun()
+        if c_none.button("Deselect All", use_container_width=True):
+            st.session_state.timeline_selected_nodes = set()
+            st.rerun()
+
     # --- RENDER GRAPH VIEWS ---
     if view_mode in ["🌳 Horizontal", "🌲 Vertical"]:
         direction = "LR" if view_mode == "🌳 Horizontal" else "TB"
