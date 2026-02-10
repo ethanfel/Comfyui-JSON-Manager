@@ -19,11 +19,15 @@ def render_timeline_tab(data, file_path):
 
     htree = HistoryTree(tree_data)
 
+    # --- Initialize selection state ---
+    if "timeline_selected_nodes" not in st.session_state:
+        st.session_state.timeline_selected_nodes = set()
+
     if 'restored_indicator' in st.session_state and st.session_state.restored_indicator:
         st.info(f"📍 Editing Restored Version: **{st.session_state.restored_indicator}**")
 
-    # --- VIEW SWITCHER ---
-    c_title, c_view = st.columns([2, 1])
+    # --- VIEW SWITCHER + SELECTION MODE ---
+    c_title, c_view, c_toggle = st.columns([2, 1, 0.6])
     c_title.subheader("🕰️ Version History")
 
     view_mode = c_view.radio(
@@ -32,6 +36,10 @@ def render_timeline_tab(data, file_path):
         horizontal=True,
         label_visibility="collapsed"
     )
+
+    selection_mode = c_toggle.toggle("Select to Delete", key="timeline_selection_mode")
+    if not selection_mode:
+        st.session_state.timeline_selected_nodes = set()
 
     # --- Build sorted node list (shared by all views) ---
     all_nodes = list(htree.nodes.values())
@@ -43,11 +51,20 @@ def render_timeline_tab(data, file_path):
 
         if AGRAPH_AVAILABLE:
             # Interactive graph with streamlit-agraph
-            clicked_node = _render_interactive_graph(htree, direction)
+            selected_set = st.session_state.timeline_selected_nodes if selection_mode else set()
+            clicked_node = _render_interactive_graph(htree, direction, selected_set)
             if clicked_node and clicked_node in htree.nodes:
-                node = htree.nodes[clicked_node]
-                if clicked_node != htree.head_id:
-                    _restore_node(data, node, htree, file_path)
+                if selection_mode:
+                    # Toggle node in selection set
+                    if clicked_node in st.session_state.timeline_selected_nodes:
+                        st.session_state.timeline_selected_nodes.discard(clicked_node)
+                    else:
+                        st.session_state.timeline_selected_nodes.add(clicked_node)
+                    st.rerun()
+                else:
+                    node = htree.nodes[clicked_node]
+                    if clicked_node != htree.head_id:
+                        _restore_node(data, node, htree, file_path)
         else:
             # Fallback to static graphviz
             try:
@@ -69,7 +86,16 @@ def render_timeline_tab(data, file_path):
         for n in all_nodes:
             is_head = (n["id"] == htree.head_id)
             with st.container():
-                c1, c2, c3 = st.columns([0.5, 4, 1])
+                if selection_mode:
+                    c0, c1, c2, c3 = st.columns([0.3, 0.5, 4, 1])
+                    with c0:
+                        is_selected = n["id"] in st.session_state.timeline_selected_nodes
+                        if st.checkbox("", value=is_selected, key=f"log_sel_{n['id']}", label_visibility="collapsed"):
+                            st.session_state.timeline_selected_nodes.add(n["id"])
+                        else:
+                            st.session_state.timeline_selected_nodes.discard(n["id"])
+                else:
+                    c1, c2, c3 = st.columns([0.5, 4, 1])
                 with c1:
                     st.markdown("### 📍" if is_head else "### ⚫")
                 with c2:
@@ -81,10 +107,45 @@ def render_timeline_tab(data, file_path):
                         st.write(f"**{note_txt}**")
                     st.caption(f"ID: {n['id'][:6]} • {ts}")
                 with c3:
-                    if not is_head:
+                    if not is_head and not selection_mode:
                         if st.button("⏪", key=f"log_rst_{n['id']}", help="Restore this version"):
                             _restore_node(data, n, htree, file_path)
             st.divider()
+
+    # --- BATCH DELETE UI ---
+    if selection_mode and st.session_state.timeline_selected_nodes:
+        # Prune any selected IDs that no longer exist in the tree
+        valid_selected = st.session_state.timeline_selected_nodes & set(htree.nodes.keys())
+        st.session_state.timeline_selected_nodes = valid_selected
+        count = len(valid_selected)
+        if count > 0:
+            st.warning(f"**{count}** node{'s' if count != 1 else ''} selected for deletion.")
+            if st.button(f"🗑️ Delete {count} Node{'s' if count != 1 else ''}", type="primary"):
+                # Backup
+                if "history_tree_backup" not in data:
+                    data["history_tree_backup"] = []
+                data["history_tree_backup"].append(copy.deepcopy(htree.to_dict()))
+                # Delete all selected nodes
+                for nid in valid_selected:
+                    if nid in htree.nodes:
+                        del htree.nodes[nid]
+                # Clean up branch tips
+                for b, tip in list(htree.branches.items()):
+                    if tip in valid_selected:
+                        del htree.branches[b]
+                # Reassign HEAD if deleted
+                if htree.head_id in valid_selected:
+                    if htree.nodes:
+                        fallback = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])[-1]
+                        htree.head_id = fallback["id"]
+                    else:
+                        htree.head_id = None
+                # Save and reset
+                data[KEY_HISTORY_TREE] = htree.to_dict()
+                save_json(file_path, data)
+                st.session_state.timeline_selected_nodes = set()
+                st.toast(f"Deleted {count} node{'s' if count != 1 else ''}!", icon="🗑️")
+                st.rerun()
 
     st.markdown("---")
 
@@ -170,20 +231,23 @@ def render_timeline_tab(data, file_path):
             _render_preview_fields(node_data, prefix)
 
 
-def _render_interactive_graph(htree, direction):
+def _render_interactive_graph(htree, direction, selected_nodes=None):
     """Render an interactive graph using streamlit-agraph. Returns clicked node id."""
+    if selected_nodes is None:
+        selected_nodes = set()
+
     # Build reverse lookup: branch tip -> branch name(s)
     tip_to_branches = {}
     for b_name, tip_id in htree.branches.items():
         if tip_id:
             tip_to_branches.setdefault(tip_id, []).append(b_name)
 
-    sorted_nodes = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])
+    sorted_nodes_list = sorted(htree.nodes.values(), key=lambda x: x["timestamp"])
 
     nodes = []
     edges = []
 
-    for n in sorted_nodes:
+    for n in sorted_nodes_list:
         nid = n["id"]
         full_note = n.get('note', 'Step')
         display_note = (full_note[:20] + '..') if len(full_note) > 20 else full_note
@@ -196,8 +260,10 @@ def _render_interactive_graph(htree, direction):
 
         label = f"{display_note}\n{ts}{branch_label}"
 
-        # Colors - bright for dark backgrounds
-        if nid == htree.head_id:
+        # Colors - selected nodes override to red
+        if nid in selected_nodes:
+            color = "#ff5555"  # Selected for deletion - red
+        elif nid == htree.head_id:
             color = "#ffdd44"  # Current head - bright yellow
         elif nid in htree.branches.values():
             color = "#66dd66"  # Branch tip - bright green
