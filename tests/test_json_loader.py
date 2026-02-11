@@ -31,7 +31,16 @@ class TestToInt:
 
 
 class TestGetBatchItem:
-    def test_valid_index(self):
+    def test_lookup_by_sequence_number_field(self):
+        data = {"batch_data": [
+            {"sequence_number": 1, "a": "first"},
+            {"sequence_number": 5, "a": "fifth"},
+            {"sequence_number": 3, "a": "third"},
+        ]}
+        assert get_batch_item(data, 5) == {"sequence_number": 5, "a": "fifth"}
+        assert get_batch_item(data, 3) == {"sequence_number": 3, "a": "third"}
+
+    def test_fallback_to_index(self):
         data = {"batch_data": [{"a": 1}, {"a": 2}, {"a": 3}]}
         assert get_batch_item(data, 2) == {"a": 2}
 

@@ -21,11 +21,15 @@ def to_int(val: Any) -> int:
         return 0
 
 def get_batch_item(data: dict[str, Any], sequence_number: int) -> dict[str, Any]:
-    """Resolve batch item by sequence_number, clamping to valid range."""
+    """Resolve batch item by sequence_number field, falling back to array index."""
     if KEY_BATCH_DATA in data and isinstance(data[KEY_BATCH_DATA], list) and len(data[KEY_BATCH_DATA]) > 0:
+        # Search by sequence_number field first
+        for item in data[KEY_BATCH_DATA]:
+            if int(item.get("sequence_number", 0)) == sequence_number:
+                return item
+        # Fallback to array index
         idx = max(0, min(sequence_number - 1, len(data[KEY_BATCH_DATA]) - 1))
-        if sequence_number - 1 != idx:
-            logger.warning(f"Sequence {sequence_number} out of range (1-{len(data[KEY_BATCH_DATA])}), clamped to {idx + 1}")
+        logger.warning(f"No item with sequence_number={sequence_number}, falling back to index {idx}")
         return data[KEY_BATCH_DATA][idx]
     return data
 
