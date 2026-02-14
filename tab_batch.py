@@ -293,7 +293,27 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["reference path"] = st.text_input("Reference Path", value=seq.get("reference path", ""), key=f"{prefix}_rp")
                 seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
                 with st.expander("VACE Settings"):
-                    seq["frame_to_skip"] = st.number_input("Frame to Skip", value=int(seq.get("frame_to_skip", 81)), key=f"{prefix}_fts")
+                    fts_col, fts_btn = st.columns([3, 1])
+                    old_fts = int(seq.get("frame_to_skip", 81))
+                    seq["frame_to_skip"] = fts_col.number_input("Frame to Skip", value=old_fts, key=f"{prefix}_fts")
+                    fts_btn.write("")
+                    fts_btn.write("")
+                    if fts_btn.button("Shift ↓", key=f"{prefix}_fts_shift", help="Apply delta to all following sequences"):
+                        delta = int(seq["frame_to_skip"]) - old_fts
+                        if delta != 0:
+                            current_seq_num = int(seq.get(KEY_SEQUENCE_NUMBER, i + 1))
+                            shifted = 0
+                            for s in batch_list:
+                                if int(s.get(KEY_SEQUENCE_NUMBER, 0)) > current_seq_num:
+                                    s["frame_to_skip"] = int(s.get("frame_to_skip", 81)) + delta
+                                    shifted += 1
+                            data[KEY_BATCH_DATA] = batch_list
+                            save_json(file_path, data)
+                            st.session_state.ui_reset_token += 1
+                            st.toast(f"Shifted {shifted} sequences by {delta:+d}", icon="⏬")
+                            st.rerun()
+                        else:
+                            st.toast("No change to shift", icon="ℹ️")
                     seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
                     seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
                     seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
