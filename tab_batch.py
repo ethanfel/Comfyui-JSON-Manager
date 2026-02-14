@@ -296,10 +296,11 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     fts_col, fts_btn = st.columns([3, 1])
                     old_fts = int(seq.get("frame_to_skip", 81))
                     seq["frame_to_skip"] = fts_col.number_input("Frame to Skip", value=old_fts, key=f"{prefix}_fts")
+                    delta = int(seq["frame_to_skip"]) - old_fts
+                    delta_label = f"Shift ↓ ({delta:+d})" if delta != 0 else "Shift ↓ (0)"
                     fts_btn.write("")
                     fts_btn.write("")
-                    if fts_btn.button("Shift ↓", key=f"{prefix}_fts_shift", help="Apply delta to all following sequences"):
-                        delta = int(seq["frame_to_skip"]) - old_fts
+                    if fts_btn.button(delta_label, key=f"{prefix}_fts_shift", help="Apply delta to all following sequences", disabled=(delta == 0)):
                         if delta != 0:
                             current_seq_num = int(seq.get(KEY_SEQUENCE_NUMBER, i + 1))
                             shifted = 0
