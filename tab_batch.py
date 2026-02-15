@@ -377,7 +377,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
                 with st.expander("VACE Settings"):
                     fts_col, fts_btn = st.columns([3, 1])
-                    old_fts = int(seq.get("frame_to_skip", 81))
+                    saved_fts_key = f"{prefix}_fts_saved"
+                    if saved_fts_key not in st.session_state:
+                        st.session_state[saved_fts_key] = int(seq.get("frame_to_skip", 81))
+                    old_fts = st.session_state[saved_fts_key]
                     seq["frame_to_skip"] = fts_col.number_input("Frame to Skip", value=old_fts, key=f"{prefix}_fts")
                     delta = int(seq["frame_to_skip"]) - old_fts
                     delta_label = f"Shift ↓ ({delta:+d})" if delta != 0 else "Shift ↓ (0)"
