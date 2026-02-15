@@ -4,6 +4,51 @@ import copy
 from utils import DEFAULTS, save_json, load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER
 from history_tree import HistoryTree
 
+SUB_SEGMENT_MULTIPLIER = 1000
+
+def is_subsegment(seq_num):
+    """Return True if seq_num is a sub-segment (>= 1000)."""
+    return int(seq_num) >= SUB_SEGMENT_MULTIPLIER
+
+def parent_of(seq_num):
+    """Return the parent segment number (or self if already a parent)."""
+    seq_num = int(seq_num)
+    return seq_num // SUB_SEGMENT_MULTIPLIER if is_subsegment(seq_num) else seq_num
+
+def sub_index_of(seq_num):
+    """Return the sub-index (0 if parent)."""
+    seq_num = int(seq_num)
+    return seq_num % SUB_SEGMENT_MULTIPLIER if is_subsegment(seq_num) else 0
+
+def format_seq_label(seq_num):
+    """Return display label: 'Sequence #3' or 'Sub #2.1'."""
+    seq_num = int(seq_num)
+    if is_subsegment(seq_num):
+        return f"Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)}"
+    return f"Sequence #{seq_num}"
+
+def next_sub_segment_number(batch_list, parent_seq_num):
+    """Find the next available sub-segment number under a parent."""
+    parent_seq_num = int(parent_seq_num)
+    max_sub = 0
+    for s in batch_list:
+        sn = int(s.get(KEY_SEQUENCE_NUMBER, 0))
+        if is_subsegment(sn) and parent_of(sn) == parent_seq_num:
+            max_sub = max(max_sub, sub_index_of(sn))
+    return parent_seq_num * SUB_SEGMENT_MULTIPLIER + max_sub + 1
+
+def find_insert_position(batch_list, parent_index, parent_seq_num):
+    """Find the insert position after the parent's last existing sub-segment."""
+    parent_seq_num = int(parent_seq_num)
+    pos = parent_index + 1
+    while pos < len(batch_list):
+        sn = int(batch_list[pos].get(KEY_SEQUENCE_NUMBER, 0))
+        if is_subsegment(sn) and parent_of(sn) == parent_seq_num:
+            pos += 1
+        else:
+            break
+    return pos
+
 def _render_mass_update(batch_list, data, file_path, key_prefix):
     """Render the mass update UI section."""
     with st.expander("🔄 Mass Update", expanded=False):
@@ -15,7 +60,7 @@ def _render_mass_update(batch_list, data, file_path, key_prefix):
         source_idx = st.selectbox(
             "Copy from sequence:",
             range(len(batch_list)),
-            format_func=lambda i: f"Sequence #{batch_list[i].get('sequence_number', i+1)}",
+            format_func=lambda i: format_seq_label(batch_list[i].get('sequence_number', i+1)),
             key=f"{key_prefix}_mass_src"
         )
         source_seq = batch_list[source_idx]
@@ -39,7 +84,7 @@ def _render_mass_update(batch_list, data, file_path, key_prefix):
                 continue
             seq_num = seq.get("sequence_number", i + 1)
             with target_cols[col_idx % len(target_cols)]:
-                checked = select_all or st.checkbox(f"#{seq_num}", key=f"{key_prefix}_mass_t{i}")
+                checked = select_all or st.checkbox(format_seq_label(seq_num), key=f"{key_prefix}_mass_t{i}")
             if checked:
                 target_indices.append(i)
             col_idx += 1
@@ -131,7 +176,9 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     def add_sequence(new_item):
         max_seq = 0
         for s in batch_list:
-            if KEY_SEQUENCE_NUMBER in s: max_seq = max(max_seq, int(s[KEY_SEQUENCE_NUMBER]))
+            sn = int(s.get(KEY_SEQUENCE_NUMBER, 0))
+            if not is_subsegment(sn):
+                max_seq = max(max_seq, sn)
         new_item[KEY_SEQUENCE_NUMBER] = max_seq + 1
 
         for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, "note", "loras"]:
@@ -170,7 +217,15 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
     # --- RENDER LIST ---
     st.markdown("---")
-    st.info(f"Batch contains {len(batch_list)} sequences.")
+    info_col, reorder_col = st.columns([3, 1])
+    info_col.info(f"Batch contains {len(batch_list)} sequences.")
+    if reorder_col.button("🔢 Sort by Number", use_container_width=True, help="Reorder sequences by sequence number"):
+        batch_list.sort(key=lambda s: int(s.get(KEY_SEQUENCE_NUMBER, 0)))
+        data[KEY_BATCH_DATA] = batch_list
+        save_json(file_path, data)
+        st.session_state.ui_reset_token += 1
+        st.toast("Sorted by sequence number!", icon="🔢")
+        st.rerun()
 
     # --- MASS UPDATE SECTION ---
     ui_reset_token = st.session_state.get("ui_reset_token", 0)
@@ -192,7 +247,12 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         seq_num = seq.get(KEY_SEQUENCE_NUMBER, i+1)
         prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
 
-        with st.expander(f"🎬 Sequence #{seq_num}", expanded=False):
+        if is_subsegment(seq_num):
+            expander_label = f"🔗  ↳ Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)}  ({int(seq_num)})"
+        else:
+            expander_label = f"🎬 Sequence #{seq_num}"
+
+        with st.expander(expander_label, expanded=False):
             # --- ACTION ROW ---
             act_c1, act_c2, act_c3, act_c4 = st.columns([1.2, 1.8, 1.2, 0.5])
             
@@ -214,11 +274,14 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
             # 2. Cloning Tools
             with act_c2:
-                cl_1, cl_2 = st.columns(2)
+                cl_1, cl_2, cl_3 = st.columns(3)
                 if cl_1.button("👯 Next", key=f"{prefix}_c_next", help="Clone and insert below", use_container_width=True):
                     new_seq = copy.deepcopy(seq)
                     max_sn = 0
-                    for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
+                    for s in batch_list:
+                        sn = int(s.get(KEY_SEQUENCE_NUMBER, 0))
+                        if not is_subsegment(sn):
+                            max_sn = max(max_sn, sn)
                     new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
                     batch_list.insert(i + 1, new_seq)
                     data[KEY_BATCH_DATA] = batch_list
@@ -230,13 +293,35 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 if cl_2.button("⏬ End", key=f"{prefix}_c_end", help="Clone and add to bottom", use_container_width=True):
                     new_seq = copy.deepcopy(seq)
                     max_sn = 0
-                    for s in batch_list: max_sn = max(max_sn, int(s.get(KEY_SEQUENCE_NUMBER, 0)))
+                    for s in batch_list:
+                        sn = int(s.get(KEY_SEQUENCE_NUMBER, 0))
+                        if not is_subsegment(sn):
+                            max_sn = max(max_sn, sn)
                     new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
                     batch_list.append(new_seq)
                     data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
                     st.toast("Cloned to End!", icon="⏬")
+                    st.rerun()
+
+                if cl_3.button("🔗 Sub", key=f"{prefix}_c_sub", help="Clone as sub-segment", use_container_width=True):
+                    new_seq = copy.deepcopy(seq)
+                    p_seq_num = parent_of(seq_num)
+                    # Find the parent's index in batch_list
+                    p_idx = i
+                    if is_subsegment(seq_num):
+                        for pi, ps in enumerate(batch_list):
+                            if int(ps.get(KEY_SEQUENCE_NUMBER, 0)) == p_seq_num:
+                                p_idx = pi
+                                break
+                    new_seq[KEY_SEQUENCE_NUMBER] = next_sub_segment_number(batch_list, p_seq_num)
+                    insert_pos = find_insert_position(batch_list, p_idx, p_seq_num)
+                    batch_list.insert(insert_pos, new_seq)
+                    data[KEY_BATCH_DATA] = batch_list
+                    save_json(file_path, data)
+                    st.session_state.ui_reset_token += 1
+                    st.toast(f"Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!", icon="🔗")
                     st.rerun()
 
             # 3. Promote
@@ -270,7 +355,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["negative"] = st.text_area("Specific Negative", value=seq.get("negative", ""), height=60, key=f"{prefix}_sn")
             
             with c2:
-                seq[KEY_SEQUENCE_NUMBER] = st.number_input("Sequence Number", value=int(seq_num), key=f"{prefix}_sn_val")
+                sn_label = f"Sequence Number (↳ Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)})" if is_subsegment(seq_num) else "Sequence Number"
+                seq[KEY_SEQUENCE_NUMBER] = st.number_input(sn_label, value=int(seq_num), key=f"{prefix}_sn_val")
                 
                 s_row1, s_row2 = st.columns([3, 1])
                 seed_key = f"{prefix}_seed"
@@ -302,12 +388,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     fts_btn.write("")
                     if fts_btn.button(delta_label, key=f"{prefix}_fts_shift", help="Apply delta to all following sequences", disabled=(delta == 0)):
                         if delta != 0:
-                            current_seq_num = int(seq.get(KEY_SEQUENCE_NUMBER, i + 1))
                             shifted = 0
-                            for s in batch_list:
-                                if int(s.get(KEY_SEQUENCE_NUMBER, 0)) > current_seq_num:
-                                    s["frame_to_skip"] = int(s.get("frame_to_skip", 81)) + delta
-                                    shifted += 1
+                            for j in range(i + 1, len(batch_list)):
+                                batch_list[j]["frame_to_skip"] = int(batch_list[j].get("frame_to_skip", 81)) + delta
+                                shifted += 1
                             data[KEY_BATCH_DATA] = batch_list
                             save_json(file_path, data)
                             st.session_state.ui_reset_token += 1
