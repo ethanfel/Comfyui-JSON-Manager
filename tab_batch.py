@@ -159,7 +159,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     # --- ADD NEW SEQUENCE AREA ---
     st.subheader("Add New Sequence")
     ac1, ac2 = st.columns(2)
-    
+
     with ac1:
         file_options = [f.name for f in json_files]
         d_idx = file_options.index(selected_file_name) if selected_file_name in file_options else 0
@@ -167,12 +167,21 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         src_data, _ = load_json(current_dir / src_name)
 
     with ac2:
-        src_hist = src_data.get(KEY_PROMPT_HISTORY, [])
-        h_opts = [f"#{i+1}: {h.get('note', 'No Note')} ({h.get('prompt', '')[:15]}...)" for i, h in enumerate(src_hist)] if src_hist else []
-        sel_hist = st.selectbox("History Entry (Legacy):", h_opts, key="batch_src_hist")
+        src_batch = src_data.get(KEY_BATCH_DATA, [])
+        if src_batch:
+            seq_opts = list(range(len(src_batch)))
+            sel_seq_idx = st.selectbox(
+                "Source Sequence:",
+                seq_opts,
+                format_func=lambda i: format_seq_label(src_batch[i].get(KEY_SEQUENCE_NUMBER, i + 1)),
+                key="batch_src_seq"
+            )
+        else:
+            st.caption("Single file (no sequences)")
+            sel_seq_idx = None
 
-    bc1, bc2, bc3 = st.columns(3)
-    
+    bc1, bc2 = st.columns(2)
+
     def add_sequence(new_item):
         max_seq = 0
         for s in batch_list:
@@ -183,7 +192,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
 
         for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, "note", "loras"]:
             if k in new_item: del new_item[k]
-        
+
         batch_list.append(new_item)
         data[KEY_BATCH_DATA] = batch_list
         save_json(file_path, data)
@@ -193,27 +202,13 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     if bc1.button("➕ Add Empty", use_container_width=True):
         add_sequence(DEFAULTS.copy())
 
-    if bc2.button("➕ From File", use_container_width=True, help=f"Copy {src_name}"):
+    if bc2.button("➕ From Source", use_container_width=True, help=f"Import from {src_name}"):
         item = DEFAULTS.copy()
-        flat = src_data[KEY_BATCH_DATA][0] if KEY_BATCH_DATA in src_data and src_data[KEY_BATCH_DATA] else src_data
-        item.update(flat)
+        if src_batch and sel_seq_idx is not None:
+            item.update(src_batch[sel_seq_idx])
+        else:
+            item.update(src_data)
         add_sequence(item)
-
-    if bc3.button("➕ From History", use_container_width=True, disabled=not src_hist):
-        if sel_hist:
-            try:
-                idx = int(sel_hist.split(":")[0].replace("#", "")) - 1
-                if idx < 0 or idx >= len(src_hist):
-                    st.error(f"History index {idx + 1} out of range.")
-                else:
-                    item = DEFAULTS.copy()
-                    h_item = src_hist[idx]
-                    item.update(h_item)
-                    if "loras" in h_item and isinstance(h_item["loras"], dict):
-                        item.update(h_item["loras"])
-                    add_sequence(item)
-            except (ValueError, IndexError) as e:
-                st.error(f"Could not parse history selection: {e}")
 
     # --- RENDER LIST ---
     st.markdown("---")
@@ -260,8 +255,10 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
             with act_c1:
                 if st.button(f"📥 Copy {src_name}", key=f"{prefix}_copy", use_container_width=True):
                     item = DEFAULTS.copy()
-                    flat = src_data[KEY_BATCH_DATA][0] if KEY_BATCH_DATA in src_data and src_data[KEY_BATCH_DATA] else src_data
-                    item.update(flat)
+                    if src_batch and sel_seq_idx is not None:
+                        item.update(src_batch[sel_seq_idx])
+                    else:
+                        item.update(src_data)
                     item[KEY_SEQUENCE_NUMBER] = seq_num
                     for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE]:
                         if k in item: del item[k]
