@@ -162,6 +162,9 @@ with st.sidebar:
         selected_file_name = st.radio("Select File", file_names, key="file_selector")
     else:
         st.info("No JSON files in this folder.")
+        if 'file_selector' in st.session_state:
+            del st.session_state.file_selector
+        st.session_state.loaded_file = None
 
     # --- GLOBAL MONITOR TOGGLE (NEW) ---
     st.markdown("---")
