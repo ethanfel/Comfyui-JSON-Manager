@@ -63,7 +63,7 @@ with st.sidebar:
             st.session_state.loaded_file = None
             st.rerun()
         else:
-            st.session_state.nav_path_input = str(st.session_state.current_dir)
+            st.session_state._sync_nav_path = True
             st.rerun()
 
     # --- Favorites System ---
