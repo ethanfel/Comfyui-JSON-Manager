@@ -47,25 +47,24 @@ with st.sidebar:
     st.header("📂 Navigator")
     
     # --- Path Navigator ---
-    # Sync widget only when dir changed externally (favorites, first load)
-    if st.session_state.get("_sync_nav_path", True):
+    if "nav_path_input" not in st.session_state:
+        st.session_state.nav_path_input = str(st.session_state.current_dir)
+    if st.session_state.get("_sync_nav_path"):
         st.session_state.nav_path_input = str(st.session_state.current_dir)
         st.session_state._sync_nav_path = False
 
-    def _on_path_change():
-        new_path = st.session_state.nav_path_input
-        if new_path != str(st.session_state.current_dir):
-            p = Path(new_path).resolve()
-            if p.exists() and p.is_dir():
-                st.session_state.current_dir = p
-                st.session_state.config['last_dir'] = str(p)
-                save_config(st.session_state.current_dir, st.session_state.config['favorites'])
-                st.session_state.loaded_file = None
-            else:
-                # Revert to current dir on invalid path
-                st.session_state.nav_path_input = str(st.session_state.current_dir)
-
-    st.text_input("Current Path", key="nav_path_input", on_change=_on_path_change)
+    nav_path = st.text_input("Current Path", key="nav_path_input")
+    if nav_path != str(st.session_state.current_dir):
+        p = Path(nav_path).resolve()
+        if p.exists() and p.is_dir():
+            st.session_state.current_dir = p
+            st.session_state.config['last_dir'] = str(p)
+            save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+            st.session_state.loaded_file = None
+            st.rerun()
+        else:
+            st.session_state.nav_path_input = str(st.session_state.current_dir)
+            st.rerun()
 
     # --- Favorites System ---
     if st.button("📌 Pin Folder", use_container_width=True):
