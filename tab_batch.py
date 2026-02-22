@@ -280,7 +280,11 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                         if not is_subsegment(sn):
                             max_sn = max(max_sn, sn)
                     new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
-                    batch_list.insert(i + 1, new_seq)
+                    if not is_subsegment(seq_num):
+                        insert_pos = find_insert_position(batch_list, i, int(seq_num))
+                    else:
+                        insert_pos = i + 1
+                    batch_list.insert(insert_pos, new_seq)
                     data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
                     st.session_state.ui_reset_token += 1
