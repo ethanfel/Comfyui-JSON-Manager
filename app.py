@@ -47,8 +47,10 @@ with st.sidebar:
     st.header("📂 Navigator")
     
     # --- Path Navigator ---
-    # Always sync the widget value to current_dir BEFORE the widget renders
-    st.session_state.nav_path_input = str(st.session_state.current_dir)
+    # Sync widget only when dir changed externally (favorites, first load)
+    if st.session_state.get("_sync_nav_path", True):
+        st.session_state.nav_path_input = str(st.session_state.current_dir)
+        st.session_state._sync_nav_path = False
 
     def _on_path_change():
         new_path = st.session_state.nav_path_input
@@ -58,6 +60,10 @@ with st.sidebar:
                 st.session_state.current_dir = p
                 st.session_state.config['last_dir'] = str(p)
                 save_config(st.session_state.current_dir, st.session_state.config['favorites'])
+                st.session_state.loaded_file = None
+            else:
+                # Revert to current dir on invalid path
+                st.session_state.nav_path_input = str(st.session_state.current_dir)
 
     st.text_input("Current Path", key="nav_path_input", on_change=_on_path_change)
 
@@ -74,6 +80,7 @@ with st.sidebar:
             sel = st.session_state._fav_radio
             if sel != "Select..." and sel != str(st.session_state.current_dir):
                 st.session_state.current_dir = Path(sel)
+                st.session_state._sync_nav_path = True
 
         st.radio(
             "Jump to:",
