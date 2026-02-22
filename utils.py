@@ -132,8 +132,11 @@ def get_file_mtime(path: str | Path) -> float:
     return 0
 
 def generate_templates(current_dir: Path) -> None:
-    """Creates dummy template files if folder is empty."""
-    save_json(current_dir / "template_i2v.json", DEFAULTS)
+    """Creates batch template files if folder is empty."""
+    first = DEFAULTS.copy()
+    first[KEY_SEQUENCE_NUMBER] = 1
+    save_json(current_dir / "batch_prompt_i2v.json", {KEY_BATCH_DATA: [first]})
 
-    batch_data = {KEY_BATCH_DATA: [DEFAULTS.copy(), DEFAULTS.copy()]}
-    save_json(current_dir / "template_batch.json", batch_data)
+    first2 = DEFAULTS.copy()
+    first2[KEY_SEQUENCE_NUMBER] = 1
+    save_json(current_dir / "batch_prompt_vace_extend.json", {KEY_BATCH_DATA: [first2]})

@@ -137,16 +137,12 @@ with st.sidebar:
     
     with st.expander("Create New JSON"):
         new_filename = st.text_input("Filename", placeholder="my_prompt_vace")
-        is_batch = st.checkbox("Is Batch File?")
         if st.button("Create"):
             if not new_filename.endswith(".json"): new_filename += ".json"
             path = st.session_state.current_dir / new_filename
-            if is_batch:
-                first_item = DEFAULTS.copy()
-                first_item[KEY_SEQUENCE_NUMBER] = 1
-                data = {KEY_BATCH_DATA: [first_item]}
-            else:
-                data = DEFAULTS.copy()
+            first_item = DEFAULTS.copy()
+            first_item[KEY_SEQUENCE_NUMBER] = 1
+            data = {KEY_BATCH_DATA: [first_item]}
             save_json(path, data)
             st.rerun()
 
