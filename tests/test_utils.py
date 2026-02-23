@@ -10,7 +10,7 @@ import sys
 from unittest.mock import MagicMock
 sys.modules.setdefault("streamlit", MagicMock())
 
-from utils import load_json, save_json, get_file_mtime, ALLOWED_BASE_DIR, DEFAULTS
+from utils import load_json, save_json, get_file_mtime, ALLOWED_BASE_DIR, DEFAULTS, resolve_path_case_insensitive
 
 
 def test_load_json_valid(tmp_path):
@@ -66,3 +66,36 @@ def test_get_file_mtime_missing(tmp_path):
 def test_allowed_base_dir_is_set():
     assert ALLOWED_BASE_DIR is not None
     assert isinstance(ALLOWED_BASE_DIR, Path)
+
+
+class TestResolvePathCaseInsensitive:
+    def test_exact_match(self, tmp_path):
+        d = tmp_path / "MyFolder"
+        d.mkdir()
+        result = resolve_path_case_insensitive(str(d))
+        assert result == d.resolve()
+
+    def test_wrong_case_single_component(self, tmp_path):
+        d = tmp_path / "MyFolder"
+        d.mkdir()
+        wrong = tmp_path / "myfolder"
+        result = resolve_path_case_insensitive(str(wrong))
+        assert result == d.resolve()
+
+    def test_wrong_case_nested(self, tmp_path):
+        d = tmp_path / "Parent" / "Child"
+        d.mkdir(parents=True)
+        wrong = tmp_path / "parent" / "CHILD"
+        result = resolve_path_case_insensitive(str(wrong))
+        assert result == d.resolve()
+
+    def test_no_match_returns_none(self, tmp_path):
+        result = resolve_path_case_insensitive(str(tmp_path / "nonexistent"))
+        assert result is None
+
+    def test_file_path(self, tmp_path):
+        f = tmp_path / "Data.json"
+        f.write_text("{}")
+        wrong = tmp_path / "data.JSON"
+        result = resolve_path_case_insensitive(str(wrong))
+        assert result == f.resolve()

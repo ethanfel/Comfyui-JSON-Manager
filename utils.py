@@ -60,6 +60,40 @@ SNIPPETS_FILE = Path(".editor_snippets.json")
 # No restriction on directory navigation
 ALLOWED_BASE_DIR = Path("/").resolve()
 
+def resolve_path_case_insensitive(path: str | Path) -> Path | None:
+    """Resolve a path with case-insensitive component matching on Linux.
+
+    Walks each component of the path and matches against actual directory
+    entries when an exact match fails. Returns the corrected Path, or None
+    if no match is found.
+    """
+    p = Path(path)
+    if p.exists():
+        return p.resolve()
+
+    # Start from the root / anchor
+    parts = p.resolve().parts  # resolve to get absolute parts
+    built = Path(parts[0])     # root "/"
+    for component in parts[1:]:
+        candidate = built / component
+        if candidate.exists():
+            built = candidate
+            continue
+        # Case-insensitive scan of the parent directory
+        try:
+            lower = component.lower()
+            match = next(
+                (entry for entry in built.iterdir() if entry.name.lower() == lower),
+                None,
+            )
+        except PermissionError:
+            return None
+        if match is None:
+            return None
+        built = match
+    return built.resolve()
+
+
 def load_config():
     """Loads the main editor configuration (Favorites, Last Dir, Servers)."""
     if CONFIG_FILE.exists():

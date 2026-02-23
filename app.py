@@ -7,6 +7,7 @@ from utils import (
     load_config, save_config, load_snippets, save_snippets,
     load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR,
     KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
+    resolve_path_case_insensitive,
 )
 from tab_single import render_single_editor
 from tab_batch import render_batch_processor
@@ -54,8 +55,8 @@ with st.sidebar:
 
     def _on_path_change():
         new_path = st.session_state.nav_path_input
-        p = Path(new_path).resolve()
-        if p.exists() and p.is_dir():
+        p = resolve_path_case_insensitive(new_path)
+        if p is not None and p.is_dir():
             st.session_state.current_dir = p
             st.session_state.config['last_dir'] = str(p)
             save_config(st.session_state.current_dir, st.session_state.config['favorites'])
