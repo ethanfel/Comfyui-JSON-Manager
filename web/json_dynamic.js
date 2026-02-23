@@ -27,6 +27,8 @@ app.registerExtension({
             this.addWidget("button", "Refresh Outputs", null, () => {
                 this.refreshDynamicOutputs();
             });
+
+            this.setSize(this.computeSize());
         };
 
         nodeType.prototype.refreshDynamicOutputs = async function () {
