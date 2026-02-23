@@ -18,21 +18,15 @@ app.registerExtension({
                 okWidget.computeSize = () => [0, -4];
             }
 
-            // Hide all 32 outputs initially
-            this._dynamicOutputCount = 0;
-            for (let i = 0; i < this.outputs.length; i++) {
-                this.outputs[i]._visible = false;
+            // Remove all 32 default outputs from Python RETURN_TYPES
+            while (this.outputs.length > 0) {
+                this.removeOutput(0);
             }
 
             // Add Refresh button
             this.addWidget("button", "Refresh Outputs", null, () => {
                 this.refreshDynamicOutputs();
             });
-
-            // Store original outputs array for show/hide
-            this._allOutputs = [...this.outputs];
-            // Start with no visible outputs
-            this.outputs.length = 0;
         };
 
         nodeType.prototype.refreshDynamicOutputs = async function () {
@@ -46,39 +40,19 @@ app.registerExtension({
                 );
                 const { keys } = await resp.json();
 
-                // Update output_keys widget for Python to read
+                // Update output_keys widget for Python to read at execution time
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
                 if (okWidget) okWidget.value = keys.join(",");
 
-                // Restore full outputs array to manipulate
-                if (this._allOutputs) {
-                    this.outputs = this._allOutputs;
+                // Remove all current outputs (disconnects links properly)
+                while (this.outputs.length > 0) {
+                    this.removeOutput(0);
                 }
 
-                // Disconnect any links on outputs that will be hidden
-                for (let i = keys.length; i < 32; i++) {
-                    if (this.outputs[i]?.links?.length) {
-                        for (const linkId of [...this.outputs[i].links]) {
-                            this.graph?.removeLink(linkId);
-                        }
-                    }
+                // Add an output slot for each discovered key
+                for (const key of keys) {
+                    this.addOutput(key, "*");
                 }
-
-                // Rename visible outputs to key names
-                for (let i = 0; i < 32; i++) {
-                    if (i < keys.length) {
-                        this.outputs[i].name = keys[i];
-                        this.outputs[i]._visible = true;
-                    } else {
-                        this.outputs[i].name = `output_${i}`;
-                        this.outputs[i]._visible = false;
-                    }
-                }
-
-                // Truncate outputs array to only show active ones
-                this._dynamicOutputCount = keys.length;
-                this._allOutputs = [...this.outputs];
-                this.outputs.length = keys.length;
 
                 this.setSize(this.computeSize());
                 app.graph.setDirtyCanvas(true, true);
@@ -87,7 +61,7 @@ app.registerExtension({
             }
         };
 
-        // Override configure to restore state on workflow load
+        // Restore state on workflow load
         const origOnConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function (info) {
             origOnConfigure?.apply(this, arguments);
@@ -102,30 +76,16 @@ app.registerExtension({
                 ? okWidget.value.split(",").filter(k => k.trim())
                 : [];
 
-            // Ensure we have the full 32 outputs stored
-            this._allOutputs = [...this.outputs];
-            while (this._allOutputs.length < 32) {
-                this._allOutputs.push({
-                    name: `output_${this._allOutputs.length}`,
-                    type: "*",
-                    links: null,
-                    _visible: false,
-                });
+            // On load, LiteGraph already restored serialized outputs with links.
+            // Just rename to match keys (preserves links) and trim excess.
+            for (let i = 0; i < this.outputs.length && i < keys.length; i++) {
+                this.outputs[i].name = keys[i].trim();
             }
 
-            // Rename and set visibility
-            for (let i = 0; i < 32; i++) {
-                if (i < keys.length) {
-                    this._allOutputs[i].name = keys[i].trim();
-                    this._allOutputs[i]._visible = true;
-                } else {
-                    this._allOutputs[i].name = `output_${i}`;
-                    this._allOutputs[i]._visible = false;
-                }
+            // Remove any extra outputs beyond the key count
+            while (this.outputs.length > keys.length) {
+                this.removeOutput(this.outputs.length - 1);
             }
-
-            this._dynamicOutputCount = keys.length;
-            this.outputs = this._allOutputs.slice(0, keys.length);
 
             this.setSize(this.computeSize());
         };
