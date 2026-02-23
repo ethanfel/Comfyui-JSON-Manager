@@ -116,7 +116,7 @@ class JSONLoaderDynamic:
     CATEGORY = "utils/json"
     OUTPUT_NODE = False
 
-    def load_dynamic(self, json_path, sequence_number, output_keys=""):
+    def load_dynamic(self, json_path, sequence_number, output_keys="", output_types=""):
         data = read_json_data(json_path)
         target = get_batch_item(data, sequence_number)
 
