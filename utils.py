@@ -38,6 +38,7 @@ DEFAULTS = {
     "frame_to_skip": 81,
     "end_frame": 0,
     "transition": "1-2",
+    "vace_length": 49,
     "vace schedule": 1,
     "input_a_frames": 0,
     "input_b_frames": 0,

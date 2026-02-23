@@ -237,7 +237,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     }
     standard_keys.update(lora_keys)
     standard_keys.update([
-        "frame_to_skip", "end_frame", "transition",
+        "frame_to_skip", "end_frame", "transition", "vace_length",
         "input_a_frames", "input_b_frames", "reference switch", "vace schedule",
         "reference path", "video file path", "reference image path", "flf image path"
     ])
@@ -379,6 +379,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"{prefix}_cam")
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 
+                seq["end_frame"] = st.number_input("End Frame", value=int(seq.get("end_frame", 0)), key=f"{prefix}_ef")
                 seq["video file path"] = st.text_input("Video File Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
                 for img_label, img_key, img_suffix in [
                     ("Reference Image Path", "reference image path", "rip"),
@@ -415,10 +416,13 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                             st.rerun()
                         else:
                             st.toast("No change to shift", icon="ℹ️")
-                    seq["end_frame"] = st.number_input("End Frame", value=int(seq.get("end_frame", 0)), key=f"{prefix}_ef")
                     seq["transition"] = st.text_input("Transition", value=str(seq.get("transition", "1-2")), key=f"{prefix}_trans")
                     seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
                     seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
+                    vl_col, vl_out = st.columns([3, 1])
+                    seq["vace_length"] = vl_col.number_input("VACE Length", value=int(seq.get("vace_length", 49)), key=f"{prefix}_vl")
+                    total_frames = int(seq["vace_length"]) + int(seq["input_a_frames"]) + int(seq["input_b_frames"])
+                    vl_out.metric("Output", total_frames)
                     seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
                     seq["vace schedule"] = st.number_input("VACE Schedule", value=int(seq.get("vace schedule", 1)), key=f"{prefix}_vsc")
 
@@ -481,8 +485,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     ck1, ck2, ck3 = st.columns([1, 2, 0.5])
                     ck1.text_input("Key", value=k, disabled=True, key=f"{prefix}_ck_lbl_{k}", label_visibility="collapsed")
                     val = ck2.text_input("Value", value=str(seq[k]), key=f"{prefix}_cv_{k}", label_visibility="collapsed")
-                    seq[k] = val 
-                    
+                    seq[k] = val
+
                     if ck3.button("🗑️", key=f"{prefix}_cdel_{k}"):
                         keys_to_remove.append(k)
             
