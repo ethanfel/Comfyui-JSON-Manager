@@ -40,7 +40,7 @@ app.registerExtension({
                 const resp = await api.fetchApi(
                     `/json_manager/get_keys?path=${encodeURIComponent(pathWidget.value)}&sequence_number=${seqWidget?.value || 1}`
                 );
-                const { keys } = await resp.json();
+                const { keys, types } = await resp.json();
 
                 // Update output_keys widget for Python to read at execution time
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
@@ -54,14 +54,18 @@ app.registerExtension({
 
                 // Build new outputs, reusing existing slots to preserve links
                 const newOutputs = [];
-                for (const key of keys) {
+                for (let k = 0; k < keys.length; k++) {
+                    const key = keys[k];
+                    const type = types[k] || "*";
                     if (key in oldSlots) {
                         // Reuse existing slot object (keeps links intact)
-                        newOutputs.push(this.outputs[oldSlots[key]]);
+                        const slot = this.outputs[oldSlots[key]];
+                        slot.type = type;
+                        newOutputs.push(slot);
                         delete oldSlots[key];
                     } else {
                         // New key — create a fresh slot
-                        newOutputs.push({ name: key, type: "*", links: null });
+                        newOutputs.push({ name: key, type: type, links: null });
                     }
                 }
 

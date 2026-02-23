@@ -76,8 +76,20 @@ if PromptServer is not None:
             seq = 1
         data = read_json_data(json_path)
         target = get_batch_item(data, seq)
-        keys = list(target.keys()) if isinstance(target, dict) else []
-        return web.json_response({"keys": keys})
+        keys = []
+        types = []
+        if isinstance(target, dict):
+            for k, v in target.items():
+                keys.append(k)
+                if isinstance(v, bool):
+                    types.append("STRING")
+                elif isinstance(v, int):
+                    types.append("INT")
+                elif isinstance(v, float):
+                    types.append("FLOAT")
+                else:
+                    types.append("STRING")
+        return web.json_response({"keys": keys, "types": types})
 
 
 # ==========================================
