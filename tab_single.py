@@ -73,8 +73,8 @@ def render_single_editor(data, file_path):
             standard_keys.update(vace_keys)
             
             spec_fields["frame_to_skip"] = st.number_input("Frame to Skip", value=int(data.get("frame_to_skip", 81)), key=f"{fk}_fts")
-            spec_fields["input_a_frames"] = st.number_input("Input A Frames", value=int(data.get("input_a_frames", 0)), key=f"{fk}_ia")
-            spec_fields["input_b_frames"] = st.number_input("Input B Frames", value=int(data.get("input_b_frames", 0)), key=f"{fk}_ib")
+            spec_fields["input_a_frames"] = st.number_input("Input A Frames", value=int(data.get("input_a_frames", 16)), key=f"{fk}_ia")
+            spec_fields["input_b_frames"] = st.number_input("Input B Frames", value=int(data.get("input_b_frames", 16)), key=f"{fk}_ib")
             spec_fields["reference switch"] = st.number_input("Reference Switch", value=int(data.get("reference switch", 1)), key=f"{fk}_rsw")
             spec_fields["vace schedule"] = st.number_input("VACE Schedule", value=int(data.get("vace schedule", 1)), key=f"{fk}_vsc")
             for f in ["reference path", "video file path", "reference image path"]:

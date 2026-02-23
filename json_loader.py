@@ -204,8 +204,8 @@ class JSONLoaderVACE:
             str(data.get("current_prompt", "")), str(data.get("negative", "")),
             str(data.get("camera", "")), to_float(data.get("flf", 0.0)),
             to_int(data.get("seed", 0)),
-            to_int(data.get("frame_to_skip", 81)), to_int(data.get("input_a_frames", 0)),
-            to_int(data.get("input_b_frames", 0)), str(data.get("reference path", "")),
+            to_int(data.get("frame_to_skip", 81)), to_int(data.get("input_a_frames", 16)),
+            to_int(data.get("input_b_frames", 16)), str(data.get("reference path", "")),
             to_int(data.get("reference switch", 1)), to_int(data.get("vace schedule", 1)),
             str(data.get("video file path", "")), str(data.get("reference image path", ""))
         )
@@ -271,7 +271,7 @@ class JSONLoaderBatchVACE:
             str(target_data.get("current_prompt", "")), str(target_data.get("negative", "")),
             str(target_data.get("camera", "")), to_float(target_data.get("flf", 0.0)),
             to_int(target_data.get("seed", 0)), to_int(target_data.get("frame_to_skip", 81)),
-            to_int(target_data.get("input_a_frames", 0)), to_int(target_data.get("input_b_frames", 0)),
+            to_int(target_data.get("input_a_frames", 16)), to_int(target_data.get("input_b_frames", 16)),
             str(target_data.get("reference path", "")), to_int(target_data.get("reference switch", 1)),
             to_int(target_data.get("vace schedule", 1)), str(target_data.get("video file path", "")),
             str(target_data.get("reference image path", ""))
