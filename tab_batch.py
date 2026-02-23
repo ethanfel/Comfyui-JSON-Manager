@@ -419,10 +419,14 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     seq["transition"] = st.text_input("Transition", value=str(seq.get("transition", "1-2")), key=f"{prefix}_trans")
                     seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
                     seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
+                    input_a = int(seq.get("input_a_frames", 0))
+                    input_b = int(seq.get("input_b_frames", 0))
+                    stored_total = int(seq.get("vace_length", 49))
+                    base_length = max(stored_total - input_a - input_b, 1)
                     vl_col, vl_out = st.columns([3, 1])
-                    seq["vace_length"] = vl_col.number_input("VACE Length", value=int(seq.get("vace_length", 49)), key=f"{prefix}_vl")
-                    total_frames = int(seq["vace_length"]) + int(seq["input_a_frames"]) + int(seq["input_b_frames"])
-                    vl_out.metric("Output", total_frames)
+                    new_base = vl_col.number_input("VACE Length", value=base_length, min_value=1, key=f"{prefix}_vl")
+                    seq["vace_length"] = new_base + input_a + input_b
+                    vl_out.metric("Output", seq["vace_length"])
                     seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
                     seq["vace schedule"] = st.number_input("VACE Schedule", value=int(seq.get("vace schedule", 1)), key=f"{prefix}_vsc")
 
