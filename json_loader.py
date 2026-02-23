@@ -106,6 +106,7 @@ class JSONLoaderDynamic:
             },
             "optional": {
                 "output_keys": ("STRING", {"default": ""}),
+                "output_types": ("STRING", {"default": ""}),
             },
         }
 
