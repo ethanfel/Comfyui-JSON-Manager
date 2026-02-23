@@ -1,8 +1,11 @@
 import streamlit as st
 import random
 import copy
+from pathlib import Path
 from utils import DEFAULTS, save_json, load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER
 from history_tree import HistoryTree
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 SUB_SEGMENT_MULTIPLIER = 1000
 
@@ -377,9 +380,17 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 
                 seq["video file path"] = st.text_input("Video File Path", value=seq.get("video file path", ""), key=f"{prefix}_vid")
-                seq["reference image path"] = st.text_input("Reference Image Path", value=seq.get("reference image path", ""), key=f"{prefix}_rip")
-                seq["reference path"] = st.text_input("Reference Path", value=seq.get("reference path", ""), key=f"{prefix}_rp")
-                seq["flf image path"] = st.text_input("FLF Image Path", value=seq.get("flf image path", ""), key=f"{prefix}_flfi")
+                for img_label, img_key, img_suffix in [
+                    ("Reference Image Path", "reference image path", "rip"),
+                    ("Reference Path", "reference path", "rp"),
+                    ("FLF Image Path", "flf image path", "flfi"),
+                ]:
+                    img_col, prev_col = st.columns([5, 1])
+                    seq[img_key] = img_col.text_input(img_label, value=seq.get(img_key, ""), key=f"{prefix}_{img_suffix}")
+                    img_path = Path(seq[img_key]) if seq[img_key] else None
+                    if img_path and img_path.exists() and img_path.suffix.lower() in IMAGE_EXTENSIONS:
+                        with prev_col.popover("👁"):
+                            st.image(str(img_path), use_container_width=True)
                 with st.expander("VACE Settings"):
                     fts_col, fts_btn = st.columns([3, 1])
                     saved_fts_key = f"{prefix}_fts_saved"
