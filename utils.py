@@ -23,26 +23,21 @@ logger = logging.getLogger(__name__)
 
 # Default structure for new files
 DEFAULTS = {
-    # --- Standard Keys for your Restored Single Tab ---
-    "general_prompt": "",       # Global positive
-    "general_negative": "",     # Global negative
-    "current_prompt": "",       # Specific positive
-    "negative": "",             # Specific negative
+    # --- Prompts ---
+    "general_prompt": "",
+    "general_negative": "Vivid tones, overexposed, static, blurry details, subtitles, style, artwork, painting, picture, still image, overall gray, worst quality, low quality, JPEG compression artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, distorted, disfigured, malformed limbs, fused fingers, unmoving frame, cluttered background, three legs",
+    "current_prompt": "",
+    "negative": "",
     "seed": -1,
-    
+
     # --- Settings ---
     "camera": "static",
     "flf": 0.0,
-    "steps": 20,
-    "cfg": 7.0,
-    "sampler_name": "euler",
-    "scheduler": "normal",
-    "denoise": 1.0,
-    "model_name": "v1-5-pruned-emaonly.ckpt",
-    "vae_name": "vae-ft-mse-840000-ema-pruned.ckpt",
 
     # --- I2V / VACE Specifics ---
     "frame_to_skip": 81,
+    "end_frame": 0,
+    "transition": "1-2",
     "vace schedule": 1,
     "input_a_frames": 0,
     "input_b_frames": 0,
@@ -51,7 +46,7 @@ DEFAULTS = {
     "reference image path": "",
     "reference path": "",
     "flf image path": "",
-    
+
     # --- LoRAs ---
     "lora 1 high": "", "lora 1 low": "",
     "lora 2 high": "", "lora 2 low": "",

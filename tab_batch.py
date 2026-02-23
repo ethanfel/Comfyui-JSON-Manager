@@ -234,7 +234,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     }
     standard_keys.update(lora_keys)
     standard_keys.update([
-        "frame_to_skip", "input_a_frames", "input_b_frames", "reference switch", "vace schedule", 
+        "frame_to_skip", "end_frame", "transition",
+        "input_a_frames", "input_b_frames", "reference switch", "vace schedule",
         "reference path", "video file path", "reference image path", "flf image path"
     ])
 
@@ -403,6 +404,8 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                             st.rerun()
                         else:
                             st.toast("No change to shift", icon="ℹ️")
+                    seq["end_frame"] = st.number_input("End Frame", value=int(seq.get("end_frame", 0)), key=f"{prefix}_ef")
+                    seq["transition"] = st.text_input("Transition", value=str(seq.get("transition", "1-2")), key=f"{prefix}_trans")
                     seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 0)), key=f"{prefix}_ia")
                     seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 0)), key=f"{prefix}_ib")
                     seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
