@@ -44,14 +44,47 @@ app.registerExtension({
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
                 if (okWidget) okWidget.value = keys.join(",");
 
-                // Remove all current outputs (disconnects links properly)
-                while (this.outputs.length > 0) {
-                    this.removeOutput(0);
+                // Build a map of current output names to slot indices
+                const oldSlots = {};
+                for (let i = 0; i < this.outputs.length; i++) {
+                    oldSlots[this.outputs[i].name] = i;
                 }
 
-                // Add an output slot for each discovered key
+                // Build new outputs, reusing existing slots to preserve links
+                const newOutputs = [];
                 for (const key of keys) {
-                    this.addOutput(key, "*");
+                    if (key in oldSlots) {
+                        // Reuse existing slot object (keeps links intact)
+                        newOutputs.push(this.outputs[oldSlots[key]]);
+                        delete oldSlots[key];
+                    } else {
+                        // New key — create a fresh slot
+                        newOutputs.push({ name: key, type: "*", links: null });
+                    }
+                }
+
+                // Disconnect links on slots that are being removed
+                for (const name in oldSlots) {
+                    const idx = oldSlots[name];
+                    if (this.outputs[idx]?.links?.length) {
+                        for (const linkId of [...this.outputs[idx].links]) {
+                            this.graph?.removeLink(linkId);
+                        }
+                    }
+                }
+
+                // Reassign the outputs array and fix link slot indices
+                this.outputs = newOutputs;
+                // Update link origin_slot to match new positions
+                if (this.graph) {
+                    for (let i = 0; i < this.outputs.length; i++) {
+                        const links = this.outputs[i].links;
+                        if (!links) continue;
+                        for (const linkId of links) {
+                            const link = this.graph.links[linkId];
+                            if (link) link.origin_slot = i;
+                        }
+                    }
                 }
 
                 this.setSize(this.computeSize());
