@@ -9,7 +9,6 @@ from utils import (
     KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
     resolve_path_case_insensitive,
 )
-from tab_single import render_single_editor
 from tab_batch import render_batch_processor
 from tab_timeline import render_timeline_tab
 from tab_comfy import render_comfy_monitor
@@ -28,9 +27,8 @@ _SESSION_DEFAULTS = {
     "loaded_file": lambda: None,
     "last_mtime": lambda: 0,
     "edit_history_idx": lambda: None,
-    "single_editor_cache": lambda: DEFAULTS.copy(),
     "ui_reset_token": lambda: 0,
-    "active_tab_name": lambda: "📝 Single Editor",
+    "active_tab_name": lambda: "🚀 Batch Processor",
 }
 
 if 'config' not in st.session_state:
@@ -187,11 +185,7 @@ if selected_file_name:
         st.session_state.edit_history_idx = None
         
         # --- AUTO-SWITCH TAB LOGIC ---
-        is_batch = KEY_BATCH_DATA in data or isinstance(data, list)
-        if is_batch:
-            st.session_state.active_tab_name = "🚀 Batch Processor"
-        else:
-            st.session_state.active_tab_name = "📝 Single Editor"
+        st.session_state.active_tab_name = "🚀 Batch Processor"
             
     else:
         data = st.session_state.data_cache
@@ -201,7 +195,6 @@ if selected_file_name:
     # --- CONTROLLED NAVIGATION ---
     # Removed "🔌 Comfy Monitor" from this list
     tabs_list = [
-        "📝 Single Editor",
         "🚀 Batch Processor",
         "🕒 Timeline",
         "💻 Raw Editor"
@@ -221,10 +214,7 @@ if selected_file_name:
     st.markdown("---")
 
     # --- RENDER EDITOR TABS ---
-    if current_tab == "📝 Single Editor":
-        render_single_editor(data, file_path)
-        
-    elif current_tab == "🚀 Batch Processor":
+    if current_tab == "🚀 Batch Processor":
         render_batch_processor(data, file_path, json_files, st.session_state.current_dir, selected_file_name)
         
     elif current_tab == "🕒 Timeline":

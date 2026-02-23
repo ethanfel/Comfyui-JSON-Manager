@@ -39,19 +39,6 @@ A visual dashboard for managing, versioning, and batch-processing JSON configura
 <td width="50%">
 
 <h3>
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="4" fill="#0f3460"/><text x="10" y="14" text-anchor="middle" fill="#fff" font-size="11">E</text></svg>
-Single File Editor
-</h3>
-
-- Visual editing of Prompts, Seeds, LoRAs, Camera, FLF, VACE params
-- Custom key-value parameters that persist and flow to ComfyUI
-- Conflict protection against external file modifications
-- Snippet library for reusable prompt fragments
-
-</td>
-<td width="50%">
-
-<h3>
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="4" fill="#e94560"/><text x="10" y="14" text-anchor="middle" fill="#fff" font-size="11">B</text></svg>
 Batch Processor
 </h3>
@@ -60,6 +47,8 @@ Batch Processor
 - Import settings from any file or history entry
 - Per-shot custom keys (e.g. Shot 1: `fog: 0.5`, Shot 2: `fog: 0.0`)
 - Clone, reorder, and manage sequences visually
+- Conflict protection against external file modifications
+- Snippet library for reusable prompt fragments
 
 </td>
 </tr>
@@ -329,7 +318,6 @@ ComfyUI-JSON-Manager/
 ├── app.py                 # Streamlit main entry point & navigator
 ├── utils.py               # I/O, config, defaults, case-insensitive path resolver
 ├── history_tree.py        # Git-style branching engine
-├── tab_single.py          # Single file editor UI
 ├── tab_batch.py           # Batch processor UI
 ├── tab_timeline.py        # Visual timeline UI
 ├── tab_comfy.py           # ComfyUI server monitor
