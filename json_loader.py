@@ -175,8 +175,6 @@ class JSONLoaderStandard:
 
     def load_standard(self, json_path):
         data = read_json_data(json_path)
-
-
         return (
             str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
             str(data.get("current_prompt", "")), str(data.get("negative", "")),
@@ -197,8 +195,6 @@ class JSONLoaderVACE:
 
     def load_vace(self, json_path):
         data = read_json_data(json_path)
-
-
         return (
             str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
             str(data.get("current_prompt", "")), str(data.get("negative", "")),

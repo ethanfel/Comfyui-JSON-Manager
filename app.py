@@ -1,12 +1,11 @@
 import streamlit as st
-import random
 from pathlib import Path
 
 # --- Import Custom Modules ---
 from utils import (
     load_config, save_config, load_snippets, save_snippets,
-    load_json, save_json, generate_templates, DEFAULTS, ALLOWED_BASE_DIR,
-    KEY_BATCH_DATA, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
+    load_json, save_json, generate_templates, DEFAULTS,
+    KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER,
     resolve_path_case_insensitive,
 )
 from tab_batch import render_batch_processor
@@ -26,7 +25,6 @@ _SESSION_DEFAULTS = {
     "snippets": load_snippets,
     "loaded_file": lambda: None,
     "last_mtime": lambda: 0,
-    "edit_history_idx": lambda: None,
     "ui_reset_token": lambda: 0,
     "active_tab_name": lambda: "🚀 Batch Processor",
 }
@@ -116,7 +114,6 @@ with st.sidebar:
         for name, content in st.session_state.snippets.items():
             col_s1, col_s2 = st.columns([4, 1])
             if col_s1.button(f"➕ {name}", use_container_width=True):
-                st.session_state.append_prompt = content
                 st.rerun()
             if col_s2.button("🗑️", key=f"del_snip_{name}"):
                 del st.session_state.snippets[name]
@@ -179,10 +176,7 @@ if selected_file_name:
         st.session_state.loaded_file = str(file_path)
         
         # Clear transient states
-        if 'append_prompt' in st.session_state: del st.session_state.append_prompt
-        if 'rand_seed' in st.session_state: del st.session_state.rand_seed
         if 'restored_indicator' in st.session_state: del st.session_state.restored_indicator
-        st.session_state.edit_history_idx = None
         
         # --- AUTO-SWITCH TAB LOGIC ---
         st.session_state.active_tab_name = "🚀 Batch Processor"
