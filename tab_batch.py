@@ -232,7 +232,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
     # Updated LoRA keys to match new logic
     lora_keys = ["lora 1 high", "lora 1 low", "lora 2 high", "lora 2 low", "lora 3 high", "lora 3 low"]
     standard_keys = {
-        "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed",
+        "general_prompt", "general_negative", "current_prompt", "negative", "prompt", "seed", "cfg",
         "camera", "flf", KEY_SEQUENCE_NUMBER
     }
     standard_keys.update(lora_keys)
@@ -376,6 +376,7 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     val = st.number_input("Seed", value=current_seed, key=seed_key)
                     seq["seed"] = val
 
+                seq["cfg"] = st.number_input("CFG", value=float(seq.get("cfg", DEFAULTS["cfg"])), step=0.5, format="%.1f", key=f"{prefix}_cfg")
                 seq["camera"] = st.text_input("Camera", value=seq.get("camera", ""), key=f"{prefix}_cam")
                 seq["flf"] = st.text_input("FLF", value=str(seq.get("flf", DEFAULTS["flf"])), key=f"{prefix}_flf")
                 

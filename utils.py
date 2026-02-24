@@ -29,6 +29,7 @@ DEFAULTS = {
     "current_prompt": "",
     "negative": "",
     "seed": -1,
+    "cfg": 6.0,
 
     # --- Settings ---
     "camera": "static",
