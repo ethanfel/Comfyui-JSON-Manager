@@ -242,9 +242,27 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
         "reference path", "video file path", "reference image path", "flf image path"
     ])
 
+    VACE_MODES = [
+        "End Extend", "Pre Extend", "Middle Extend", "Edge Extend",
+        "Join Extend", "Bidirectional Extend", "Frame Interpolation",
+        "Replace/Inpaint", "Video Inpaint", "Keyframe",
+    ]
+    VACE_FORMULAS = [
+        "base + A",          # 0 End Extend
+        "base + B",          # 1 Pre Extend
+        "base + A + B",      # 2 Middle Extend
+        "base + A + B",      # 3 Edge Extend
+        "base + A + B",      # 4 Join Extend
+        "base + A + B",      # 5 Bidirectional
+        "(B-1) * step",      # 6 Frame Interpolation
+        "snap(source)",      # 7 Replace/Inpaint
+        "snap(source)",      # 8 Video Inpaint
+        "base + A + B",      # 9 Keyframe
+    ]
+
     for i, seq in enumerate(batch_list):
         seq_num = seq.get(KEY_SEQUENCE_NUMBER, i+1)
-        prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}" 
+        prefix = f"{selected_file_name}_seq{i}_v{st.session_state.ui_reset_token}"
 
         if is_subsegment(seq_num):
             expander_label = f"🔗  ↳ Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)}  ({int(seq_num)})"
@@ -418,18 +436,45 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                         else:
                             st.toast("No change to shift", icon="ℹ️")
                     seq["transition"] = st.text_input("Transition", value=str(seq.get("transition", "1-2")), key=f"{prefix}_trans")
+
+                    vs_col, vs_label = st.columns([3, 1])
+                    sched_val = int(seq.get("vace schedule", 1))
+                    seq["vace schedule"] = vs_col.number_input("VACE Schedule", value=sched_val, min_value=0, max_value=len(VACE_MODES) - 1, key=f"{prefix}_vsc")
+                    mode_idx = int(seq["vace schedule"])
+                    vs_label.write("")
+                    vs_label.write("")
+                    vs_label.caption(VACE_MODES[mode_idx])
+
+                    with st.popover("📋 Mode Reference"):
+                        st.markdown(
+                            "| # | Mode | Formula |\n"
+                            "|:--|:-----|:--------|\n"
+                            + "\n".join(
+                                f"| **{j}** | {VACE_MODES[j]} | `{VACE_FORMULAS[j]}` |"
+                                for j in range(len(VACE_MODES))
+                            )
+                            + "\n\n*All totals snapped to 4n+1 (1,5,9,…,49,…,81,…)*"
+                        )
+
                     seq["input_a_frames"] = st.number_input("Input A Frames", value=int(seq.get("input_a_frames", 16)), key=f"{prefix}_ia")
                     seq["input_b_frames"] = st.number_input("Input B Frames", value=int(seq.get("input_b_frames", 16)), key=f"{prefix}_ib")
                     input_a = int(seq.get("input_a_frames", 16))
                     input_b = int(seq.get("input_b_frames", 16))
                     stored_total = int(seq.get("vace_length", 49))
+                    # Compute total based on mode formula
                     base_length = max(stored_total - input_a - input_b, 1)
                     vl_col, vl_out = st.columns([3, 1])
                     new_base = vl_col.number_input("VACE Length", value=base_length, min_value=1, key=f"{prefix}_vl")
-                    seq["vace_length"] = new_base + input_a + input_b
+                    if mode_idx == 0:       # End Extend: base + A
+                        raw_total = new_base + input_a
+                    elif mode_idx == 1:     # Pre Extend: base + B
+                        raw_total = new_base + input_b
+                    else:                   # Most modes: base + A + B
+                        raw_total = new_base + input_a + input_b
+                    # Snap to 4n+1 (1,5,9,13,...,81,...) to match VACE sampler
+                    seq["vace_length"] = ((raw_total + 2) // 4) * 4 + 1
                     vl_out.metric("Output", seq["vace_length"])
                     seq["reference switch"] = st.number_input("Reference Switch", value=int(seq.get("reference switch", 1)), key=f"{prefix}_rsw")
-                    seq["vace schedule"] = st.number_input("VACE Schedule", value=int(seq.get("vace schedule", 1)), key=f"{prefix}_vsc")
 
             # --- UPDATED: LoRA Settings with Tag Wrapping ---
             with st.expander("💊 LoRA Settings"):
