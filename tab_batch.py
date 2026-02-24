@@ -461,8 +461,13 @@ def render_batch_processor(data, file_path, json_files, current_dir, selected_fi
                     input_a = int(seq.get("input_a_frames", 16))
                     input_b = int(seq.get("input_b_frames", 16))
                     stored_total = int(seq.get("vace_length", 49))
-                    # Compute total based on mode formula
-                    base_length = max(stored_total - input_a - input_b, 1)
+                    # Reverse using same mode formula that was used to store
+                    if mode_idx == 0:
+                        base_length = max(stored_total - input_a, 1)
+                    elif mode_idx == 1:
+                        base_length = max(stored_total - input_b, 1)
+                    else:
+                        base_length = max(stored_total - input_a - input_b, 1)
                     vl_col, vl_out = st.columns([3, 1])
                     new_base = vl_col.number_input("VACE Length", value=base_length, min_value=1, key=f"{prefix}_vl")
                     if mode_idx == 0:       # End Extend: base + A
