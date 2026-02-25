@@ -284,8 +284,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
     else:
         label = f'Sequence #{seq_num}'
 
-    with ui.card().classes('w-full q-mb-sm'), \
-         ui.expansion(label, icon='movie').classes('w-full'):
+    with ui.expansion(label, icon='movie').classes('w-full'):
         # --- Action row ---
         with ui.row().classes('w-full q-gutter-sm action-row'):
             # Copy from source
@@ -391,10 +390,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
         ui.separator()
 
-        # --- Prompts + Settings ---
-        with ui.row().classes('w-full q-gutter-md'):
-            # Left column: prompts
-            with ui.column().classes('col-8'):
+        # --- Prompts + Settings (2-column like Streamlit) ---
+        with ui.splitter(value=66).classes('w-full') as splitter:
+            with splitter.before:
                 dict_textarea('General Prompt', seq, 'general_prompt').classes(
                     'w-full').props('outlined rows=2')
                 dict_textarea('General Negative', seq, 'general_negative').classes(
@@ -404,15 +402,14 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full').props('outlined rows=2')
 
-            # Right column: settings
-            with ui.column().classes('col-4'):
+            with splitter.after:
                 # Sequence number
                 sn_label = (
                     f'Seq Number (Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)})'
                     if is_subsegment(seq_num) else 'Sequence Number'
                 )
                 sn_input = dict_number(sn_label, seq, KEY_SEQUENCE_NUMBER)
-                sn_input.props('outlined')
+                sn_input.props('outlined').classes('w-full')
 
                 # Seed + randomize
                 with ui.row().classes('w-full items-end'):
@@ -428,14 +425,15 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 # CFG
                 cfg_val = float(seq.get('cfg', DEFAULTS['cfg']))
                 cfg_input = ui.number('CFG', value=cfg_val, step=0.5,
-                                      format='%.1f').props('outlined')
+                                      format='%.1f').props('outlined').classes('w-full')
                 cfg_input.on('blur', lambda e: seq.__setitem__(
                     'cfg', e.sender.value if e.sender.value is not None else DEFAULTS['cfg']))
 
-                dict_input(ui.input, 'Camera', seq, 'camera').props('outlined')
-                dict_input(ui.input, 'FLF', seq, 'flf').props('outlined')
-                dict_number('End Frame', seq, 'end_frame').props('outlined')
-                dict_input(ui.input, 'Video File Path', seq, 'video file path').props('outlined')
+                dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
+                dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
+                dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
+                dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
+                    'outlined').classes('w-full')
 
                 # Image paths with preview
                 for img_label, img_key in [
