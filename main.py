@@ -17,6 +17,16 @@ from tab_comfy_ng import render_comfy_monitor
 
 @ui.page('/')
 def index():
+    # -- Global styling for readability --
+    ui.query('body').classes('bg-grey-2')
+    ui.add_css('''
+        .q-expansion-item__content { padding: 4px 0; }
+        .action-row { flex-wrap: wrap !important; gap: 4px !important; }
+        .q-tab-panels { background: transparent !important; }
+        .q-textarea .q-field__native { color: #1a1a1a !important; }
+        .q-input .q-field__native { color: #1a1a1a !important; }
+    ''')
+
     config = load_config()
     state = AppState(
         config=config,
@@ -35,25 +45,26 @@ def index():
                 'text-subtitle1 q-pa-lg')
             return
 
-        ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-md')
+        with ui.card().classes('w-full q-pa-md'):
+            ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-md')
 
-        with ui.tabs().classes('w-full') as tabs:
-            ui.tab('batch', label='Batch Processor')
-            ui.tab('timeline', label='Timeline')
-            ui.tab('raw', label='Raw Editor')
+            with ui.tabs().classes('w-full') as tabs:
+                ui.tab('batch', label='Batch Processor')
+                ui.tab('timeline', label='Timeline')
+                ui.tab('raw', label='Raw Editor')
 
-        with ui.tab_panels(tabs, value='batch').classes('w-full'):
-            with ui.tab_panel('batch'):
-                render_batch_processor(state)
-            with ui.tab_panel('timeline'):
-                render_timeline_tab(state)
-            with ui.tab_panel('raw'):
-                render_raw_editor(state)
+            with ui.tab_panels(tabs, value='batch').classes('w-full'):
+                with ui.tab_panel('batch'):
+                    render_batch_processor(state)
+                with ui.tab_panel('timeline'):
+                    render_timeline_tab(state)
+                with ui.tab_panel('raw'):
+                    render_raw_editor(state)
 
         if state.show_comfy_monitor:
-            ui.separator()
-            with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
-                render_comfy_monitor(state)
+            with ui.card().classes('w-full q-pa-md q-mt-md'):
+                with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
+                    render_comfy_monitor(state)
 
     def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
@@ -77,7 +88,7 @@ def index():
     # ------------------------------------------------------------------
     # Sidebar (rendered AFTER helpers are attached)
     # ------------------------------------------------------------------
-    with ui.left_drawer().classes('q-pa-md').style('width: 350px'):
+    with ui.left_drawer().classes('q-pa-md bg-grey-1').style('width: 350px'):
         render_sidebar(state)
 
     # ------------------------------------------------------------------

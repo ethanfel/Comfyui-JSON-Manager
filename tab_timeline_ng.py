@@ -92,8 +92,8 @@ def render_timeline_tab(state: AppState):
 
                 with ui.card().classes(
                     'w-full q-mb-sm' +
-                    (' bg-yellow-1' if is_head else '') +
-                    (' bg-red-1' if is_selected else '')
+                    (' bg-amber-2' if is_head else '') +
+                    (' bg-red-2' if is_selected else '')
                 ):
                     with ui.row().classes('w-full items-center'):
                         if selection_mode.value:

@@ -284,9 +284,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
     else:
         label = f'Sequence #{seq_num}'
 
-    with ui.expansion(label, icon='movie').classes('w-full'):
+    with ui.card().classes('w-full q-mb-sm'), \
+         ui.expansion(label, icon='movie').classes('w-full'):
         # --- Action row ---
-        with ui.row().classes('w-full q-gutter-sm'):
+        with ui.row().classes('w-full q-gutter-sm action-row'):
             # Copy from source
             def copy_source(idx=i, sn=seq_num):
                 item = DEFAULTS.copy()
