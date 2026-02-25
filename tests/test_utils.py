@@ -1,14 +1,7 @@
 import json
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-
-# Mock streamlit before importing utils
-import sys
-from unittest.mock import MagicMock
-sys.modules.setdefault("streamlit", MagicMock())
 
 from utils import load_json, save_json, get_file_mtime, ALLOWED_BASE_DIR, DEFAULTS, resolve_path_case_insensitive
 
