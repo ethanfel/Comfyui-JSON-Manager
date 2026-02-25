@@ -86,7 +86,7 @@ def index():
     # ------------------------------------------------------------------
     # Sidebar (rendered AFTER helpers are attached)
     # ------------------------------------------------------------------
-    with ui.left_drawer().classes('q-pa-md').style('width: 350px'):
+    with ui.left_drawer(value=True).classes('q-pa-md').style('width: 350px'):
         render_sidebar(state)
 
     # ------------------------------------------------------------------
