@@ -144,7 +144,11 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
             None, lambda: _fetch_blocking(f'{comfy_url}/queue'))
         with status_container:
             if res is not None:
-                queue_data = res.json()
+                try:
+                    queue_data = res.json()
+                except (ValueError, Exception):
+                    ui.label('Invalid response from server').classes('text-negative')
+                    return
                 running_cnt = len(queue_data.get('queue_running', []))
                 pending_cnt = len(queue_data.get('queue_pending', []))
 
@@ -238,7 +242,11 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
             if err is not None:
                 ui.label(f'Error fetching image: {err}').classes('text-negative')
                 return
-            history = res.json()
+            try:
+                history = res.json()
+            except (ValueError, Exception):
+                ui.label('Invalid response from server').classes('text-negative')
+                return
             if not history:
                 ui.label('No history found.').classes('text-caption')
                 return

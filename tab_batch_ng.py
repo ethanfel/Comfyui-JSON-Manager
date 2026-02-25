@@ -119,7 +119,7 @@ def render_batch_processor(state: AppState):
             if new_path.exists():
                 ui.notify(f'File {new_name} already exists!', type='warning')
                 return
-            first_item = data.copy()
+            first_item = copy.deepcopy(data)
             first_item.pop(KEY_PROMPT_HISTORY, None)
             first_item.pop(KEY_HISTORY_TREE, None)
             first_item[KEY_SEQUENCE_NUMBER] = 1
@@ -164,10 +164,9 @@ def render_batch_processor(state: AppState):
             if _src_cache['batch']:
                 opts = {i: format_seq_label(s.get(KEY_SEQUENCE_NUMBER, i+1))
                         for i, s in enumerate(_src_cache['batch'])}
-                src_seq_select.options = opts
-                src_seq_select.set_value(0)
+                src_seq_select.set_options(opts, value=0)
             else:
-                src_seq_select.options = {}
+                src_seq_select.set_options({})
 
     src_file_select.on_value_change(lambda _: _update_src())
     _update_src()
@@ -366,9 +365,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
             # Promote
             def promote(idx=i, s=seq):
-                single_data = s.copy()
-                single_data[KEY_PROMPT_HISTORY] = data.get(KEY_PROMPT_HISTORY, [])
-                single_data[KEY_HISTORY_TREE] = data.get(KEY_HISTORY_TREE, {})
+                single_data = copy.deepcopy(s)
+                single_data[KEY_PROMPT_HISTORY] = copy.deepcopy(data.get(KEY_PROMPT_HISTORY, []))
+                single_data[KEY_HISTORY_TREE] = copy.deepcopy(data.get(KEY_HISTORY_TREE, {}))
                 single_data.pop(KEY_SEQUENCE_NUMBER, None)
                 save_json(file_path, single_data)
                 state.data_cache = single_data
@@ -646,7 +645,7 @@ def _render_mass_update(batch_list, data, file_path, state: AppState):
             if idx is not None and 0 <= idx < len(batch_list):
                 src = batch_list[idx]
                 keys = [k for k in src.keys() if k != 'sequence_number']
-                field_select.options = keys
+                field_select.set_options(keys)
 
         source_select.on_value_change(update_fields)
         update_fields()
