@@ -17,12 +17,74 @@ from tab_comfy_ng import render_comfy_monitor
 
 @ui.page('/')
 def index():
-    # -- Dark theme to match original Streamlit look --
+    # -- Streamlit dark theme --
     ui.dark_mode(True)
+    ui.colors(primary='#FF4B4B')
     ui.add_css('''
-        .q-expansion-item__content { padding: 4px 0; }
+        /* === Streamlit Dark Theme === */
+
+        /* Backgrounds */
+        body.body--dark,
+        .q-page.body--dark,
+        .body--dark .q-page { background: #0E1117 !important; }
+        .body--dark .q-drawer { background: #262730 !important; }
+        .body--dark .q-card { background: #262730 !important; border-radius: 0.5rem; }
+        .body--dark .q-tab-panels { background: transparent !important; }
+        .body--dark .q-tab-panel { background: transparent !important; }
+        .body--dark .q-expansion-item { background: transparent !important; }
+
+        /* Text */
+        .body--dark { color: #FAFAFA !important; }
+        .body--dark .q-field__label { color: rgba(250,250,250,0.6) !important; }
+        .body--dark .text-caption { color: rgba(250,250,250,0.6) !important; }
+        .body--dark .text-subtitle1,
+        .body--dark .text-subtitle2 { color: #FAFAFA !important; }
+
+        /* Inputs & textareas */
+        .body--dark .q-field--outlined .q-field__control {
+            background: #262730 !important;
+            border-radius: 0.5rem !important;
+        }
+        .body--dark .q-field--outlined .q-field__control:before {
+            border-color: rgba(250,250,250,0.2) !important;
+            border-radius: 0.5rem !important;
+        }
+        .body--dark .q-field--outlined.q-field--focused .q-field__control:after {
+            border-color: #FF4B4B !important;
+        }
+        .body--dark .q-field__native,
+        .body--dark .q-field__input { color: #FAFAFA !important; }
+
+        /* Sidebar inputs get main bg */
+        .body--dark .q-drawer .q-field--outlined .q-field__control {
+            background: #0E1117 !important;
+        }
+
+        /* Buttons */
+        .body--dark .q-btn--standard { border-radius: 0.5rem !important; }
+
+        /* Tabs */
+        .body--dark .q-tab--active { color: #FF4B4B !important; }
+        .body--dark .q-tab__indicator { background: #FF4B4B !important; }
+
+        /* Separators */
+        .body--dark .q-separator { background: rgba(250,250,250,0.2) !important; }
+
+        /* Expansion items */
+        .body--dark .q-expansion-item__content { padding: 4px 0; }
+        .body--dark .q-item { border-radius: 0.5rem; }
+
+        /* Splitter */
+        .body--dark .q-splitter__separator { background: rgba(250,250,250,0.2) !important; }
+
+        /* Action row wrap */
         .action-row { flex-wrap: wrap !important; gap: 4px !important; }
-        .q-tab-panels { background: transparent !important; }
+
+        /* Notifications */
+        .body--dark .q-notification { border-radius: 0.5rem; }
+
+        /* Font */
+        body { font-family: "Source Sans Pro", "Source Sans 3", sans-serif !important; }
     ''')
 
     config = load_config()
@@ -43,26 +105,25 @@ def index():
                 'text-subtitle1 q-pa-lg')
             return
 
-        with ui.card().classes('w-full q-pa-md'):
-            ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-md')
+        ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-md')
 
-            with ui.tabs().classes('w-full') as tabs:
-                ui.tab('batch', label='Batch Processor')
-                ui.tab('timeline', label='Timeline')
-                ui.tab('raw', label='Raw Editor')
+        with ui.tabs().classes('w-full') as tabs:
+            ui.tab('batch', label='Batch Processor')
+            ui.tab('timeline', label='Timeline')
+            ui.tab('raw', label='Raw Editor')
 
-            with ui.tab_panels(tabs, value='batch').classes('w-full'):
-                with ui.tab_panel('batch'):
-                    render_batch_processor(state)
-                with ui.tab_panel('timeline'):
-                    render_timeline_tab(state)
-                with ui.tab_panel('raw'):
-                    render_raw_editor(state)
+        with ui.tab_panels(tabs, value='batch').classes('w-full'):
+            with ui.tab_panel('batch'):
+                render_batch_processor(state)
+            with ui.tab_panel('timeline'):
+                render_timeline_tab(state)
+            with ui.tab_panel('raw'):
+                render_raw_editor(state)
 
         if state.show_comfy_monitor:
-            with ui.card().classes('w-full q-pa-md q-mt-md'):
-                with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
-                    render_comfy_monitor(state)
+            ui.separator()
+            with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
+                render_comfy_monitor(state)
 
     def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
@@ -86,7 +147,7 @@ def index():
     # ------------------------------------------------------------------
     # Sidebar (rendered AFTER helpers are attached)
     # ------------------------------------------------------------------
-    with ui.left_drawer(value=True).classes('q-pa-md').style('width: 350px'):
+    with ui.left_drawer(value=True).classes('q-pa-md').style('width: 300px'):
         render_sidebar(state)
 
     # ------------------------------------------------------------------

@@ -90,11 +90,12 @@ def render_timeline_tab(state: AppState):
                 is_head = n['id'] == htree.head_id
                 is_selected = n['id'] in selected_nodes
 
-                with ui.card().classes(
-                    'w-full q-mb-sm' +
-                    (' bg-amber-9' if is_head else '') +
-                    (' bg-red-9' if is_selected else '')
-                ):
+                card_style = ''
+                if is_selected:
+                    card_style = 'background: #3d1f1f !important;'
+                elif is_head:
+                    card_style = 'background: #1a2332 !important;'
+                with ui.card().classes('w-full q-mb-sm').style(card_style):
                     with ui.row().classes('w-full items-center'):
                         if selection_mode.value:
                             ui.checkbox(
