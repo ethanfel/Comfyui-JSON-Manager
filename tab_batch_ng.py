@@ -230,7 +230,7 @@ def render_batch_processor(state: AppState):
     @ui.refreshable
     def render_sequence_list():
         # Mass update (rebuilt on refresh so checkboxes match current sequences)
-        _render_mass_update(batch_list, data, file_path, state)
+        _render_mass_update(batch_list, data, file_path, state, render_sequence_list)
 
         with ui.row().classes('w-full items-center'):
             ui.label(f'Batch contains {len(batch_list)} sequences.')
@@ -626,7 +626,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
 # Mass Update
 # ======================================================================
 
-def _render_mass_update(batch_list, data, file_path, state: AppState):
+def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_list=None):
     with ui.expansion('Mass Update', icon='sync').classes('w-full'):
         if len(batch_list) < 2:
             ui.label('Need at least 2 sequences for mass update.').classes('text-caption')
@@ -693,6 +693,8 @@ def _render_mass_update(batch_list, data, file_path, state: AppState):
             data[KEY_HISTORY_TREE] = htree.to_dict()
             save_json(file_path, data)
             ui.notify(f'Updated {len(targets)} sequences', type='positive')
+            if refresh_list:
+                refresh_list.refresh()
 
         ui.button('Apply Changes', icon='check', on_click=apply_mass_update).props(
             'color=primary')
