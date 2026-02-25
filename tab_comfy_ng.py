@@ -1,3 +1,4 @@
+import asyncio
 import html
 import time
 import urllib.parse
@@ -76,15 +77,31 @@ def render_comfy_monitor(state: AppState):
     render_instance_tabs()
 
     # --- Auto-poll timer (every 300s) ---
+    # Store live_checkbox references so the timer can update them
+    _live_checkboxes = state._live_checkboxes = getattr(state, '_live_checkboxes', {})
+    _live_refreshables = state._live_refreshables = getattr(state, '_live_refreshables', {})
+
     def poll_all():
-        # Timeout checks for live toggles
         timeout_val = config.get('monitor_timeout', 0)
         if timeout_val > 0:
             for key, start_time in list(state.live_toggles.items()):
                 if start_time and (time.time() - start_time) > (timeout_val * 60):
                     state.live_toggles[key] = None
+                    if key in _live_checkboxes:
+                        _live_checkboxes[key].set_value(False)
+                    if key in _live_refreshables:
+                        _live_refreshables[key].refresh()
 
     ui.timer(300, poll_all)
+
+
+def _fetch_blocking(url, timeout=1.5):
+    """Run a blocking GET request; returns (response, error)."""
+    try:
+        res = requests.get(url, timeout=timeout)
+        return res, None
+    except Exception as e:
+        return None, e
 
 
 def _render_single_instance(state: AppState, instance_config: dict, index: int,
@@ -120,11 +137,13 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
     # --- Status Dashboard ---
     status_container = ui.row().classes('w-full items-center q-gutter-md')
 
-    def refresh_status():
+    async def refresh_status():
         status_container.clear()
+        loop = asyncio.get_event_loop()
+        res, err = await loop.run_in_executor(
+            None, lambda: _fetch_blocking(f'{comfy_url}/queue'))
         with status_container:
-            try:
-                res = requests.get(f'{comfy_url}/queue', timeout=1.5)
+            if res is not None:
                 queue_data = res.json()
                 running_cnt = len(queue_data.get('queue_running', []))
                 pending_cnt = len(queue_data.get('queue_pending', []))
@@ -139,13 +158,14 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
                 with ui.card().classes('q-pa-sm'):
                     ui.label('Running')
                     ui.label(str(running_cnt))
-            except Exception:
+            else:
                 with ui.card().classes('q-pa-sm'):
                     ui.label('Status')
                     ui.label('Offline').classes('text-negative')
                 ui.label(f'Could not connect to {comfy_url}').classes('text-negative')
 
-    refresh_status()
+    # Initial status fetch (non-blocking via button click handler pattern)
+    ui.timer(0.1, refresh_status, once=True)
     ui.button('Refresh Status', icon='refresh', on_click=refresh_status).props('flat dense')
 
     # --- Live View ---
@@ -153,6 +173,8 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
     toggle_key = f'live_toggle_{index}'
 
     live_checkbox = ui.checkbox('Enable Live Preview', value=False)
+    # Store reference so poll_all timer can disable it on timeout
+    state._live_checkboxes[toggle_key] = live_checkbox
 
     @ui.refreshable
     def render_live_view():
@@ -199,6 +221,7 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
         else:
             ui.label('No valid viewer URL configured.').classes('text-warning')
 
+    state._live_refreshables[toggle_key] = render_live_view
     live_checkbox.on_value_change(lambda _: render_live_view.refresh())
     render_live_view()
 
@@ -206,36 +229,40 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
     ui.label('Latest Output').classes('text-subtitle1 q-mt-md')
     img_container = ui.column().classes('w-full')
 
-    def check_image():
+    async def check_image():
         img_container.clear()
+        loop = asyncio.get_event_loop()
+        res, err = await loop.run_in_executor(
+            None, lambda: _fetch_blocking(f'{comfy_url}/history', timeout=2))
         with img_container:
-            try:
-                hist_res = requests.get(f'{comfy_url}/history', timeout=2)
-                history = hist_res.json()
-                if not history:
-                    ui.label('No history found.').classes('text-caption')
-                    return
-                last_prompt_id = list(history.keys())[-1]
-                outputs = history[last_prompt_id].get('outputs', {})
-                found_img = None
-                for node_output in outputs.values():
-                    if 'images' in node_output:
-                        for img_info in node_output['images']:
-                            if img_info['type'] == 'output':
-                                found_img = img_info
-                                break
-                    if found_img:
-                        break
+            if err is not None:
+                ui.label(f'Error fetching image: {err}').classes('text-negative')
+                return
+            history = res.json()
+            if not history:
+                ui.label('No history found.').classes('text-caption')
+                return
+            last_prompt_id = list(history.keys())[-1]
+            outputs = history[last_prompt_id].get('outputs', {})
+            found_img = None
+            for node_output in outputs.values():
+                if 'images' in node_output:
+                    for img_info in node_output['images']:
+                        if img_info['type'] == 'output':
+                            found_img = img_info
+                            break
                 if found_img:
-                    img_name = found_img['filename']
-                    folder = found_img['subfolder']
-                    img_type = found_img['type']
-                    img_url = f'{comfy_url}/view?filename={img_name}&subfolder={folder}&type={img_type}'
-                    ui.image(img_url).classes('w-full').style('max-width: 600px')
-                    ui.label(f'Last Output: {img_name}').classes('text-caption')
-                else:
-                    ui.label('Last run had no image output.').classes('text-caption')
-            except Exception as e:
-                ui.label(f'Error fetching image: {e}').classes('text-negative')
+                    break
+            if found_img:
+                params = urllib.parse.urlencode({
+                    'filename': found_img['filename'],
+                    'subfolder': found_img['subfolder'],
+                    'type': found_img['type'],
+                })
+                img_url = f'{comfy_url}/view?{params}'
+                ui.image(img_url).classes('w-full').style('max-width: 600px')
+                ui.label(f'Last Output: {found_img["filename"]}').classes('text-caption')
+            else:
+                ui.label('Last run had no image output.').classes('text-caption')
 
     ui.button('Check Latest Image', icon='image', on_click=check_image).props('flat')

@@ -194,22 +194,19 @@ def render_batch_processor(state: AppState):
             _add_sequence(DEFAULTS.copy())
 
         def add_from_source():
-            item = DEFAULTS.copy()
+            item = copy.deepcopy(DEFAULTS)
             src_batch = _src_cache['batch']
             sel_idx = src_seq_select.value
             if src_batch and sel_idx is not None:
-                item.update(src_batch[int(sel_idx)])
+                item.update(copy.deepcopy(src_batch[int(sel_idx)]))
             elif _src_cache['data']:
-                item.update(_src_cache['data'])
+                item.update(copy.deepcopy(_src_cache['data']))
             _add_sequence(item)
 
         ui.button('Add Empty', icon='add', on_click=add_empty)
         ui.button('From Source', icon='file_download', on_click=add_from_source)
 
     ui.separator()
-
-    # --- Mass Update ---
-    _render_mass_update(batch_list, data, file_path, state)
 
     # --- Standard / LoRA / VACE key sets ---
     lora_keys = ['lora 1 high', 'lora 1 low', 'lora 2 high', 'lora 2 low',
@@ -230,9 +227,12 @@ def render_batch_processor(state: AppState):
         ui.notify('Sorted by sequence number!', type='positive')
         render_sequence_list.refresh()
 
-    # --- Sequence list (count label + cards inside refreshable) ---
+    # --- Sequence list + mass update (inside refreshable so they stay in sync) ---
     @ui.refreshable
     def render_sequence_list():
+        # Mass update (rebuilt on refresh so checkboxes match current sequences)
+        _render_mass_update(batch_list, data, file_path, state)
+
         with ui.row().classes('w-full items-center'):
             ui.label(f'Batch contains {len(batch_list)} sequences.')
             ui.button('Sort by Number', icon='sort', on_click=sort_by_number).props('flat')
@@ -289,13 +289,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         with ui.row().classes('w-full q-gutter-sm action-row'):
             # Copy from source
             def copy_source(idx=i, sn=seq_num):
-                item = DEFAULTS.copy()
+                item = copy.deepcopy(DEFAULTS)
                 src_batch = src_cache['batch']
                 sel_idx = src_seq_select.value
                 if src_batch and sel_idx is not None:
-                    item.update(src_batch[int(sel_idx)])
+                    item.update(copy.deepcopy(src_batch[int(sel_idx)]))
                 elif src_cache['data']:
-                    item.update(src_cache['data'])
+                    item.update(copy.deepcopy(src_cache['data']))
                 item[KEY_SEQUENCE_NUMBER] = sn
                 item.pop(KEY_PROMPT_HISTORY, None)
                 item.pop(KEY_HISTORY_TREE, None)

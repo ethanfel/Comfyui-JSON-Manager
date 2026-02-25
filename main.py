@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from nicegui import ui
@@ -175,7 +176,7 @@ def render_sidebar(state: AppState):
         if p is not None and p.is_dir():
             state.current_dir = p
             state.config['last_dir'] = str(p)
-            save_config(state.current_dir, state.config['favorites'])
+            save_config(state.current_dir, state.config['favorites'], state.config)
             state.loaded_file = None
             state.file_path = None
             path_input.set_value(str(p))
@@ -192,7 +193,7 @@ def render_sidebar(state: AppState):
         d = str(state.current_dir)
         if d not in state.config['favorites']:
             state.config['favorites'].append(d)
-            save_config(state.current_dir, state.config['favorites'])
+            save_config(state.current_dir, state.config['favorites'], state.config)
             render_favorites.refresh()
 
     ui.button('Pin Folder', icon='push_pin', on_click=pin_folder).classes('w-full')
@@ -213,7 +214,7 @@ def render_sidebar(state: AppState):
     def _jump_to(fav: str):
         state.current_dir = Path(fav)
         state.config['last_dir'] = fav
-        save_config(state.current_dir, state.config['favorites'])
+        save_config(state.current_dir, state.config['favorites'], state.config)
         state.loaded_file = None
         state.file_path = None
         path_input.set_value(fav)
@@ -224,7 +225,7 @@ def render_sidebar(state: AppState):
     def _unpin(fav: str):
         if fav in state.config['favorites']:
             state.config['favorites'].remove(fav)
-            save_config(state.current_dir, state.config['favorites'])
+            save_config(state.current_dir, state.config['favorites'], state.config)
             render_favorites.refresh()
 
     render_favorites()
@@ -260,7 +261,7 @@ def render_sidebar(state: AppState):
             with ui.row().classes('w-full items-center'):
                 async def copy_snippet(c=content):
                     await ui.run_javascript(
-                        f'navigator.clipboard.writeText({c!r})', timeout=3.0)
+                        f'navigator.clipboard.writeText({json.dumps(c)})', timeout=3.0)
                     ui.notify('Copied to clipboard')
 
                 ui.button(
