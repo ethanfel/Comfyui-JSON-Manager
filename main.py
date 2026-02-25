@@ -17,14 +17,12 @@ from tab_comfy_ng import render_comfy_monitor
 
 @ui.page('/')
 def index():
-    # -- Global styling for readability --
-    ui.query('body').classes('bg-grey-2')
+    # -- Dark theme to match original Streamlit look --
+    ui.dark_mode(True)
     ui.add_css('''
         .q-expansion-item__content { padding: 4px 0; }
         .action-row { flex-wrap: wrap !important; gap: 4px !important; }
         .q-tab-panels { background: transparent !important; }
-        .q-textarea .q-field__native { color: #1a1a1a !important; }
-        .q-input .q-field__native { color: #1a1a1a !important; }
     ''')
 
     config = load_config()
@@ -88,7 +86,7 @@ def index():
     # ------------------------------------------------------------------
     # Sidebar (rendered AFTER helpers are attached)
     # ------------------------------------------------------------------
-    with ui.left_drawer().classes('q-pa-md bg-grey-1').style('width: 350px'):
+    with ui.left_drawer().classes('q-pa-md').style('width: 350px'):
         render_sidebar(state)
 
     # ------------------------------------------------------------------
