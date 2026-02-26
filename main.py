@@ -212,34 +212,35 @@ def index():
             with ui.row().classes('w-full gap-4'):
                 with ui.column().classes('col'):
                     ui.label('Pane A').classes('section-header q-mb-sm')
+                    _render_pane_file_selector(state)
                     render_batch_processor(state)
                 with ui.column().classes('col pane-secondary'):
                     ui.label('Pane B').classes('section-header q-mb-sm')
-                    _render_secondary_file_selector(s2)
+                    _render_pane_file_selector(s2)
                     if s2.file_path and s2.file_path.exists():
                         render_batch_processor(s2)
                     else:
                         ui.label('Select a file above to begin.').classes(
                             'text-caption q-pa-md')
 
-    def _render_secondary_file_selector(s2: AppState):
-        json_files = sorted(s2.current_dir.glob('*.json'))
+    def _render_pane_file_selector(pane_state: AppState):
+        json_files = sorted(pane_state.current_dir.glob('*.json'))
         json_files = [f for f in json_files if f.name not in (
             '.editor_config.json', '.editor_snippets.json')]
         file_names = [f.name for f in json_files]
 
-        current_val = s2.file_path.name if s2.file_path else None
+        current_val = pane_state.file_path.name if pane_state.file_path else None
 
         def on_select(e):
             if not e.value:
                 return
-            fp = s2.current_dir / e.value
+            fp = pane_state.current_dir / e.value
             data, mtime = load_json(fp)
-            s2.data_cache = data
-            s2.last_mtime = mtime
-            s2.loaded_file = str(fp)
-            s2.file_path = fp
-            s2.restored_indicator = None
+            pane_state.data_cache = data
+            pane_state.last_mtime = mtime
+            pane_state.loaded_file = str(fp)
+            pane_state.file_path = fp
+            pane_state.restored_indicator = None
             _render_batch_tab_content.refresh()
 
         ui.select(
@@ -301,6 +302,9 @@ def render_sidebar(state: AppState, dual_pane: dict):
                 state.current_dir = p
                 if dual_pane['state']:
                     dual_pane['state'].current_dir = state.current_dir
+                    dual_pane['state'].file_path = None
+                    dual_pane['state'].loaded_file = None
+                    dual_pane['state'].data_cache = {}
                 state.config['last_dir'] = str(p)
                 save_config(state.current_dir, state.config['favorites'], state.config)
                 state.loaded_file = None
@@ -344,6 +348,9 @@ def render_sidebar(state: AppState, dual_pane: dict):
             state.current_dir = Path(fav)
             if dual_pane['state']:
                 dual_pane['state'].current_dir = state.current_dir
+                dual_pane['state'].file_path = None
+                dual_pane['state'].loaded_file = None
+                dual_pane['state'].data_cache = {}
             state.config['last_dir'] = fav
             save_config(state.current_dir, state.config['favorites'], state.config)
             state.loaded_file = None
@@ -443,9 +450,11 @@ def render_sidebar(state: AppState, dual_pane: dict):
 
             ui.label('Select File').classes('subsection-header q-mt-sm')
             file_names = [f.name for f in json_files]
+            current = Path(state.loaded_file).name if state.loaded_file else None
+            selected = current if current in file_names else (file_names[0] if file_names else None)
             ui.radio(
                 file_names,
-                value=file_names[0] if file_names else None,
+                value=selected,
                 on_change=lambda e: state._load_file(e.value) if e.value else None,
             ).classes('w-full')
 

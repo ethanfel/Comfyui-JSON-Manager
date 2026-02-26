@@ -79,12 +79,17 @@ def find_insert_position(batch_list, parent_index, parent_seq_num):
 # --- Helper for repetitive dict-bound inputs ---
 
 def dict_input(element_fn, label, seq, key, **kwargs):
-    """Create an input element bound to seq[key] via blur event."""
+    """Create an input element bound to seq[key] via blur and model-value update."""
     val = seq.get(key, '')
     if isinstance(val, (int, float)):
         val = str(val) if element_fn != ui.number else val
     el = element_fn(label, value=val, **kwargs)
-    el.on('blur', lambda e, k=key: seq.__setitem__(k, e.sender.value))
+
+    def _sync(k=key):
+        seq[k] = el.value
+
+    el.on('blur', lambda _: _sync())
+    el.on('update:model-value', lambda _: _sync())
     return el
 
 
@@ -95,7 +100,7 @@ def dict_number(label, seq, key, default=0, **kwargs):
         # Try float first to handle "1.5" strings, then check if it's a clean int
         fval = float(val)
         val = int(fval) if fval == int(fval) else fval
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         val = default
     el = ui.number(label, value=val, **kwargs)
 
@@ -103,8 +108,11 @@ def dict_number(label, seq, key, default=0, **kwargs):
         v = el.value
         if v is None:
             v = d
-        elif isinstance(v, float) and v == int(v):
-            v = int(v)
+        elif isinstance(v, float):
+            try:
+                v = int(v) if v == int(v) else v
+            except (OverflowError, ValueError):
+                v = d
         seq[k] = v
 
     el.on('blur', lambda _: _sync())
@@ -113,9 +121,14 @@ def dict_number(label, seq, key, default=0, **kwargs):
 
 
 def dict_textarea(label, seq, key, **kwargs):
-    """Textarea bound to seq[key] via blur."""
+    """Textarea bound to seq[key] via blur and model-value update."""
     el = ui.textarea(label, value=seq.get(key, ''), **kwargs)
-    el.on('blur', lambda e, k=key: seq.__setitem__(k, e.sender.value))
+
+    def _sync(k=key):
+        seq[k] = el.value
+
+    el.on('blur', lambda _: _sync())
+    el.on('update:model-value', lambda _: _sync())
     return el
 
 
@@ -126,7 +139,10 @@ def dict_textarea(label, seq, key, **kwargs):
 def render_batch_processor(state: AppState):
     data = state.data_cache
     file_path = state.file_path
-    is_batch_file = KEY_BATCH_DATA in data or isinstance(data, list)
+    if isinstance(data, list):
+        data = {KEY_BATCH_DATA: data}
+        state.data_cache = data
+    is_batch_file = KEY_BATCH_DATA in data
 
     if not is_batch_file:
         ui.label('This is a Single file. To use Batch mode, create a copy.').classes(
@@ -158,67 +174,65 @@ def render_batch_processor(state: AppState):
 
     # Source file data for importing
     with ui.card().classes('w-full q-pa-md q-mb-lg'):
-        json_files = sorted(state.current_dir.glob('*.json'))
-        json_files = [f for f in json_files if f.name not in (
-            '.editor_config.json', '.editor_snippets.json')]
-        file_options = {f.name: f.name for f in json_files}
+        with ui.expansion('Add New Sequence from Source File', icon='playlist_add').classes('w-full'):
+            json_files = sorted(state.current_dir.glob('*.json'))
+            json_files = [f for f in json_files if f.name not in (
+                '.editor_config.json', '.editor_snippets.json')]
+            file_options = {f.name: f.name for f in json_files}
 
-        src_file_select = ui.select(
-            file_options,
-            value=file_path.name,
-            label='Source File:',
-        ).classes('w-64')
+            src_file_select = ui.select(
+                file_options,
+                value=file_path.name,
+                label='Source File:',
+            ).classes('w-64')
 
-        src_seq_select = ui.select([], label='Source Sequence:').classes('w-64')
+            src_seq_select = ui.select([], label='Source Sequence:').classes('w-64')
 
-        # Track loaded source data
-        _src_cache = {'data': None, 'batch': [], 'name': None}
+            # Track loaded source data
+            _src_cache = {'data': None, 'batch': [], 'name': None}
 
-        def _update_src():
-            name = src_file_select.value
-            if name and name != _src_cache['name']:
-                src_data, _ = load_json(state.current_dir / name)
-                _src_cache['data'] = src_data
-                _src_cache['batch'] = src_data.get(KEY_BATCH_DATA, [])
-                _src_cache['name'] = name
-                if _src_cache['batch']:
-                    opts = {i: format_seq_label(s.get(KEY_SEQUENCE_NUMBER, i+1))
-                            for i, s in enumerate(_src_cache['batch'])}
-                    src_seq_select.set_options(opts, value=0)
-                else:
-                    src_seq_select.set_options({})
+            def _update_src():
+                name = src_file_select.value
+                if name and name != _src_cache['name']:
+                    src_data, _ = load_json(state.current_dir / name)
+                    _src_cache['data'] = src_data
+                    _src_cache['batch'] = src_data.get(KEY_BATCH_DATA, [])
+                    _src_cache['name'] = name
+                    if _src_cache['batch']:
+                        opts = {i: format_seq_label(s.get(KEY_SEQUENCE_NUMBER, i+1))
+                                for i, s in enumerate(_src_cache['batch'])}
+                        src_seq_select.set_options(opts, value=0)
+                    else:
+                        src_seq_select.set_options({})
 
-        src_file_select.on_value_change(lambda _: _update_src())
-        _update_src()
+            src_file_select.on_value_change(lambda _: _update_src())
+            _update_src()
 
-        # --- Add New Sequence ---
-        ui.label('Add New Sequence').classes('section-header q-mt-md')
+            def _add_sequence(new_item):
+                new_item[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
+                for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, 'note', 'loras']:
+                    new_item.pop(k, None)
+                batch_list.append(new_item)
+                data[KEY_BATCH_DATA] = batch_list
+                save_json(file_path, data)
+                render_sequence_list.refresh()
 
-        def _add_sequence(new_item):
-            new_item[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
-            for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, 'note', 'loras']:
-                new_item.pop(k, None)
-            batch_list.append(new_item)
-            data[KEY_BATCH_DATA] = batch_list
-            save_json(file_path, data)
-            render_sequence_list.refresh()
+            with ui.row().classes('q-mt-sm'):
+                def add_empty():
+                    _add_sequence(DEFAULTS.copy())
 
-        with ui.row():
-            def add_empty():
-                _add_sequence(DEFAULTS.copy())
+                def add_from_source():
+                    item = copy.deepcopy(DEFAULTS)
+                    src_batch = _src_cache['batch']
+                    sel_idx = src_seq_select.value
+                    if src_batch and sel_idx is not None:
+                        item.update(copy.deepcopy(src_batch[int(sel_idx)]))
+                    elif _src_cache['data']:
+                        item.update(copy.deepcopy(_src_cache['data']))
+                    _add_sequence(item)
 
-            def add_from_source():
-                item = copy.deepcopy(DEFAULTS)
-                src_batch = _src_cache['batch']
-                sel_idx = src_seq_select.value
-                if src_batch and sel_idx is not None:
-                    item.update(copy.deepcopy(src_batch[int(sel_idx)]))
-                elif _src_cache['data']:
-                    item.update(copy.deepcopy(_src_cache['data']))
-                _add_sequence(item)
-
-            ui.button('Add Empty', icon='add', on_click=add_empty)
-            ui.button('From Source', icon='file_download', on_click=add_from_source)
+                ui.button('Add Empty', icon='add', on_click=add_empty)
+                ui.button('From Source', icon='file_download', on_click=add_from_source)
 
     # --- Standard / LoRA / VACE key sets ---
     lora_keys = ['lora 1 high', 'lora 1 low', 'lora 2 high', 'lora 2 low',
@@ -456,28 +470,46 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
         # --- LoRA Settings ---
         with ui.expansion('LoRA Settings', icon='style').classes('w-full'):
-            with ui.row().classes('w-full q-gutter-md'):
-                for lora_idx in range(1, 4):
-                    with ui.card().classes('col q-pa-sm surface-3'):
-                        ui.label(f'LoRA {lora_idx}').classes('text-subtitle2')
-                        for tier, tier_label in [('high', 'High'), ('low', 'Low')]:
-                            k = f'lora {lora_idx} {tier}'
-                            raw = str(seq.get(k, ''))
-                            disp = raw.replace('<lora:', '').replace('>', '')
+            for lora_idx in range(1, 4):
+                for tier, tier_label in [('high', 'High'), ('low', 'Low')]:
+                    k = f'lora {lora_idx} {tier}'
+                    raw = str(seq.get(k, ''))
+                    inner = raw.replace('<lora:', '').replace('>', '')
+                    # Split "name:strength" or just "name"
+                    if ':' in inner:
+                        parts = inner.rsplit(':', 1)
+                        lora_name = parts[0]
+                        try:
+                            lora_strength = float(parts[1])
+                        except ValueError:
+                            lora_name = inner
+                            lora_strength = 1.0
+                    else:
+                        lora_name = inner
+                        lora_strength = 1.0
 
-                            with ui.row().classes('w-full items-center'):
-                                ui.label('<lora:').classes('text-caption font-mono')
-                                lora_input = ui.input(
-                                    f'L{lora_idx} {tier_label}',
-                                    value=disp,
-                                ).classes('col').props('outlined dense')
-                                ui.label('>').classes('text-caption font-mono')
+                    with ui.row().classes('w-full items-center q-gutter-sm'):
+                        ui.label(f'L{lora_idx} {tier_label}').classes(
+                            'text-caption').style('min-width: 55px')
+                        name_input = ui.input(
+                            'Name',
+                            value=lora_name,
+                        ).classes('col').props('outlined dense')
+                        strength_input = ui.number(
+                            'Str',
+                            value=lora_strength,
+                            min=0, max=10, step=0.1,
+                        ).props('outlined dense').style('max-width: 80px')
 
-                                def on_lora_blur(e, key=k):
-                                    v = e.sender.value
-                                    seq[key] = f'<lora:{v}>' if v else ''
+                        def _lora_sync(key=k, n_inp=name_input, s_inp=strength_input):
+                            name = n_inp.value or ''
+                            strength = s_inp.value if s_inp.value is not None else 1.0
+                            seq[key] = f'<lora:{name}:{strength}>' if name else ''
 
-                                lora_input.on('blur', on_lora_blur)
+                        name_input.on('blur', lambda _, s=_lora_sync: s())
+                        name_input.on('update:model-value', lambda _, s=_lora_sync: s())
+                        strength_input.on('blur', lambda _, s=_lora_sync: s())
+                        strength_input.on('update:model-value', lambda _, s=_lora_sync: s())
 
         # --- Custom Parameters ---
         ui.label('Custom Parameters').classes('section-header q-mt-md')
