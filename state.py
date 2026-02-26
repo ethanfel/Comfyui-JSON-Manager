@@ -23,3 +23,10 @@ class AppState:
     _main_rendered: bool = False
     _live_checkboxes: dict = field(default_factory=dict)
     _live_refreshables: dict = field(default_factory=dict)
+
+    def create_secondary(self) -> 'AppState':
+        return AppState(
+            config=self.config,
+            current_dir=self.current_dir,
+            snippets=self.snippets,
+        )

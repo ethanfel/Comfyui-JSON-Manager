@@ -143,6 +143,13 @@ def index():
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255,255,255,0.2);
         }
+
+        /* Secondary pane teal accent */
+        .pane-secondary .q-field--outlined.q-field--focused .q-field__control:after {
+            border-color: #06B6D4 !important;
+        }
+        .pane-secondary .q-btn.bg-primary { background-color: #06B6D4 !important; }
+        .pane-secondary .section-header { color: rgba(6,182,212,0.7) !important; }
     ''')
 
     config = load_config()
@@ -151,6 +158,7 @@ def index():
         current_dir=Path(config.get('last_dir', str(Path.cwd()))),
         snippets=load_snippets(),
     )
+    dual_pane = {'active': False, 'state': None}
 
     # ------------------------------------------------------------------
     # Define helpers FIRST (before sidebar, which needs them)
@@ -158,7 +166,8 @@ def index():
 
     @ui.refreshable
     def render_main_content():
-        with ui.column().classes('w-full q-pa-md').style('max-width: 1200px; margin: 0 auto'):
+        max_w = '2400px' if dual_pane['active'] else '1200px'
+        with ui.column().classes('w-full q-pa-md').style(f'max-width: {max_w}; margin: 0 auto'):
             if not state.file_path or not state.file_path.exists():
                 ui.label('Select a file from the sidebar to begin.').classes(
                     'text-subtitle1 q-pa-lg')
@@ -173,7 +182,7 @@ def index():
 
             with ui.tab_panels(tabs, value='batch').classes('w-full'):
                 with ui.tab_panel('batch'):
-                    render_batch_processor(state)
+                    _render_batch_tab_content()
                 with ui.tab_panel('timeline'):
                     render_timeline_tab(state)
                 with ui.tab_panel('raw'):
@@ -183,6 +192,62 @@ def index():
                 ui.separator()
                 with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
                     render_comfy_monitor(state)
+
+    @ui.refreshable
+    def _render_batch_tab_content():
+        def on_toggle(e):
+            dual_pane['active'] = e.value
+            if e.value and dual_pane['state'] is None:
+                s2 = state.create_secondary()
+                s2._render_main = _render_batch_tab_content
+                dual_pane['state'] = s2
+            render_main_content.refresh()
+
+        ui.switch('Dual Pane', value=dual_pane['active'], on_change=on_toggle)
+
+        if not dual_pane['active']:
+            render_batch_processor(state)
+        else:
+            s2 = dual_pane['state']
+            with ui.row().classes('w-full gap-4'):
+                with ui.column().classes('col'):
+                    ui.label('Pane A').classes('section-header q-mb-sm')
+                    render_batch_processor(state)
+                with ui.column().classes('col pane-secondary'):
+                    ui.label('Pane B').classes('section-header q-mb-sm')
+                    _render_secondary_file_selector(s2)
+                    if s2.file_path and s2.file_path.exists():
+                        render_batch_processor(s2)
+                    else:
+                        ui.label('Select a file above to begin.').classes(
+                            'text-caption q-pa-md')
+
+    def _render_secondary_file_selector(s2: AppState):
+        json_files = sorted(s2.current_dir.glob('*.json'))
+        json_files = [f for f in json_files if f.name not in (
+            '.editor_config.json', '.editor_snippets.json')]
+        file_names = [f.name for f in json_files]
+
+        current_val = s2.file_path.name if s2.file_path else None
+
+        def on_select(e):
+            if not e.value:
+                return
+            fp = s2.current_dir / e.value
+            data, mtime = load_json(fp)
+            s2.data_cache = data
+            s2.last_mtime = mtime
+            s2.loaded_file = str(fp)
+            s2.file_path = fp
+            s2.restored_indicator = None
+            _render_batch_tab_content.refresh()
+
+        ui.select(
+            file_names,
+            value=current_val,
+            label='File',
+            on_change=on_select,
+        ).classes('w-full')
 
     def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
@@ -207,7 +272,7 @@ def index():
     # Sidebar (rendered AFTER helpers are attached)
     # ------------------------------------------------------------------
     with ui.left_drawer(value=True).classes('q-pa-md').style('width: 320px'):
-        render_sidebar(state)
+        render_sidebar(state, dual_pane)
 
     # ------------------------------------------------------------------
     # Main content area
@@ -220,7 +285,7 @@ def index():
 # Sidebar
 # ======================================================================
 
-def render_sidebar(state: AppState):
+def render_sidebar(state: AppState, dual_pane: dict):
     ui.label('Navigator').classes('text-h6')
 
     # --- Path input + Pin ---
@@ -234,6 +299,8 @@ def render_sidebar(state: AppState):
             p = resolve_path_case_insensitive(path_input.value)
             if p is not None and p.is_dir():
                 state.current_dir = p
+                if dual_pane['state']:
+                    dual_pane['state'].current_dir = state.current_dir
                 state.config['last_dir'] = str(p)
                 save_config(state.current_dir, state.config['favorites'], state.config)
                 state.loaded_file = None
@@ -275,6 +342,8 @@ def render_sidebar(state: AppState):
 
         def _jump_to(fav: str):
             state.current_dir = Path(fav)
+            if dual_pane['state']:
+                dual_pane['state'].current_dir = state.current_dir
             state.config['last_dir'] = fav
             save_config(state.current_dir, state.config['favorites'], state.config)
             state.loaded_file = None
