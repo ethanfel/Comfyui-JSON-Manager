@@ -158,30 +158,31 @@ def index():
 
     @ui.refreshable
     def render_main_content():
-        if not state.file_path or not state.file_path.exists():
-            ui.label('Select a file from the sidebar to begin.').classes(
-                'text-subtitle1 q-pa-lg')
-            return
+        with ui.column().classes('w-full q-pa-md').style('max-width: 1200px; margin: 0 auto'):
+            if not state.file_path or not state.file_path.exists():
+                ui.label('Select a file from the sidebar to begin.').classes(
+                    'text-subtitle1 q-pa-lg')
+                return
 
-        ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-lg').style('font-weight: 600')
+            ui.label(f'Editing: {state.file_path.name}').classes('text-h5 q-mb-lg').style('font-weight: 600')
 
-        with ui.tabs().classes('w-full').style('border-bottom: 1px solid var(--border)') as tabs:
-            ui.tab('batch', label='Batch Processor')
-            ui.tab('timeline', label='Timeline')
-            ui.tab('raw', label='Raw Editor')
+            with ui.tabs().classes('w-full').style('border-bottom: 1px solid var(--border)') as tabs:
+                ui.tab('batch', label='Batch Processor')
+                ui.tab('timeline', label='Timeline')
+                ui.tab('raw', label='Raw Editor')
 
-        with ui.tab_panels(tabs, value='batch').classes('w-full'):
-            with ui.tab_panel('batch'):
-                render_batch_processor(state)
-            with ui.tab_panel('timeline'):
-                render_timeline_tab(state)
-            with ui.tab_panel('raw'):
-                render_raw_editor(state)
+            with ui.tab_panels(tabs, value='batch').classes('w-full'):
+                with ui.tab_panel('batch'):
+                    render_batch_processor(state)
+                with ui.tab_panel('timeline'):
+                    render_timeline_tab(state)
+                with ui.tab_panel('raw'):
+                    render_raw_editor(state)
 
-        if state.show_comfy_monitor:
-            ui.separator()
-            with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
-                render_comfy_monitor(state)
+            if state.show_comfy_monitor:
+                ui.separator()
+                with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
+                    render_comfy_monitor(state)
 
     def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
