@@ -530,49 +530,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 # ======================================================================
 
 def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
-    # Frame to Skip + shift
-    with ui.row().classes('w-full items-end'):
-        fts_input = dict_number('Frame to Skip', seq, 'frame_to_skip').classes('col').props(
-            'outlined')
-
-        # Capture original at render time; blur updates seq before click fires
-        _original_fts = int(seq.get('frame_to_skip', FRAME_TO_SKIP_DEFAULT))
-
-        def shift_fts(idx=i, orig=_original_fts):
-            new_fts = int(fts_input.value) if fts_input.value is not None else orig
-            delta = new_fts - orig
-            if delta == 0:
-                ui.notify('No change to shift', type='info')
-                return
-            shifted = 0
-            for j in range(idx + 1, len(batch_list)):
-                batch_list[j]['frame_to_skip'] = int(
-                    batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT)) + delta
-                shifted += 1
-            data[KEY_BATCH_DATA] = batch_list
-            save_json(file_path, data)
-            ui.notify(f'Shifted {shifted} sequences by {delta:+d}', type='positive')
-            refresh_list.refresh()
-
-        ui.button('Shift', icon='arrow_downward', on_click=shift_fts).props('dense')
-
-    dict_input(ui.input, 'Transition', seq, 'transition').props('outlined').classes('q-mt-sm')
-
-    # VACE Schedule
+    # VACE Schedule (needed early for both columns)
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
-    with ui.row().classes('w-full items-center q-mt-sm'):
-        vs_input = dict_number('VACE Schedule', seq, 'vace schedule', default=1,
-                               min=0, max=len(VACE_MODES) - 1).classes('col').props('outlined')
-        mode_label = ui.label(VACE_MODES[sched_val]).classes('text-caption')
 
-        def update_mode_label(e):
-            idx = int(e.sender.value) if e.sender.value is not None else 0
-            idx = max(0, min(idx, len(VACE_MODES) - 1))
-            mode_label.set_text(VACE_MODES[idx])
-
-        vs_input.on('update:model-value', update_mode_label)
-
-    # Mode reference
+    # Mode reference dialog
     with ui.dialog() as ref_dlg, ui.card():
         table_md = (
             '| # | Mode | Formula |\n|:--|:-----|:--------|\n'
@@ -582,30 +543,82 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
             + '\n\n*All totals snapped to 4n+1 (1,5,9,...,49,...,81,...)*'
         )
         ui.markdown(table_md)
-    ui.button('Mode Reference', icon='help', on_click=ref_dlg.open).props('flat dense')
 
-    # Input A / B frames
-    ia_input = dict_number('Input A Frames', seq, 'input_a_frames').props('outlined').classes('q-mt-sm')
-    ib_input = dict_number('Input B Frames', seq, 'input_b_frames').props('outlined').classes('q-mt-sm')
+    with ui.row().classes('w-full q-gutter-md'):
+        # --- Left column ---
+        with ui.column().classes('col'):
+            # Frame to Skip + shift
+            with ui.row().classes('w-full items-end'):
+                fts_input = dict_number('Frame to Skip', seq, 'frame_to_skip').classes(
+                    'col').props('outlined')
 
-    # VACE Length + output calculation
-    input_a = int(seq.get('input_a_frames', 16))
-    input_b = int(seq.get('input_b_frames', 16))
-    stored_total = int(seq.get('vace_length', 49))
-    mode_idx = int(seq.get('vace schedule', 1))
+                _original_fts = int(seq.get('frame_to_skip', FRAME_TO_SKIP_DEFAULT))
 
-    if mode_idx == 0:
-        base_length = max(stored_total - input_a, 1)
-    elif mode_idx == 1:
-        base_length = max(stored_total - input_b, 1)
-    else:
-        base_length = max(stored_total - input_a - input_b, 1)
+                def shift_fts(idx=i, orig=_original_fts):
+                    new_fts = int(fts_input.value) if fts_input.value is not None else orig
+                    delta = new_fts - orig
+                    if delta == 0:
+                        ui.notify('No change to shift', type='info')
+                        return
+                    shifted = 0
+                    for j in range(idx + 1, len(batch_list)):
+                        batch_list[j]['frame_to_skip'] = int(
+                            batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT)) + delta
+                        shifted += 1
+                    data[KEY_BATCH_DATA] = batch_list
+                    save_json(file_path, data)
+                    ui.notify(f'Shifted {shifted} sequences by {delta:+d}', type='positive')
+                    refresh_list.refresh()
 
-    with ui.row().classes('w-full items-center q-mt-sm'):
-        vl_input = ui.number('VACE Length', value=base_length, min=1).classes('col').props(
-            'outlined')
-        output_label = ui.label(f'Output: {stored_total}').classes('text-bold')
+                ui.button('Shift', icon='arrow_downward', on_click=shift_fts).props('dense')
 
+            dict_input(ui.input, 'Transition', seq, 'transition').props('outlined').classes(
+                'w-full q-mt-sm')
+
+            # VACE Schedule
+            with ui.row().classes('w-full items-center q-mt-sm'):
+                vs_input = dict_number('VACE Schedule', seq, 'vace schedule', default=1,
+                                       min=0, max=len(VACE_MODES) - 1).classes('col').props(
+                    'outlined')
+                mode_label = ui.label(VACE_MODES[sched_val]).classes('text-caption')
+                ui.button(icon='help', on_click=ref_dlg.open).props('flat dense round')
+
+                def update_mode_label(e):
+                    idx = int(e.sender.value) if e.sender.value is not None else 0
+                    idx = max(0, min(idx, len(VACE_MODES) - 1))
+                    mode_label.set_text(VACE_MODES[idx])
+
+                vs_input.on('update:model-value', update_mode_label)
+
+        # --- Right column ---
+        with ui.column().classes('col'):
+            ia_input = dict_number('Input A Frames', seq, 'input_a_frames').props(
+                'outlined').classes('w-full')
+            ib_input = dict_number('Input B Frames', seq, 'input_b_frames').props(
+                'outlined').classes('w-full q-mt-sm')
+
+            # VACE Length + output calculation
+            input_a = int(seq.get('input_a_frames', 16))
+            input_b = int(seq.get('input_b_frames', 16))
+            stored_total = int(seq.get('vace_length', 49))
+            mode_idx = int(seq.get('vace schedule', 1))
+
+            if mode_idx == 0:
+                base_length = max(stored_total - input_a, 1)
+            elif mode_idx == 1:
+                base_length = max(stored_total - input_b, 1)
+            else:
+                base_length = max(stored_total - input_a - input_b, 1)
+
+            with ui.row().classes('w-full items-center q-mt-sm'):
+                vl_input = ui.number('VACE Length', value=base_length, min=1).classes(
+                    'col').props('outlined')
+                output_label = ui.label(f'Output: {stored_total}').classes('text-bold')
+
+            dict_number('Reference Switch', seq, 'reference switch').props(
+                'outlined').classes('w-full q-mt-sm')
+
+    # Recalculate VACE output when any input changes
     def recalc_vace(*_args):
         mi = int(vs_input.value) if vs_input.value is not None else 0
         ia = int(ia_input.value) if ia_input.value is not None else 16
@@ -625,8 +638,6 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
 
     for inp in (vs_input, ia_input, ib_input, vl_input):
         inp.on('update:model-value', recalc_vace)
-
-    dict_number('Reference Switch', seq, 'reference switch').props('outlined').classes('q-mt-sm')
 
 
 # ======================================================================
