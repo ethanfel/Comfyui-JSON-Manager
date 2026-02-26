@@ -427,7 +427,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
                 dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
-                    'outlined').classes('w-full')
+                    'outlined input-style="direction: rtl"').classes('w-full')
 
                 # Image paths with preview
                 for img_label, img_key in [
@@ -437,7 +437,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 ]:
                     with ui.row().classes('w-full items-center'):
                         inp = dict_input(ui.input, img_label, seq, img_key).classes(
-                            'col').props('outlined')
+                            'col').props('outlined input-style="direction: rtl"')
                         img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
