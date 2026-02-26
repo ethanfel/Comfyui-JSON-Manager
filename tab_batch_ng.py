@@ -542,7 +542,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
     # VACE Schedule
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
     with ui.row().classes('w-full items-center'):
-        vs_input = dict_number('VACE Schedule', seq, 'vace schedule',
+        vs_input = dict_number('VACE Schedule', seq, 'vace schedule', default=1,
                                min=0, max=len(VACE_MODES) - 1).classes('col').props('outlined')
         mode_label = ui.label(VACE_MODES[sched_val]).classes('text-caption')
 
