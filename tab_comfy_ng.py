@@ -55,7 +55,7 @@ def render_comfy_monitor(state: AppState):
 
         # Add server section
         ui.separator()
-        ui.label('Add New Server').classes('text-subtitle1')
+        ui.label('Add New Server').classes('section-header')
         with ui.row().classes('w-full items-end'):
             new_name = ui.input('Server Name', placeholder='e.g. Render Node 2').classes('col')
             new_url = ui.input('URL', placeholder='http://192.168.1.50:8188').classes('col')
@@ -152,18 +152,18 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
                 running_cnt = len(queue_data.get('queue_running', []))
                 pending_cnt = len(queue_data.get('queue_pending', []))
 
-                with ui.card().classes('q-pa-sm'):
+                with ui.card().classes('q-pa-md text-center').style('min-width: 100px'):
                     ui.label('Status')
                     ui.label('Online' if running_cnt > 0 else 'Idle').classes(
                         'text-positive' if running_cnt > 0 else 'text-grey')
-                with ui.card().classes('q-pa-sm'):
+                with ui.card().classes('q-pa-md text-center').style('min-width: 100px'):
                     ui.label('Pending')
                     ui.label(str(pending_cnt))
-                with ui.card().classes('q-pa-sm'):
+                with ui.card().classes('q-pa-md text-center').style('min-width: 100px'):
                     ui.label('Running')
                     ui.label(str(running_cnt))
             else:
-                with ui.card().classes('q-pa-sm'):
+                with ui.card().classes('q-pa-md text-center').style('min-width: 100px'):
                     ui.label('Status')
                     ui.label('Offline').classes('text-negative')
                 ui.label(f'Could not connect to {comfy_url}').classes('text-negative')
@@ -173,104 +173,106 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
     ui.button('Refresh Status', icon='refresh', on_click=refresh_status).props('flat dense')
 
     # --- Live View ---
-    ui.label('Live View').classes('text-subtitle1 q-mt-md')
-    toggle_key = f'live_toggle_{index}'
+    with ui.card().classes('w-full q-pa-md q-mt-md'):
+        ui.label('Live View').classes('section-header')
+        toggle_key = f'live_toggle_{index}'
 
-    live_checkbox = ui.checkbox('Enable Live Preview', value=False)
-    # Store reference so poll_all timer can disable it on timeout
-    state._live_checkboxes[toggle_key] = live_checkbox
+        live_checkbox = ui.checkbox('Enable Live Preview', value=False)
+        # Store reference so poll_all timer can disable it on timeout
+        state._live_checkboxes[toggle_key] = live_checkbox
 
-    @ui.refreshable
-    def render_live_view():
-        if not live_checkbox.value:
-            ui.label('Live Preview is disabled.').classes('text-caption')
-            return
-
-        # Record start time
-        if toggle_key not in state.live_toggles or state.live_toggles.get(toggle_key) is None:
-            state.live_toggles[toggle_key] = time.time()
-
-        timeout_val = config.get('monitor_timeout', 0)
-        if timeout_val > 0:
-            start = state.live_toggles.get(toggle_key, time.time())
-            remaining = (timeout_val * 60) - (time.time() - start)
-            if remaining <= 0:
-                live_checkbox.set_value(False)
-                state.live_toggles[toggle_key] = None
-                ui.label('Preview timed out.').classes('text-caption')
+        @ui.refreshable
+        def render_live_view():
+            if not live_checkbox.value:
+                ui.label('Live Preview is disabled.').classes('text-caption')
                 return
-            ui.label(f'Auto-off in: {int(remaining)}s').classes('text-caption')
 
-        iframe_h = ui.slider(min=600, max=2500, step=50, value=1000).classes('w-full')
-        ui.label().bind_text_from(iframe_h, 'value', backward=lambda v: f'Height: {v}px')
+            # Record start time
+            if toggle_key not in state.live_toggles or state.live_toggles.get(toggle_key) is None:
+                state.live_toggles[toggle_key] = time.time()
 
-        viewer_base = config.get('viewer_url', '').strip()
-        parsed = urllib.parse.urlparse(viewer_base)
-        if viewer_base and parsed.scheme in ('http', 'https'):
-            safe_src = html.escape(viewer_base, quote=True)
-            ui.label(f'Viewing: {viewer_base}').classes('text-caption')
+            timeout_val = config.get('monitor_timeout', 0)
+            if timeout_val > 0:
+                start = state.live_toggles.get(toggle_key, time.time())
+                remaining = (timeout_val * 60) - (time.time() - start)
+                if remaining <= 0:
+                    live_checkbox.set_value(False)
+                    state.live_toggles[toggle_key] = None
+                    ui.label('Preview timed out.').classes('text-caption')
+                    return
+                ui.label(f'Auto-off in: {int(remaining)}s').classes('text-caption')
 
-            iframe_container = ui.column().classes('w-full')
+            iframe_h = ui.slider(min=600, max=2500, step=50, value=1000).classes('w-full')
+            ui.label().bind_text_from(iframe_h, 'value', backward=lambda v: f'Height: {v}px')
 
-            def update_iframe():
-                iframe_container.clear()
-                with iframe_container:
-                    ui.html(
-                        f'<iframe src="{safe_src}" width="100%" height="{int(iframe_h.value)}px"'
-                        f' style="border: 2px solid #666; border-radius: 8px;"></iframe>'
-                    )
+            viewer_base = config.get('viewer_url', '').strip()
+            parsed = urllib.parse.urlparse(viewer_base)
+            if viewer_base and parsed.scheme in ('http', 'https'):
+                safe_src = html.escape(viewer_base, quote=True)
+                ui.label(f'Viewing: {viewer_base}').classes('text-caption')
 
-            iframe_h.on_value_change(lambda _: update_iframe())
-            update_iframe()
-        else:
-            ui.label('No valid viewer URL configured.').classes('text-warning')
+                iframe_container = ui.column().classes('w-full')
 
-    state._live_refreshables[toggle_key] = render_live_view
-    live_checkbox.on_value_change(lambda _: render_live_view.refresh())
-    render_live_view()
+                def update_iframe():
+                    iframe_container.clear()
+                    with iframe_container:
+                        ui.html(
+                            f'<iframe src="{safe_src}" width="100%" height="{int(iframe_h.value)}px"'
+                            f' style="border: 2px solid #666; border-radius: 8px;"></iframe>'
+                        )
+
+                iframe_h.on_value_change(lambda _: update_iframe())
+                update_iframe()
+            else:
+                ui.label('No valid viewer URL configured.').classes('text-warning')
+
+        state._live_refreshables[toggle_key] = render_live_view
+        live_checkbox.on_value_change(lambda _: render_live_view.refresh())
+        render_live_view()
 
     # --- Latest Output ---
-    ui.label('Latest Output').classes('text-subtitle1 q-mt-md')
-    img_container = ui.column().classes('w-full')
+    with ui.card().classes('w-full q-pa-md q-mt-md'):
+        ui.label('Latest Output').classes('section-header')
+        img_container = ui.column().classes('w-full')
 
-    async def check_image():
-        img_container.clear()
-        loop = asyncio.get_event_loop()
-        res, err = await loop.run_in_executor(
-            None, lambda: _fetch_blocking(f'{comfy_url}/history', timeout=2))
-        with img_container:
-            if err is not None:
-                ui.label(f'Error fetching image: {err}').classes('text-negative')
-                return
-            try:
-                history = res.json()
-            except (ValueError, Exception):
-                ui.label('Invalid response from server').classes('text-negative')
-                return
-            if not history:
-                ui.label('No history found.').classes('text-caption')
-                return
-            last_prompt_id = list(history.keys())[-1]
-            outputs = history[last_prompt_id].get('outputs', {})
-            found_img = None
-            for node_output in outputs.values():
-                if 'images' in node_output:
-                    for img_info in node_output['images']:
-                        if img_info['type'] == 'output':
-                            found_img = img_info
-                            break
+        async def check_image():
+            img_container.clear()
+            loop = asyncio.get_event_loop()
+            res, err = await loop.run_in_executor(
+                None, lambda: _fetch_blocking(f'{comfy_url}/history', timeout=2))
+            with img_container:
+                if err is not None:
+                    ui.label(f'Error fetching image: {err}').classes('text-negative')
+                    return
+                try:
+                    history = res.json()
+                except (ValueError, Exception):
+                    ui.label('Invalid response from server').classes('text-negative')
+                    return
+                if not history:
+                    ui.label('No history found.').classes('text-caption')
+                    return
+                last_prompt_id = list(history.keys())[-1]
+                outputs = history[last_prompt_id].get('outputs', {})
+                found_img = None
+                for node_output in outputs.values():
+                    if 'images' in node_output:
+                        for img_info in node_output['images']:
+                            if img_info['type'] == 'output':
+                                found_img = img_info
+                                break
+                    if found_img:
+                        break
                 if found_img:
-                    break
-            if found_img:
-                params = urllib.parse.urlencode({
-                    'filename': found_img['filename'],
-                    'subfolder': found_img['subfolder'],
-                    'type': found_img['type'],
-                })
-                img_url = f'{comfy_url}/view?{params}'
-                ui.image(img_url).classes('w-full').style('max-width: 600px')
-                ui.label(f'Last Output: {found_img["filename"]}').classes('text-caption')
-            else:
-                ui.label('Last run had no image output.').classes('text-caption')
+                    params = urllib.parse.urlencode({
+                        'filename': found_img['filename'],
+                        'subfolder': found_img['subfolder'],
+                        'type': found_img['type'],
+                    })
+                    img_url = f'{comfy_url}/view?{params}'
+                    ui.image(img_url).classes('w-full').style('max-width: 600px')
+                    ui.label(f'Last Output: {found_img["filename"]}').classes('text-caption')
+                else:
+                    ui.label('Last run had no image output.').classes('text-caption')
 
-    ui.button('Check Latest Image', icon='image', on_click=check_image).props('flat')
+        ui.button('Check Latest Image', icon='image', on_click=check_image).props('flat')

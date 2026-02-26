@@ -156,69 +156,68 @@ def render_batch_processor(state: AppState):
     batch_list = data.get(KEY_BATCH_DATA, [])
 
     # Source file data for importing
-    json_files = sorted(state.current_dir.glob('*.json'))
-    json_files = [f for f in json_files if f.name not in (
-        '.editor_config.json', '.editor_snippets.json')]
-    file_options = {f.name: f.name for f in json_files}
+    with ui.card().classes('w-full q-pa-md q-mb-lg'):
+        json_files = sorted(state.current_dir.glob('*.json'))
+        json_files = [f for f in json_files if f.name not in (
+            '.editor_config.json', '.editor_snippets.json')]
+        file_options = {f.name: f.name for f in json_files}
 
-    src_file_select = ui.select(
-        file_options,
-        value=file_path.name,
-        label='Source File:',
-    ).classes('w-64')
+        src_file_select = ui.select(
+            file_options,
+            value=file_path.name,
+            label='Source File:',
+        ).classes('w-64')
 
-    src_seq_select = ui.select([], label='Source Sequence:').classes('w-64')
+        src_seq_select = ui.select([], label='Source Sequence:').classes('w-64')
 
-    # Track loaded source data
-    _src_cache = {'data': None, 'batch': [], 'name': None}
+        # Track loaded source data
+        _src_cache = {'data': None, 'batch': [], 'name': None}
 
-    def _update_src():
-        name = src_file_select.value
-        if name and name != _src_cache['name']:
-            src_data, _ = load_json(state.current_dir / name)
-            _src_cache['data'] = src_data
-            _src_cache['batch'] = src_data.get(KEY_BATCH_DATA, [])
-            _src_cache['name'] = name
-            if _src_cache['batch']:
-                opts = {i: format_seq_label(s.get(KEY_SEQUENCE_NUMBER, i+1))
-                        for i, s in enumerate(_src_cache['batch'])}
-                src_seq_select.set_options(opts, value=0)
-            else:
-                src_seq_select.set_options({})
+        def _update_src():
+            name = src_file_select.value
+            if name and name != _src_cache['name']:
+                src_data, _ = load_json(state.current_dir / name)
+                _src_cache['data'] = src_data
+                _src_cache['batch'] = src_data.get(KEY_BATCH_DATA, [])
+                _src_cache['name'] = name
+                if _src_cache['batch']:
+                    opts = {i: format_seq_label(s.get(KEY_SEQUENCE_NUMBER, i+1))
+                            for i, s in enumerate(_src_cache['batch'])}
+                    src_seq_select.set_options(opts, value=0)
+                else:
+                    src_seq_select.set_options({})
 
-    src_file_select.on_value_change(lambda _: _update_src())
-    _update_src()
+        src_file_select.on_value_change(lambda _: _update_src())
+        _update_src()
 
-    # --- Add New Sequence ---
-    ui.label('Add New Sequence').classes('text-subtitle1 q-mt-md')
+        # --- Add New Sequence ---
+        ui.label('Add New Sequence').classes('section-header q-mt-md')
 
-    def _add_sequence(new_item):
-        new_item[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
-        for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, 'note', 'loras']:
-            new_item.pop(k, None)
-        batch_list.append(new_item)
-        data[KEY_BATCH_DATA] = batch_list
-        save_json(file_path, data)
-        render_sequence_list.refresh()
+        def _add_sequence(new_item):
+            new_item[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
+            for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, 'note', 'loras']:
+                new_item.pop(k, None)
+            batch_list.append(new_item)
+            data[KEY_BATCH_DATA] = batch_list
+            save_json(file_path, data)
+            render_sequence_list.refresh()
 
-    with ui.row():
-        def add_empty():
-            _add_sequence(DEFAULTS.copy())
+        with ui.row():
+            def add_empty():
+                _add_sequence(DEFAULTS.copy())
 
-        def add_from_source():
-            item = copy.deepcopy(DEFAULTS)
-            src_batch = _src_cache['batch']
-            sel_idx = src_seq_select.value
-            if src_batch and sel_idx is not None:
-                item.update(copy.deepcopy(src_batch[int(sel_idx)]))
-            elif _src_cache['data']:
-                item.update(copy.deepcopy(_src_cache['data']))
-            _add_sequence(item)
+            def add_from_source():
+                item = copy.deepcopy(DEFAULTS)
+                src_batch = _src_cache['batch']
+                sel_idx = src_seq_select.value
+                if src_batch and sel_idx is not None:
+                    item.update(copy.deepcopy(src_batch[int(sel_idx)]))
+                elif _src_cache['data']:
+                    item.update(copy.deepcopy(_src_cache['data']))
+                _add_sequence(item)
 
-        ui.button('Add Empty', icon='add', on_click=add_empty)
-        ui.button('From Source', icon='file_download', on_click=add_from_source)
-
-    ui.separator()
+            ui.button('Add Empty', icon='add', on_click=add_empty)
+            ui.button('From Source', icon='file_download', on_click=add_from_source)
 
     # --- Standard / LoRA / VACE key sets ---
     lora_keys = ['lora 1 high', 'lora 1 low', 'lora 2 high', 'lora 2 low',
@@ -250,36 +249,36 @@ def render_batch_processor(state: AppState):
             ui.button('Sort by Number', icon='sort', on_click=sort_by_number).props('flat')
 
         for i, seq in enumerate(batch_list):
-            _render_sequence_card(
-                i, seq, batch_list, data, file_path, state,
-                _src_cache, src_seq_select,
-                standard_keys, render_sequence_list,
-            )
+            with ui.card().classes('w-full q-mb-sm'):
+                _render_sequence_card(
+                    i, seq, batch_list, data, file_path, state,
+                    _src_cache, src_seq_select,
+                    standard_keys, render_sequence_list,
+                )
 
     render_sequence_list()
 
-    ui.separator()
-
     # --- Save & Snap ---
-    with ui.row().classes('w-full items-end q-gutter-md'):
-        commit_input = ui.input('Change Note (Optional)',
-                                placeholder='e.g. Added sequence 3').classes('col')
+    with ui.card().classes('w-full q-pa-md q-mt-lg'):
+        with ui.row().classes('w-full items-end q-gutter-md'):
+            commit_input = ui.input('Change Note (Optional)',
+                                    placeholder='e.g. Added sequence 3').classes('col')
 
-        def save_and_snap():
-            data[KEY_BATCH_DATA] = batch_list
-            tree_data = data.get(KEY_HISTORY_TREE, {})
-            htree = HistoryTree(tree_data)
-            snapshot_payload = copy.deepcopy(data)
-            snapshot_payload.pop(KEY_HISTORY_TREE, None)
-            note = commit_input.value if commit_input.value else 'Batch Update'
-            htree.commit(snapshot_payload, note=note)
-            data[KEY_HISTORY_TREE] = htree.to_dict()
-            save_json(file_path, data)
-            state.restored_indicator = None
-            commit_input.set_value('')
-            ui.notify('Batch Saved & Snapshot Created!', type='positive')
+            def save_and_snap():
+                data[KEY_BATCH_DATA] = batch_list
+                tree_data = data.get(KEY_HISTORY_TREE, {})
+                htree = HistoryTree(tree_data)
+                snapshot_payload = copy.deepcopy(data)
+                snapshot_payload.pop(KEY_HISTORY_TREE, None)
+                note = commit_input.value if commit_input.value else 'Batch Update'
+                htree.commit(snapshot_payload, note=note)
+                data[KEY_HISTORY_TREE] = htree.to_dict()
+                save_json(file_path, data)
+                state.restored_indicator = None
+                commit_input.set_value('')
+                ui.notify('Batch Saved & Snapshot Created!', type='positive')
 
-        ui.button('Save & Snap', icon='save', on_click=save_and_snap).props('color=primary')
+            ui.button('Save & Snap', icon='save', on_click=save_and_snap).props('color=primary')
 
 
 # ======================================================================
@@ -321,7 +320,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 batch_list[idx] = item
                 commit('Copied!')
 
-            ui.button('Copy Src', icon='file_download', on_click=copy_source).props('dense')
+            ui.button('Copy Src', icon='file_download', on_click=copy_source).props('outline')
 
             # Clone Next
             def clone_next(idx=i, sn=seq_num, s=seq):
@@ -334,7 +333,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 batch_list.insert(pos, new_seq)
                 commit('Cloned to Next!')
 
-            ui.button('Clone Next', icon='content_copy', on_click=clone_next).props('dense')
+            ui.button('Clone Next', icon='content_copy', on_click=clone_next).props('outline')
 
             # Clone End
             def clone_end(s=seq):
@@ -343,7 +342,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 batch_list.append(new_seq)
                 commit('Cloned to End!')
 
-            ui.button('Clone End', icon='vertical_align_bottom', on_click=clone_end).props('dense')
+            ui.button('Clone End', icon='vertical_align_bottom', on_click=clone_end).props('outline')
 
             # Clone Sub
             def clone_sub(idx=i, sn=seq_num, s=seq):
@@ -360,7 +359,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 batch_list.insert(pos, new_seq)
                 commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
 
-            ui.button('Clone Sub', icon='link', on_click=clone_sub).props('dense')
+            ui.button('Clone Sub', icon='link', on_click=clone_sub).props('outline')
+
+            # Spacer before Promote
+            ui.element('div').classes('col')
 
             # Promote
             def promote(idx=i, s=seq):
@@ -375,14 +377,17 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 # and sees the file is now single (no KEY_BATCH_DATA)
                 state._render_main.refresh()
 
-            ui.button('Promote', icon='north_west', on_click=promote).props('dense')
+            ui.button('Promote', icon='north_west', on_click=promote)
+
+            # Spacer before Delete
+            ui.element('div').classes('col')
 
             # Delete
             def delete(idx=i):
                 batch_list.pop(idx)
                 commit()
 
-            ui.button(icon='delete', on_click=delete).props('dense color=negative')
+            ui.button(icon='delete', on_click=delete).props('color=negative')
 
         ui.separator()
 
@@ -390,13 +395,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         with ui.splitter(value=66).classes('w-full') as splitter:
             with splitter.before:
                 dict_textarea('General Prompt', seq, 'general_prompt').classes(
-                    'w-full').props('outlined rows=2')
+                    'w-full q-mt-sm').props('outlined rows=2')
                 dict_textarea('General Negative', seq, 'general_negative').classes(
-                    'w-full').props('outlined rows=2')
+                    'w-full q-mt-sm').props('outlined rows=2')
                 dict_textarea('Specific Prompt', seq, 'current_prompt').classes(
-                    'w-full').props('outlined rows=10')
+                    'w-full q-mt-sm').props('outlined rows=10')
                 dict_textarea('Specific Negative', seq, 'negative').classes(
-                    'w-full').props('outlined rows=2')
+                    'w-full q-mt-sm').props('outlined rows=2')
 
             with splitter.after:
                 # Sequence number
@@ -452,7 +457,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         with ui.expansion('LoRA Settings', icon='style').classes('w-full'):
             with ui.row().classes('w-full q-gutter-md'):
                 for lora_idx in range(1, 4):
-                    with ui.column().classes('col'):
+                    with ui.card().classes('col q-pa-sm surface-3'):
                         ui.label(f'LoRA {lora_idx}').classes('text-subtitle2')
                         for tier, tier_label in [('high', 'High'), ('low', 'Low')]:
                             k = f'lora {lora_idx} {tier}'
@@ -474,8 +479,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                                 lora_input.on('blur', on_lora_blur)
 
         # --- Custom Parameters ---
-        ui.separator()
-        ui.label('Custom Parameters').classes('text-caption')
+        ui.label('Custom Parameters').classes('section-header q-mt-md')
 
         custom_keys = [k for k in seq.keys() if k not in standard_keys]
         if custom_keys:
@@ -537,11 +541,11 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
 
         ui.button('Shift', icon='arrow_downward', on_click=shift_fts).props('dense')
 
-    dict_input(ui.input, 'Transition', seq, 'transition').props('outlined')
+    dict_input(ui.input, 'Transition', seq, 'transition').props('outlined').classes('q-mt-sm')
 
     # VACE Schedule
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
-    with ui.row().classes('w-full items-center'):
+    with ui.row().classes('w-full items-center q-mt-sm'):
         vs_input = dict_number('VACE Schedule', seq, 'vace schedule', default=1,
                                min=0, max=len(VACE_MODES) - 1).classes('col').props('outlined')
         mode_label = ui.label(VACE_MODES[sched_val]).classes('text-caption')
@@ -566,8 +570,8 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
     ui.button('Mode Reference', icon='help', on_click=ref_dlg.open).props('flat dense')
 
     # Input A / B frames
-    ia_input = dict_number('Input A Frames', seq, 'input_a_frames').props('outlined')
-    ib_input = dict_number('Input B Frames', seq, 'input_b_frames').props('outlined')
+    ia_input = dict_number('Input A Frames', seq, 'input_a_frames').props('outlined').classes('q-mt-sm')
+    ib_input = dict_number('Input B Frames', seq, 'input_b_frames').props('outlined').classes('q-mt-sm')
 
     # VACE Length + output calculation
     input_a = int(seq.get('input_a_frames', 16))
@@ -582,7 +586,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
     else:
         base_length = max(stored_total - input_a - input_b, 1)
 
-    with ui.row().classes('w-full items-center'):
+    with ui.row().classes('w-full items-center q-mt-sm'):
         vl_input = ui.number('VACE Length', value=base_length, min=1).classes('col').props(
             'outlined')
         output_label = ui.label(f'Output: {stored_total}').classes('text-bold')
@@ -607,7 +611,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
     for inp in (vs_input, ia_input, ib_input, vl_input):
         inp.on('update:model-value', recalc_vace)
 
-    dict_number('Reference Switch', seq, 'reference switch').props('outlined')
+    dict_number('Reference Switch', seq, 'reference switch').props('outlined').classes('q-mt-sm')
 
 
 # ======================================================================
@@ -638,13 +642,14 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
         source_select.on_value_change(update_fields)
         update_fields()
 
-        ui.label('Apply to:').classes('text-subtitle2 q-mt-md')
+        ui.label('Apply to:').classes('subsection-header q-mt-md')
         select_all_cb = ui.checkbox('Select All')
         target_checks = {}
-        for idx, s in enumerate(batch_list):
-            sn = s.get(KEY_SEQUENCE_NUMBER, idx + 1)
-            cb = ui.checkbox(format_seq_label(sn))
-            target_checks[idx] = cb
+        with ui.scroll_area().style('max-height: 250px'):
+            for idx, s in enumerate(batch_list):
+                sn = s.get(KEY_SEQUENCE_NUMBER, idx + 1)
+                cb = ui.checkbox(format_seq_label(sn))
+                target_checks[idx] = cb
 
         def on_select_all(e):
             for cb in target_checks.values():

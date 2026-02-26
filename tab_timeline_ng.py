@@ -68,11 +68,12 @@ def _render_graph_or_log(mode, all_nodes, htree, selected_nodes,
     """Render graph visualization or linear log view."""
     if mode in ('Horizontal', 'Vertical'):
         direction = 'LR' if mode == 'Horizontal' else 'TB'
-        try:
-            graph_dot = htree.generate_graph(direction=direction)
-            _render_graphviz(graph_dot)
-        except Exception as e:
-            ui.label(f'Graph Error: {e}').classes('text-negative')
+        with ui.card().classes('w-full q-pa-md'):
+            try:
+                graph_dot = htree.generate_graph(direction=direction)
+                _render_graphviz(graph_dot)
+            except Exception as e:
+                ui.label(f'Graph Error: {e}').classes('text-negative')
 
     elif mode == 'Linear Log':
         ui.label('Chronological list of all snapshots.').classes('text-caption')
@@ -82,9 +83,9 @@ def _render_graph_or_log(mode, all_nodes, htree, selected_nodes,
 
             card_style = ''
             if is_selected:
-                card_style = 'background: #3d1f1f !important;'
+                card_style = 'background: rgba(239, 68, 68, 0.1) !important; border-left: 3px solid var(--negative);'
             elif is_head:
-                card_style = 'background: #1a2332 !important;'
+                card_style = 'background: var(--accent-subtle) !important; border-left: 3px solid var(--accent);'
             with ui.card().classes('w-full q-mb-sm').style(card_style):
                 with ui.row().classes('w-full items-center'):
                     if selection_mode_on:
@@ -145,7 +146,7 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
 
 def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn):
     """Render node selector with restore, rename, delete, and preview."""
-    ui.label('Manage Version').classes('text-subtitle1 q-mt-md')
+    ui.label('Manage Version').classes('section-header')
 
     def fmt_node(n):
         ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
@@ -186,7 +187,7 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
         ui.button('Update Label', on_click=rename_node).props('flat')
 
     # Danger zone
-    with ui.expansion('Danger Zone (Delete)', icon='warning').classes('w-full q-mt-md'):
+    with ui.expansion('Danger Zone (Delete)', icon='warning').classes('w-full q-mt-md').style('border-left: 3px solid var(--negative)'):
         ui.label('Deleting a node cannot be undone.').classes('text-warning')
 
         def delete_selected():
@@ -226,7 +227,7 @@ def render_timeline_tab(state: AppState):
             'text-info q-pa-sm')
 
     # --- View mode + Selection toggle ---
-    with ui.row().classes('w-full items-center q-gutter-md'):
+    with ui.row().classes('w-full items-center q-gutter-md q-mb-md'):
         ui.label('Version History').classes('text-h6 col')
         view_mode = ui.toggle(
             ['Horizontal', 'Vertical', 'Linear Log'],
@@ -249,11 +250,10 @@ def render_timeline_tab(state: AppState):
         if selection_mode.value and state.timeline_selected_nodes:
             _render_batch_delete(htree, data, file_path, state, render_timeline.refresh)
 
-        ui.separator()
-
-        _render_node_manager(
-            all_nodes, htree, data, file_path,
-            _restore_and_refresh, render_timeline.refresh)
+        with ui.card().classes('w-full q-pa-md q-mt-md'):
+            _render_node_manager(
+                all_nodes, htree, data, file_path,
+                _restore_and_refresh, render_timeline.refresh)
 
     def _toggle_select(nid, checked):
         if checked:
