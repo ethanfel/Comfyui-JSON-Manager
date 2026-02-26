@@ -224,6 +224,9 @@ def index():
                             'text-caption q-pa-md')
 
     def _render_pane_file_selector(pane_state: AppState):
+        if not pane_state.current_dir.exists():
+            ui.label('Directory not found.').classes('text-warning')
+            return
         json_files = sorted(pane_state.current_dir.glob('*.json'))
         json_files = [f for f in json_files if f.name not in (
             '.editor_config.json', '.editor_snippets.json')]
@@ -422,6 +425,9 @@ def render_sidebar(state: AppState, dual_pane: dict):
     with ui.card().classes('w-full q-pa-md q-mb-md'):
         @ui.refreshable
         def render_file_list():
+            if not state.current_dir.exists():
+                ui.label('Directory not found.').classes('text-warning')
+                return
             json_files = sorted(state.current_dir.glob('*.json'))
             json_files = [f for f in json_files if f.name not in ('.editor_config.json', '.editor_snippets.json')]
 

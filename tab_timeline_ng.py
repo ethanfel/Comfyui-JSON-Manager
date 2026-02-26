@@ -130,10 +130,11 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
     ).classes('text-warning q-mt-md')
 
     def do_batch_delete():
-        _delete_nodes(htree, data, file_path, valid)
+        current_valid = state.timeline_selected_nodes & set(htree.nodes.keys())
+        _delete_nodes(htree, data, file_path, current_valid)
         state.timeline_selected_nodes = set()
         ui.notify(
-            f'Deleted {count} node{"s" if count != 1 else ""}!',
+            f'Deleted {len(current_valid)} node{"s" if len(current_valid) != 1 else ""}!',
             type='positive')
         refresh_fn()
 
@@ -288,7 +289,7 @@ def _render_graphviz(dot_source: str):
 
 def _restore_node(data, node, htree, file_path, state: AppState):
     """Restore a history node as the current version."""
-    node_data = node['data']
+    node_data = copy.deepcopy(node['data'])
     if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
         del data[KEY_BATCH_DATA]
     data.update(node_data)
