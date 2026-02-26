@@ -570,7 +570,8 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
                     ui.notify(f'Shifted {shifted} sequences by {delta:+d}', type='positive')
                     refresh_list.refresh()
 
-                ui.button('Shift', icon='arrow_downward', on_click=shift_fts).props('dense')
+                ui.button('Shift', icon='arrow_downward', on_click=shift_fts).props(
+                    'outline').style('height: 40px')
 
             dict_input(ui.input, 'Transition', seq, 'transition').props('outlined').classes(
                 'w-full q-mt-sm')
