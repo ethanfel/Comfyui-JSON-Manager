@@ -89,7 +89,7 @@ def dict_input(element_fn, label, seq, key, **kwargs):
 
 
 def dict_number(label, seq, key, default=0, **kwargs):
-    """Number input bound to seq[key] via blur."""
+    """Number input bound to seq[key] via blur and model-value update."""
     val = seq.get(key, default)
     try:
         # Try float first to handle "1.5" strings, then check if it's a clean int
@@ -99,15 +99,16 @@ def dict_number(label, seq, key, default=0, **kwargs):
         val = default
     el = ui.number(label, value=val, **kwargs)
 
-    def _on_blur(e, k=key, d=default):
-        v = e.sender.value
+    def _sync(k=key, d=default):
+        v = el.value
         if v is None:
             v = d
         elif isinstance(v, float) and v == int(v):
             v = int(v)
         seq[k] = v
 
-    el.on('blur', _on_blur)
+    el.on('blur', lambda _: _sync())
+    el.on('update:model-value', lambda _: _sync())
     return el
 
 
