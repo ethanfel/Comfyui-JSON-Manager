@@ -88,8 +88,16 @@ def dict_number(label, seq, key, **kwargs):
     except (ValueError, TypeError):
         val = 0
     el = ui.number(label, value=val, **kwargs)
-    el.on('blur', lambda e, k=key: seq.__setitem__(
-        k, e.sender.value if e.sender.value is not None else 0))
+
+    def _on_blur(e, k=key):
+        v = e.sender.value
+        if v is None:
+            v = 0
+        elif isinstance(v, float) and v == int(v):
+            v = int(v)
+        seq[k] = v
+
+    el.on('blur', _on_blur)
     return el
 
 
