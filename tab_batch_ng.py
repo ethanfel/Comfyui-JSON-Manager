@@ -376,25 +376,6 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
             ui.button('Clone Sub', icon='link', on_click=clone_sub).props('outline')
 
-            # Spacer before Promote
-            ui.element('div').classes('col')
-
-            # Promote
-            def promote(idx=i, s=seq):
-                single_data = copy.deepcopy(s)
-                single_data[KEY_PROMPT_HISTORY] = copy.deepcopy(data.get(KEY_PROMPT_HISTORY, []))
-                single_data[KEY_HISTORY_TREE] = copy.deepcopy(data.get(KEY_HISTORY_TREE, {}))
-                single_data.pop(KEY_SEQUENCE_NUMBER, None)
-                save_json(file_path, single_data)
-                state.data_cache = single_data
-                ui.notify('Converted to Single!', type='positive')
-                # Full refresh so batch tab re-enters render_batch_processor
-                # and sees the file is now single (no KEY_BATCH_DATA)
-                state._render_main.refresh()
-
-            ui.button('Promote', icon='north_west', on_click=promote)
-
-            # Spacer before Delete
             ui.element('div').classes('col')
 
             # Delete
