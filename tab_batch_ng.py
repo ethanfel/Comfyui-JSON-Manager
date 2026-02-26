@@ -445,9 +445,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                                 ui.image(str(img_path)).classes('w-full')
                             ui.button(icon='visibility', on_click=dlg.open).props('flat dense')
 
-                # VACE Settings
-                with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
-                    _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list)
+        # --- VACE Settings (full width) ---
+        with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
+            _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list)
 
         # --- LoRA Settings ---
         with ui.expansion('LoRA Settings', icon='style').classes('w-full'):
