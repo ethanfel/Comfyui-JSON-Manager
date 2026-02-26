@@ -499,12 +499,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                             'Str',
                             value=lora_strength,
                             min=0, max=10, step=0.1,
+                            format='%.1f',
                         ).props('outlined dense').style('max-width: 80px')
 
                         def _lora_sync(key=k, n_inp=name_input, s_inp=strength_input):
                             name = n_inp.value or ''
                             strength = s_inp.value if s_inp.value is not None else 1.0
-                            seq[key] = f'<lora:{name}:{strength}>' if name else ''
+                            seq[key] = f'<lora:{name}:{strength:.1f}>' if name else ''
 
                         name_input.on('blur', lambda _, s=_lora_sync: s())
                         name_input.on('update:model-value', lambda _, s=_lora_sync: s())
