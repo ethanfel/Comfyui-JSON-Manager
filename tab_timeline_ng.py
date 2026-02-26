@@ -8,6 +8,207 @@ from history_tree import HistoryTree
 from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 
+def _delete_nodes(htree, data, file_path, node_ids):
+    """Delete nodes with backup, branch cleanup, and head fallback."""
+    if 'history_tree_backup' not in data:
+        data['history_tree_backup'] = []
+    data['history_tree_backup'].append(copy.deepcopy(htree.to_dict()))
+    for nid in node_ids:
+        htree.nodes.pop(nid, None)
+    for b, tip in list(htree.branches.items()):
+        if tip in node_ids:
+            del htree.branches[b]
+    if htree.head_id in node_ids:
+        if htree.nodes:
+            htree.head_id = sorted(htree.nodes.values(),
+                                   key=lambda x: x['timestamp'])[-1]['id']
+        else:
+            htree.head_id = None
+    data[KEY_HISTORY_TREE] = htree.to_dict()
+    save_json(file_path, data)
+
+
+def _render_selection_picker(all_nodes, htree, state, refresh_fn):
+    """Multi-select picker for batch-deleting timeline nodes."""
+    all_ids = [n['id'] for n in all_nodes]
+
+    def fmt_option(nid):
+        n = htree.nodes[nid]
+        ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+        note = n.get('note', 'Step')
+        head = ' (HEAD)' if nid == htree.head_id else ''
+        return f'{note} - {ts} ({nid[:6]}){head}'
+
+    options = {nid: fmt_option(nid) for nid in all_ids}
+
+    def on_selection_change(e):
+        state.timeline_selected_nodes = set(e.value) if e.value else set()
+
+    ui.select(
+        options,
+        value=list(state.timeline_selected_nodes),
+        multiple=True,
+        label='Select nodes to delete:',
+        on_change=on_selection_change,
+    ).classes('w-full')
+
+    with ui.row():
+        def select_all():
+            state.timeline_selected_nodes = set(all_ids)
+            refresh_fn()
+        def deselect_all():
+            state.timeline_selected_nodes = set()
+            refresh_fn()
+        ui.button('Select All', on_click=select_all).props('flat dense')
+        ui.button('Deselect All', on_click=deselect_all).props('flat dense')
+
+
+def _render_graph_or_log(mode, all_nodes, htree, selected_nodes,
+                         selection_mode_on, toggle_select_fn, restore_fn):
+    """Render graph visualization or linear log view."""
+    if mode in ('Horizontal', 'Vertical'):
+        direction = 'LR' if mode == 'Horizontal' else 'TB'
+        try:
+            graph_dot = htree.generate_graph(direction=direction)
+            _render_graphviz(graph_dot)
+        except Exception as e:
+            ui.label(f'Graph Error: {e}').classes('text-negative')
+
+    elif mode == 'Linear Log':
+        ui.label('Chronological list of all snapshots.').classes('text-caption')
+        for n in all_nodes:
+            is_head = n['id'] == htree.head_id
+            is_selected = n['id'] in selected_nodes
+
+            card_style = ''
+            if is_selected:
+                card_style = 'background: #3d1f1f !important;'
+            elif is_head:
+                card_style = 'background: #1a2332 !important;'
+            with ui.card().classes('w-full q-mb-sm').style(card_style):
+                with ui.row().classes('w-full items-center'):
+                    if selection_mode_on:
+                        ui.checkbox(
+                            '',
+                            value=is_selected,
+                            on_change=lambda e, nid=n['id']: toggle_select_fn(
+                                nid, e.value),
+                        )
+
+                    icon = 'location_on' if is_head else 'circle'
+                    ui.icon(icon).classes(
+                        'text-primary' if is_head else 'text-grey')
+
+                    with ui.column().classes('col'):
+                        note = n.get('note', 'Step')
+                        ts = time.strftime('%b %d %H:%M',
+                                           time.localtime(n['timestamp']))
+                        label = f'{note} (Current)' if is_head else note
+                        ui.label(label).classes('text-bold')
+                        ui.label(
+                            f'ID: {n["id"][:6]} - {ts}').classes('text-caption')
+
+                    if not is_head and not selection_mode_on:
+                        ui.button(
+                            'Restore',
+                            icon='restore',
+                            on_click=lambda node=n: restore_fn(node),
+                        ).props('flat dense color=primary')
+
+
+def _render_batch_delete(htree, data, file_path, state, refresh_fn):
+    """Render batch delete controls for selected timeline nodes."""
+    valid = state.timeline_selected_nodes & set(htree.nodes.keys())
+    state.timeline_selected_nodes = valid
+    count = len(valid)
+    if count == 0:
+        return
+
+    ui.label(
+        f'{count} node{"s" if count != 1 else ""} selected for deletion.'
+    ).classes('text-warning q-mt-md')
+
+    def do_batch_delete():
+        _delete_nodes(htree, data, file_path, valid)
+        state.timeline_selected_nodes = set()
+        ui.notify(
+            f'Deleted {count} node{"s" if count != 1 else ""}!',
+            type='positive')
+        refresh_fn()
+
+    ui.button(
+        f'Delete {count} Node{"s" if count != 1 else ""}',
+        icon='delete',
+        on_click=do_batch_delete,
+    ).props('color=negative')
+
+
+def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn):
+    """Render node selector with restore, rename, delete, and preview."""
+    ui.label('Manage Version').classes('text-subtitle1 q-mt-md')
+
+    def fmt_node(n):
+        ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
+        return f'{n.get("note", "Step")} - {ts} ({n["id"][:6]})'
+
+    node_options = {n['id']: fmt_node(n) for n in all_nodes}
+    current_id = htree.head_id if htree.head_id in node_options else (
+        all_nodes[0]['id'] if all_nodes else None)
+
+    selected_node_id = ui.select(
+        node_options,
+        value=current_id,
+        label='Select Version to Manage:',
+    ).classes('w-full')
+
+    with ui.row().classes('w-full items-end q-gutter-md'):
+        def restore_selected():
+            nid = selected_node_id.value
+            if nid and nid in htree.nodes:
+                restore_fn(htree.nodes[nid])
+
+        ui.button('Restore Version', icon='restore',
+                  on_click=restore_selected).props('color=primary')
+
+    # Rename
+    with ui.row().classes('w-full items-end q-gutter-md'):
+        rename_input = ui.input('Rename Label').classes('col')
+
+        def rename_node():
+            nid = selected_node_id.value
+            if nid and nid in htree.nodes and rename_input.value:
+                htree.nodes[nid]['note'] = rename_input.value
+                data[KEY_HISTORY_TREE] = htree.to_dict()
+                save_json(file_path, data)
+                ui.notify('Label updated', type='positive')
+                refresh_fn()
+
+        ui.button('Update Label', on_click=rename_node).props('flat')
+
+    # Danger zone
+    with ui.expansion('Danger Zone (Delete)', icon='warning').classes('w-full q-mt-md'):
+        ui.label('Deleting a node cannot be undone.').classes('text-warning')
+
+        def delete_selected():
+            nid = selected_node_id.value
+            if nid and nid in htree.nodes:
+                _delete_nodes(htree, data, file_path, {nid})
+                ui.notify('Node Deleted', type='positive')
+                refresh_fn()
+
+        ui.button('Delete This Node', icon='delete',
+                  on_click=delete_selected).props('color=negative')
+
+    # Data preview
+    ui.separator()
+    with ui.expansion('Data Preview', icon='preview').classes('w-full'):
+        @ui.refreshable
+        def render_preview():
+            _render_data_preview(selected_node_id, htree)
+        selected_node_id.on_value_change(lambda _: render_preview.refresh())
+        render_preview()
+
+
 def render_timeline_tab(state: AppState):
     data = state.data_cache
     file_path = state.file_path
@@ -35,218 +236,24 @@ def render_timeline_tab(state: AppState):
 
     @ui.refreshable
     def render_timeline():
-        # Rebuild node list inside refreshable so it's current after deletes
         all_nodes = sorted(htree.nodes.values(), key=lambda x: x['timestamp'], reverse=True)
         selected_nodes = state.timeline_selected_nodes if selection_mode.value else set()
 
-        # --- Selection picker ---
         if selection_mode.value:
-            all_ids = [n['id'] for n in all_nodes]
+            _render_selection_picker(all_nodes, htree, state, render_timeline.refresh)
 
-            def fmt_option(nid):
-                n = htree.nodes[nid]
-                ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
-                note = n.get('note', 'Step')
-                head = ' (HEAD)' if nid == htree.head_id else ''
-                return f'{note} - {ts} ({nid[:6]}){head}'
+        _render_graph_or_log(
+            view_mode.value, all_nodes, htree, selected_nodes,
+            selection_mode.value, _toggle_select, _restore_and_refresh)
 
-            options = {nid: fmt_option(nid) for nid in all_ids}
-
-            def on_selection_change(e):
-                state.timeline_selected_nodes = set(e.value) if e.value else set()
-
-            ui.select(
-                options,
-                value=list(state.timeline_selected_nodes),
-                multiple=True,
-                label='Select nodes to delete:',
-                on_change=on_selection_change,
-            ).classes('w-full')
-
-            with ui.row():
-                def select_all():
-                    state.timeline_selected_nodes = set(all_ids)
-                    render_timeline.refresh()
-                def deselect_all():
-                    state.timeline_selected_nodes = set()
-                    render_timeline.refresh()
-                ui.button('Select All', on_click=select_all).props('flat dense')
-                ui.button('Deselect All', on_click=deselect_all).props('flat dense')
-
-        # --- Graph views ---
-        mode = view_mode.value
-        if mode in ('Horizontal', 'Vertical'):
-            direction = 'LR' if mode == 'Horizontal' else 'TB'
-            try:
-                graph_dot = htree.generate_graph(direction=direction)
-                _render_graphviz(graph_dot)
-            except Exception as e:
-                ui.label(f'Graph Error: {e}').classes('text-negative')
-
-        # --- Linear Log view ---
-        elif mode == 'Linear Log':
-            ui.label('Chronological list of all snapshots.').classes('text-caption')
-            for n in all_nodes:
-                is_head = n['id'] == htree.head_id
-                is_selected = n['id'] in selected_nodes
-
-                card_style = ''
-                if is_selected:
-                    card_style = 'background: #3d1f1f !important;'
-                elif is_head:
-                    card_style = 'background: #1a2332 !important;'
-                with ui.card().classes('w-full q-mb-sm').style(card_style):
-                    with ui.row().classes('w-full items-center'):
-                        if selection_mode.value:
-                            ui.checkbox(
-                                '',
-                                value=is_selected,
-                                on_change=lambda e, nid=n['id']: _toggle_select(
-                                    nid, e.value),
-                            )
-
-                        icon = 'location_on' if is_head else 'circle'
-                        ui.icon(icon).classes(
-                            'text-primary' if is_head else 'text-grey')
-
-                        with ui.column().classes('col'):
-                            note = n.get('note', 'Step')
-                            ts = time.strftime('%b %d %H:%M',
-                                               time.localtime(n['timestamp']))
-                            label = f'{note} (Current)' if is_head else note
-                            ui.label(label).classes('text-bold')
-                            ui.label(
-                                f'ID: {n["id"][:6]} - {ts}').classes('text-caption')
-
-                        if not is_head and not selection_mode.value:
-                            ui.button(
-                                'Restore',
-                                icon='restore',
-                                on_click=lambda node=n: _restore_and_refresh(node),
-                            ).props('flat dense color=primary')
-
-        # --- Batch Delete ---
         if selection_mode.value and state.timeline_selected_nodes:
-            valid = state.timeline_selected_nodes & set(htree.nodes.keys())
-            state.timeline_selected_nodes = valid
-            count = len(valid)
-            if count > 0:
-                ui.label(
-                    f'{count} node{"s" if count != 1 else ""} selected for deletion.'
-                ).classes('text-warning q-mt-md')
-
-                def do_batch_delete():
-                    if 'history_tree_backup' not in data:
-                        data['history_tree_backup'] = []
-                    data['history_tree_backup'].append(copy.deepcopy(htree.to_dict()))
-                    for nid in valid:
-                        if nid in htree.nodes:
-                            del htree.nodes[nid]
-                    for b, tip in list(htree.branches.items()):
-                        if tip in valid:
-                            del htree.branches[b]
-                    if htree.head_id in valid:
-                        if htree.nodes:
-                            fallback = sorted(htree.nodes.values(),
-                                              key=lambda x: x['timestamp'])[-1]
-                            htree.head_id = fallback['id']
-                        else:
-                            htree.head_id = None
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
-                    save_json(file_path, data)
-                    state.timeline_selected_nodes = set()
-                    ui.notify(
-                        f'Deleted {count} node{"s" if count != 1 else ""}!',
-                        type='positive')
-                    render_timeline.refresh()
-
-                ui.button(
-                    f'Delete {count} Node{"s" if count != 1 else ""}',
-                    icon='delete',
-                    on_click=do_batch_delete,
-                ).props('color=negative')
+            _render_batch_delete(htree, data, file_path, state, render_timeline.refresh)
 
         ui.separator()
 
-        # --- Node selector + actions ---
-        ui.label('Manage Version').classes('text-subtitle1 q-mt-md')
-
-        def fmt_node(n):
-            ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
-            return f'{n.get("note", "Step")} - {ts} ({n["id"][:6]})'
-
-        node_options = {n['id']: fmt_node(n) for n in all_nodes}
-        current_id = htree.head_id if htree.head_id in node_options else (
-            all_nodes[0]['id'] if all_nodes else None)
-
-        selected_node_id = ui.select(
-            node_options,
-            value=current_id,
-            label='Select Version to Manage:',
-        ).classes('w-full')
-
-        with ui.row().classes('w-full items-end q-gutter-md'):
-            def restore_selected():
-                nid = selected_node_id.value
-                if nid and nid in htree.nodes:
-                    _restore_and_refresh(htree.nodes[nid])
-
-            ui.button('Restore Version', icon='restore',
-                      on_click=restore_selected).props('color=primary')
-
-        # Rename
-        with ui.row().classes('w-full items-end q-gutter-md'):
-            rename_input = ui.input('Rename Label').classes('col')
-
-            def rename_node():
-                nid = selected_node_id.value
-                if nid and nid in htree.nodes and rename_input.value:
-                    htree.nodes[nid]['note'] = rename_input.value
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
-                    save_json(file_path, data)
-                    ui.notify('Label updated', type='positive')
-                    render_timeline.refresh()
-
-            ui.button('Update Label', on_click=rename_node).props('flat')
-
-        # Danger zone
-        with ui.expansion('Danger Zone (Delete)', icon='warning').classes('w-full q-mt-md'):
-            ui.label('Deleting a node cannot be undone.').classes('text-warning')
-
-            def delete_selected():
-                nid = selected_node_id.value
-                if nid and nid in htree.nodes:
-                    if 'history_tree_backup' not in data:
-                        data['history_tree_backup'] = []
-                    data['history_tree_backup'].append(
-                        copy.deepcopy(htree.to_dict()))
-                    del htree.nodes[nid]
-                    for b, tip in list(htree.branches.items()):
-                        if tip == nid:
-                            del htree.branches[b]
-                    if htree.head_id == nid:
-                        if htree.nodes:
-                            fallback = sorted(htree.nodes.values(),
-                                              key=lambda x: x['timestamp'])[-1]
-                            htree.head_id = fallback['id']
-                        else:
-                            htree.head_id = None
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
-                    save_json(file_path, data)
-                    ui.notify('Node Deleted', type='positive')
-                    render_timeline.refresh()
-
-            ui.button('Delete This Node', icon='delete',
-                      on_click=delete_selected).props('color=negative')
-
-        # Data preview
-        ui.separator()
-        with ui.expansion('Data Preview', icon='preview').classes('w-full'):
-            @ui.refreshable
-            def render_preview():
-                _render_data_preview(selected_node_id, htree)
-            selected_node_id.on_value_change(lambda _: render_preview.refresh())
-            render_preview()
+        _render_node_manager(
+            all_nodes, htree, data, file_path,
+            _restore_and_refresh, render_timeline.refresh)
 
     def _toggle_select(nid, checked):
         if checked:

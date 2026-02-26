@@ -78,8 +78,8 @@ def render_comfy_monitor(state: AppState):
 
     # --- Auto-poll timer (every 300s) ---
     # Store live_checkbox references so the timer can update them
-    _live_checkboxes = state._live_checkboxes = getattr(state, '_live_checkboxes', {})
-    _live_refreshables = state._live_refreshables = getattr(state, '_live_refreshables', {})
+    _live_checkboxes = state._live_checkboxes
+    _live_refreshables = state._live_refreshables
 
     def poll_all():
         timeout_val = config.get('monitor_timeout', 0)

@@ -13,6 +13,7 @@ from history_tree import HistoryTree
 
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
 SUB_SEGMENT_MULTIPLIER = 1000
+FRAME_TO_SKIP_DEFAULT = DEFAULTS['frame_to_skip']
 
 VACE_MODES = [
     'End Extend', 'Pre Extend', 'Middle Extend', 'Edge Extend',
@@ -54,6 +55,15 @@ def next_sub_segment_number(batch_list, parent_seq_num):
             max_sub = max(max_sub, sub_index_of(sn))
     return parent_seq_num * SUB_SEGMENT_MULTIPLIER + max_sub + 1
 
+def max_main_seq_number(batch_list):
+    """Highest non-subsegment sequence number in the batch."""
+    return max(
+        (int(x.get(KEY_SEQUENCE_NUMBER, 0))
+         for x in batch_list if not is_subsegment(x.get(KEY_SEQUENCE_NUMBER, 0))),
+        default=0,
+    )
+
+
 def find_insert_position(batch_list, parent_index, parent_seq_num):
     parent_seq_num = int(parent_seq_num)
     pos = parent_index + 1
@@ -78,21 +88,21 @@ def dict_input(element_fn, label, seq, key, **kwargs):
     return el
 
 
-def dict_number(label, seq, key, **kwargs):
+def dict_number(label, seq, key, default=0, **kwargs):
     """Number input bound to seq[key] via blur."""
-    val = seq.get(key, 0)
+    val = seq.get(key, default)
     try:
         # Try float first to handle "1.5" strings, then check if it's a clean int
         fval = float(val)
         val = int(fval) if fval == int(fval) else fval
     except (ValueError, TypeError):
-        val = 0
+        val = default
     el = ui.number(label, value=val, **kwargs)
 
-    def _on_blur(e, k=key):
+    def _on_blur(e, k=key, d=default):
         v = e.sender.value
         if v is None:
-            v = 0
+            v = d
         elif isinstance(v, float) and v == int(v):
             v = int(v)
         seq[k] = v
@@ -183,12 +193,7 @@ def render_batch_processor(state: AppState):
     ui.label('Add New Sequence').classes('text-subtitle1 q-mt-md')
 
     def _add_sequence(new_item):
-        max_seq = 0
-        for s in batch_list:
-            sn = int(s.get(KEY_SEQUENCE_NUMBER, 0))
-            if not is_subsegment(sn):
-                max_seq = max(max_seq, sn)
-        new_item[KEY_SEQUENCE_NUMBER] = max_seq + 1
+        new_item[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
         for k in [KEY_PROMPT_HISTORY, KEY_HISTORY_TREE, 'note', 'loras']:
             new_item.pop(k, None)
         batch_list.append(new_item)
@@ -284,6 +289,13 @@ def render_batch_processor(state: AppState):
 def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                           src_cache, src_seq_select, standard_keys,
                           refresh_list):
+    def commit(message=None):
+        data[KEY_BATCH_DATA] = batch_list
+        save_json(file_path, data)
+        if message:
+            ui.notify(message, type='positive')
+        refresh_list.refresh()
+
     seq_num = seq.get(KEY_SEQUENCE_NUMBER, i + 1)
 
     if is_subsegment(seq_num):
@@ -307,46 +319,29 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 item.pop(KEY_PROMPT_HISTORY, None)
                 item.pop(KEY_HISTORY_TREE, None)
                 batch_list[idx] = item
-                data[KEY_BATCH_DATA] = batch_list
-                save_json(file_path, data)
-                ui.notify('Copied!', type='positive')
-                refresh_list.refresh()
+                commit('Copied!')
 
             ui.button('Copy Src', icon='file_download', on_click=copy_source).props('dense')
 
             # Clone Next
             def clone_next(idx=i, sn=seq_num, s=seq):
                 new_seq = copy.deepcopy(s)
-                max_sn = max(
-                    (int(x.get(KEY_SEQUENCE_NUMBER, 0))
-                     for x in batch_list if not is_subsegment(x.get(KEY_SEQUENCE_NUMBER, 0))),
-                    default=0)
-                new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
+                new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 if not is_subsegment(sn):
                     pos = find_insert_position(batch_list, idx, int(sn))
                 else:
                     pos = idx + 1
                 batch_list.insert(pos, new_seq)
-                data[KEY_BATCH_DATA] = batch_list
-                save_json(file_path, data)
-                ui.notify('Cloned to Next!', type='positive')
-                refresh_list.refresh()
+                commit('Cloned to Next!')
 
             ui.button('Clone Next', icon='content_copy', on_click=clone_next).props('dense')
 
             # Clone End
             def clone_end(s=seq):
                 new_seq = copy.deepcopy(s)
-                max_sn = max(
-                    (int(x.get(KEY_SEQUENCE_NUMBER, 0))
-                     for x in batch_list if not is_subsegment(x.get(KEY_SEQUENCE_NUMBER, 0))),
-                    default=0)
-                new_seq[KEY_SEQUENCE_NUMBER] = max_sn + 1
+                new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 batch_list.append(new_seq)
-                data[KEY_BATCH_DATA] = batch_list
-                save_json(file_path, data)
-                ui.notify('Cloned to End!', type='positive')
-                refresh_list.refresh()
+                commit('Cloned to End!')
 
             ui.button('Clone End', icon='vertical_align_bottom', on_click=clone_end).props('dense')
 
@@ -363,11 +358,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 new_seq[KEY_SEQUENCE_NUMBER] = next_sub_segment_number(batch_list, p_seq)
                 pos = find_insert_position(batch_list, p_idx, p_seq)
                 batch_list.insert(pos, new_seq)
-                data[KEY_BATCH_DATA] = batch_list
-                save_json(file_path, data)
-                ui.notify(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!',
-                          type='positive')
-                refresh_list.refresh()
+                commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
 
             ui.button('Clone Sub', icon='link', on_click=clone_sub).props('dense')
 
@@ -389,9 +380,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
             # Delete
             def delete(idx=i):
                 batch_list.pop(idx)
-                data[KEY_BATCH_DATA] = batch_list
-                save_json(file_path, data)
-                refresh_list.refresh()
+                commit()
 
             ui.button(icon='delete', on_click=delete).props('dense color=negative')
 
@@ -430,11 +419,8 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                     ui.button(icon='casino', on_click=randomize_seed).props('flat')
 
                 # CFG
-                cfg_val = float(seq.get('cfg', DEFAULTS['cfg']))
-                cfg_input = ui.number('CFG', value=cfg_val, step=0.5,
-                                      format='%.1f').props('outlined').classes('w-full')
-                cfg_input.on('blur', lambda e: seq.__setitem__(
-                    'cfg', e.sender.value if e.sender.value is not None else DEFAULTS['cfg']))
+                dict_number('CFG', seq, 'cfg', default=DEFAULTS['cfg'],
+                            step=0.5, format='%.1f').props('outlined').classes('w-full')
 
                 dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
                 dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
@@ -496,14 +482,11 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
             for k in custom_keys:
                 with ui.row().classes('w-full items-center'):
                     ui.input('Key', value=k).props('readonly outlined dense').classes('w-32')
-                    val_input = ui.input('Value', value=str(seq[k])).props(
-                        'outlined dense').classes('col')
-                    val_input.on('blur', lambda e, key=k: seq.__setitem__(key, e.sender.value))
+                    dict_input(ui.input, 'Value', seq, k).props('outlined dense').classes('col')
 
                     def del_custom(key=k):
                         del seq[key]
-                        save_json(file_path, data)
-                        refresh_list.refresh()
+                        commit()
 
                     ui.button(icon='delete', on_click=del_custom).props('flat dense color=negative')
 
@@ -516,10 +499,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 v = new_v_input.value
                 if k and k not in seq:
                     seq[k] = v
-                    save_json(file_path, data)
                     new_k_input.set_value('')
                     new_v_input.set_value('')
-                    refresh_list.refresh()
+                    commit()
 
             ui.button('Add', on_click=add_param).props('flat')
 
@@ -535,7 +517,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
             'outlined')
 
         # Capture original at render time; blur updates seq before click fires
-        _original_fts = int(seq.get('frame_to_skip', 81))
+        _original_fts = int(seq.get('frame_to_skip', FRAME_TO_SKIP_DEFAULT))
 
         def shift_fts(idx=i, orig=_original_fts):
             new_fts = int(fts_input.value) if fts_input.value is not None else orig
@@ -546,7 +528,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
             shifted = 0
             for j in range(idx + 1, len(batch_list)):
                 batch_list[j]['frame_to_skip'] = int(
-                    batch_list[j].get('frame_to_skip', 81)) + delta
+                    batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT)) + delta
                 shifted += 1
             data[KEY_BATCH_DATA] = batch_list
             save_json(file_path, data)
@@ -560,10 +542,8 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
     # VACE Schedule
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
     with ui.row().classes('w-full items-center'):
-        vs_input = ui.number('VACE Schedule', value=sched_val, min=0,
-                             max=len(VACE_MODES) - 1).classes('col').props('outlined')
-        vs_input.on('blur', lambda e: seq.__setitem__(
-            'vace schedule', int(e.sender.value) if e.sender.value is not None else 0))
+        vs_input = dict_number('VACE Schedule', seq, 'vace schedule',
+                               min=0, max=len(VACE_MODES) - 1).classes('col').props('outlined')
         mode_label = ui.label(VACE_MODES[sched_val]).classes('text-caption')
 
         def update_mode_label(e):
