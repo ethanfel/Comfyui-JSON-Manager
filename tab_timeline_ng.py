@@ -427,62 +427,58 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         src = graphviz.Source(dot_source)
         svg = src.pipe(format='svg').decode('utf-8')
 
-        # (a) Keep SVG at natural size, let scroll container handle overflow
-        html_el = ui.html(
-            f'<div style="overflow: auto; max-height: 500px; width: 100%;">'
-            f'{svg}</div>'
-        )
-
-        # (b) + (c) JS click handlers + visual feedback
-        # Use NiceGUI's element ID (getElement) for reliable DOM lookup
         sel_escaped = selected_node_id.replace("'", "\\'") if selected_node_id else ''
-        ui.run_javascript(f'''
-        requestAnimationFrame(() => {{
-            const wrapper = getElement({html_el.id});
-            if (!wrapper) return;
-            const container = wrapper.querySelector('div');
+
+        # Embed CSS + JS inline so there are no timing/lookup issues
+        inline_script = '''
+        <style>
+            .timeline-graph g.node { cursor: pointer; }
+            .timeline-graph g.node:hover { filter: brightness(1.3); }
+            .timeline-graph g.node.selected ellipse,
+            .timeline-graph g.node.selected polygon[stroke]:not([stroke="none"]) {
+                stroke: #f59e0b !important;
+                stroke-width: 3px !important;
+            }
+        </style>
+        <script>
+        (function() {
+            // Find the container we just rendered into
+            var scripts = document.querySelectorAll('script');
+            var thisScript = scripts[scripts.length - 1];
+            var container = thisScript.closest('.timeline-graph');
             if (!container) return;
 
-            // CSS for interactivity
-            const style = document.createElement('style');
-            const uid = 'graph-' + {html_el.id};
-            container.id = uid;
-            style.textContent = `
-                #${{uid}} g.node {{ cursor: pointer; }}
-                #${{uid}} g.node:hover {{ filter: brightness(1.3); }}
-                #${{uid}} g.node.selected ellipse,
-                #${{uid}} g.node.selected polygon[stroke]:not([stroke="none"]) {{
-                    stroke: #f59e0b !important;
-                    stroke-width: 3px !important;
-                }}
-            `;
-            container.appendChild(style);
-
-            // Attach click handlers
-            container.querySelectorAll('g.node').forEach(function(g) {{
-                g.addEventListener('click', function() {{
-                    const title = g.querySelector('title');
-                    if (title) {{
+            container.querySelectorAll('g.node').forEach(function(g) {
+                g.addEventListener('click', function() {
+                    var title = g.querySelector('title');
+                    if (title) {
                         window.graphSelectedNode = title.textContent.trim();
                         container.querySelectorAll('g.node.selected').forEach(
-                            el => el.classList.remove('selected'));
+                            function(el) { el.classList.remove('selected'); });
                         g.classList.add('selected');
-                    }}
-                }});
-            }});
+                    }
+                });
+            });
 
-            // Re-apply selected class if we already have a selection
-            const selId = '{sel_escaped}';
-            if (selId) {{
-                container.querySelectorAll('g.node').forEach(function(g) {{
-                    const title = g.querySelector('title');
-                    if (title && title.textContent.trim() === selId) {{
+            // Re-apply selected class
+            var selId = '%s';
+            if (selId) {
+                container.querySelectorAll('g.node').forEach(function(g) {
+                    var title = g.querySelector('title');
+                    if (title && title.textContent.trim() === selId) {
                         g.classList.add('selected');
-                    }}
-                }});
-            }}
-        }});
-        ''')
+                    }
+                });
+            }
+        })();
+        </script>
+        ''' % sel_escaped
+
+        ui.html(
+            f'<div class="timeline-graph"'
+            f' style="overflow: auto; max-height: 500px; width: 100%;">'
+            f'{svg}{inline_script}</div>'
+        )
     except ImportError:
         ui.label('Install graphviz Python package for graph rendering.').classes('text-warning')
         ui.code(dot_source).classes('w-full')
