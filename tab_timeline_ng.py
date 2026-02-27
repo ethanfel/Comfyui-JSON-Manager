@@ -440,20 +440,18 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
             }
         </style>'''
 
-        html_el = ui.html(
+        ui.html(
             f'{css}<div class="timeline-graph"'
             f' style="overflow: auto; max-height: 500px; width: 100%;">'
             f'{svg}</div>'
         )
 
-        # Use NiceGUI element id → DOM id "c{id}" with retry for Vue render
-        nicegui_id = f'c{html_el.id}'
+        # Find container by class with retry for Vue async render
         ui.run_javascript(f'''
         (function attempt(tries) {{
-            var wrapper = document.getElementById('{nicegui_id}');
-            var container = wrapper && wrapper.querySelector('.timeline-graph');
-            if (!container) {{
-                if (tries < 10) setTimeout(function() {{ attempt(tries + 1); }}, 50);
+            var container = document.querySelector('.timeline-graph');
+            if (!container || !container.querySelector('g.node')) {{
+                if (tries < 20) setTimeout(function() {{ attempt(tries + 1); }}, 100);
                 return;
             }}
             container.querySelectorAll('g.node').forEach(function(g) {{
