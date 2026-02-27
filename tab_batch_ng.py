@@ -387,7 +387,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
         ui.separator()
 
-        # --- Prompts + Settings (2-column like Streamlit) ---
+        # --- Prompts + Settings (2-column) ---
         with ui.splitter(value=66).classes('w-full') as splitter:
             with splitter.before:
                 dict_textarea('General Prompt', seq, 'general_prompt').classes(

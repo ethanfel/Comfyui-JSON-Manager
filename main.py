@@ -18,7 +18,6 @@ from tab_comfy_ng import render_comfy_monitor
 
 @ui.page('/')
 def index():
-    # -- Streamlit dark theme --
     ui.dark_mode(True)
     ui.colors(primary='#F59E0B')
     ui.add_head_html(
