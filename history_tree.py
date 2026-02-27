@@ -104,7 +104,7 @@ class HistoryTree:
             'digraph History {',
             f'  rankdir={direction};',
             '  bgcolor="white";',
-            '  splines=ortho;',
+            '  splines=polyline;',
             f'  nodesep={nodesep};',
             f'  ranksep={ranksep};',
             '  node [shape=plain, fontname="Arial"];',
