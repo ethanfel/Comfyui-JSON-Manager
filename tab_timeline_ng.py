@@ -428,28 +428,30 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         svg = src.pipe(format='svg').decode('utf-8')
 
         # (a) Keep SVG at natural size, let scroll container handle overflow
-        container_id = f'graph-{id(dot_source)}'
-        html_content = (
-            f'<div id="{container_id}" '
-            f'style="overflow: auto; max-height: 500px; width: 100%;">'
+        html_el = ui.html(
+            f'<div style="overflow: auto; max-height: 500px; width: 100%;">'
             f'{svg}</div>'
         )
-        ui.html(html_content)
 
         # (b) + (c) JS click handlers + visual feedback
+        # Use NiceGUI's element ID (getElement) for reliable DOM lookup
         sel_escaped = selected_node_id.replace("'", "\\'") if selected_node_id else ''
         ui.run_javascript(f'''
-        (function() {{
-            const container = document.getElementById('{container_id}');
+        requestAnimationFrame(() => {{
+            const wrapper = getElement({html_el.id});
+            if (!wrapper) return;
+            const container = wrapper.querySelector('div');
             if (!container) return;
 
             // CSS for interactivity
             const style = document.createElement('style');
+            const uid = 'graph-' + {html_el.id};
+            container.id = uid;
             style.textContent = `
-                #{container_id} g.node {{ cursor: pointer; }}
-                #{container_id} g.node:hover {{ filter: brightness(1.3); }}
-                #{container_id} g.node.selected ellipse,
-                #{container_id} g.node.selected polygon[stroke]:not([stroke="none"]) {{
+                #${{uid}} g.node {{ cursor: pointer; }}
+                #${{uid}} g.node:hover {{ filter: brightness(1.3); }}
+                #${{uid}} g.node.selected ellipse,
+                #${{uid}} g.node.selected polygon[stroke]:not([stroke="none"]) {{
                     stroke: #f59e0b !important;
                     stroke-width: 3px !important;
                 }}
@@ -462,7 +464,6 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
                     const title = g.querySelector('title');
                     if (title) {{
                         window.graphSelectedNode = title.textContent.trim();
-                        // Visual: remove old selection, add new
                         container.querySelectorAll('g.node.selected').forEach(
                             el => el.classList.remove('selected'));
                         g.classList.add('selected');
@@ -480,7 +481,7 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
                     }}
                 }});
             }}
-        }})();
+        }});
         ''')
     except ImportError:
         ui.label('Install graphviz Python package for graph rendering.').classes('text-warning')
