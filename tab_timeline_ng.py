@@ -1,5 +1,4 @@
 import copy
-import re
 import time
 
 from nicegui import ui
@@ -428,11 +427,7 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         src = graphviz.Source(dot_source)
         svg = src.pipe(format='svg').decode('utf-8')
 
-        # (a) Responsive SVG sizing — fill container width, remove fixed height
-        #     so the SVG scales proportionally via its viewBox attribute
-        svg = re.sub(r'\bwidth="[^"]*"', 'width="100%"', svg, count=1)
-        svg = re.sub(r'\s*height="[^"]*"', '', svg, count=1)
-
+        # (a) Keep SVG at natural size, let scroll container handle overflow
         container_id = f'graph-{id(dot_source)}'
         html_content = (
             f'<div id="{container_id}" '
