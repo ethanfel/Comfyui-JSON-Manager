@@ -429,9 +429,8 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
 
         sel_escaped = selected_node_id.replace("'", "\\'") if selected_node_id else ''
 
-        # Embed CSS + JS inline so there are no timing/lookup issues
-        inline_script = '''
-        <style>
+        # CSS inline (allowed), JS via run_javascript (script tags blocked)
+        css = '''<style>
             .timeline-graph g.node { cursor: pointer; }
             .timeline-graph g.node:hover { filter: brightness(1.3); }
             .timeline-graph g.node.selected ellipse,
@@ -439,46 +438,46 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
                 stroke: #f59e0b !important;
                 stroke-width: 3px !important;
             }
-        </style>
-        <script>
-        (function() {
-            // Find the container we just rendered into
-            var scripts = document.querySelectorAll('script');
-            var thisScript = scripts[scripts.length - 1];
-            var container = thisScript.closest('.timeline-graph');
-            if (!container) return;
+        </style>'''
 
-            container.querySelectorAll('g.node').forEach(function(g) {
-                g.addEventListener('click', function() {
+        html_el = ui.html(
+            f'{css}<div class="timeline-graph"'
+            f' style="overflow: auto; max-height: 500px; width: 100%;">'
+            f'{svg}</div>'
+        )
+
+        # Use NiceGUI element id → DOM id "c{id}" with retry for Vue render
+        nicegui_id = f'c{html_el.id}'
+        ui.run_javascript(f'''
+        (function attempt(tries) {{
+            var wrapper = document.getElementById('{nicegui_id}');
+            var container = wrapper && wrapper.querySelector('.timeline-graph');
+            if (!container) {{
+                if (tries < 10) setTimeout(function() {{ attempt(tries + 1); }}, 50);
+                return;
+            }}
+            container.querySelectorAll('g.node').forEach(function(g) {{
+                g.addEventListener('click', function() {{
                     var title = g.querySelector('title');
-                    if (title) {
+                    if (title) {{
                         window.graphSelectedNode = title.textContent.trim();
                         container.querySelectorAll('g.node.selected').forEach(
-                            function(el) { el.classList.remove('selected'); });
+                            function(el) {{ el.classList.remove('selected'); }});
                         g.classList.add('selected');
-                    }
-                });
-            });
-
-            // Re-apply selected class
-            var selId = '%s';
-            if (selId) {
-                container.querySelectorAll('g.node').forEach(function(g) {
+                    }}
+                }});
+            }});
+            var selId = '{sel_escaped}';
+            if (selId) {{
+                container.querySelectorAll('g.node').forEach(function(g) {{
                     var title = g.querySelector('title');
-                    if (title && title.textContent.trim() === selId) {
+                    if (title && title.textContent.trim() === selId) {{
                         g.classList.add('selected');
-                    }
-                });
-            }
-        })();
-        </script>
-        ''' % sel_escaped
-
-        ui.html(
-            f'<div class="timeline-graph"'
-            f' style="overflow: auto; max-height: 500px; width: 100%;">'
-            f'{svg}{inline_script}</div>'
-        )
+                    }}
+                }});
+            }}
+        }})(0);
+        ''')
     except ImportError:
         ui.label('Install graphviz Python package for graph rendering.').classes('text-warning')
         ui.code(dot_source).classes('w-full')
