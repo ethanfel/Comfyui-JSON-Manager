@@ -145,70 +145,178 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
     ).props('color=negative')
 
 
+def _walk_branch_nodes(htree, tip_id):
+    """Walk parent pointers from tip, returning nodes newest-first."""
+    nodes = []
+    current = tip_id
+    while current and current in htree.nodes:
+        nodes.append(htree.nodes[current])
+        current = htree.nodes[current].get('parent')
+    return nodes
+
+
+def _find_active_branch(htree):
+    """Return branch name whose tip == head_id, or None if detached."""
+    if not htree.head_id:
+        return None
+    for b_name, tip_id in htree.branches.items():
+        if tip_id == htree.head_id:
+            return b_name
+    return None
+
+
 def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn):
-    """Render node selector with restore, rename, delete, and preview."""
+    """Render branch-grouped node manager with restore, rename, delete, and preview."""
     ui.label('Manage Version').classes('section-header')
 
-    def fmt_node(n):
-        ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
-        return f'{n.get("note", "Step")} - {ts} ({n["id"][:6]})'
+    # --- State that survives @ui.refreshable ---
+    active_branch = _find_active_branch(htree)
 
-    node_options = {n['id']: fmt_node(n) for n in all_nodes}
-    current_id = htree.head_id if htree.head_id in node_options else (
-        all_nodes[0]['id'] if all_nodes else None)
+    # Default branch: active branch, or branch whose ancestry contains HEAD
+    default_branch = active_branch
+    if not default_branch and htree.head_id:
+        for b_name, tip_id in htree.branches.items():
+            for n in _walk_branch_nodes(htree, tip_id):
+                if n['id'] == htree.head_id:
+                    default_branch = b_name
+                    break
+            if default_branch:
+                break
+    if not default_branch and htree.branches:
+        default_branch = next(iter(htree.branches))
 
-    selected_node_id = ui.select(
-        node_options,
-        value=current_id,
-        label='Select Version to Manage:',
+    selected = {'node_id': htree.head_id, 'branch': default_branch}
+
+    # --- (a) Branch selector ---
+    def fmt_branch(b_name):
+        count = len(_walk_branch_nodes(htree, htree.branches.get(b_name)))
+        suffix = ' (active)' if b_name == active_branch else ''
+        return f'{b_name} ({count} nodes){suffix}'
+
+    branch_options = {b: fmt_branch(b) for b in htree.branches}
+
+    def on_branch_change(e):
+        selected['branch'] = e.value
+        tip = htree.branches.get(e.value)
+        if tip:
+            selected['node_id'] = tip
+        render_branch_nodes.refresh()
+
+    ui.select(
+        branch_options,
+        value=selected['branch'],
+        label='Branch:',
+        on_change=on_branch_change,
     ).classes('w-full')
 
-    with ui.row().classes('w-full items-end q-gutter-md'):
-        def restore_selected():
-            nid = selected_node_id.value
-            if nid and nid in htree.nodes:
-                restore_fn(htree.nodes[nid])
+    # --- (b) Node list + (c) Actions panel ---
+    @ui.refreshable
+    def render_branch_nodes():
+        branch_name = selected['branch']
+        tip_id = htree.branches.get(branch_name)
+        nodes = _walk_branch_nodes(htree, tip_id) if tip_id else []
 
-        ui.button('Restore Version', icon='restore',
-                  on_click=restore_selected).props('color=primary')
+        if not nodes:
+            ui.label('No nodes on this branch.').classes('text-caption q-pa-sm')
+            return
 
-    # Rename
-    with ui.row().classes('w-full items-end q-gutter-md'):
-        rename_input = ui.input('Rename Label').classes('col')
+        with ui.scroll_area().classes('w-full').style('max-height: 350px'):
+            for n in nodes:
+                nid = n['id']
+                is_head = nid == htree.head_id
+                is_tip = nid == tip_id
+                is_selected = nid == selected['node_id']
 
-        def rename_node():
-            nid = selected_node_id.value
-            if nid and nid in htree.nodes and rename_input.value:
-                htree.nodes[nid]['note'] = rename_input.value
-                data[KEY_HISTORY_TREE] = htree.to_dict()
-                save_json(file_path, data)
-                ui.notify('Label updated', type='positive')
-                refresh_fn()
+                card_style = ''
+                if is_selected:
+                    card_style = 'border-left: 3px solid var(--primary);'
+                elif is_head:
+                    card_style = 'border-left: 3px solid var(--accent);'
 
-        ui.button('Update Label', on_click=rename_node).props('flat')
+                with ui.card().classes('w-full q-mb-xs q-pa-xs').style(card_style):
+                    with ui.row().classes('w-full items-center no-wrap'):
+                        icon = 'location_on' if is_head else 'circle'
+                        icon_size = 'sm' if is_head else 'xs'
+                        ui.icon(icon, size=icon_size).classes(
+                            'text-primary' if is_head else 'text-grey')
 
-    # Danger zone
-    with ui.expansion('Danger Zone (Delete)', icon='warning').classes('w-full q-mt-md').style('border-left: 3px solid var(--negative)'):
-        ui.label('Deleting a node cannot be undone.').classes('text-warning')
+                        with ui.column().classes('col q-ml-xs').style('min-width: 0'):
+                            note = n.get('note', 'Step')
+                            ts = time.strftime('%b %d %H:%M',
+                                               time.localtime(n['timestamp']))
+                            label_text = note
+                            lbl = ui.label(label_text).classes('text-body2 ellipsis')
+                            if is_head:
+                                lbl.classes('text-bold')
+                            ui.label(f'{ts} \u2022 {nid[:6]}').classes(
+                                'text-caption text-grey')
 
-        def delete_selected():
-            nid = selected_node_id.value
-            if nid and nid in htree.nodes:
-                _delete_nodes(htree, data, file_path, {nid})
-                ui.notify('Node Deleted', type='positive')
-                refresh_fn()
+                        if is_head:
+                            ui.badge('HEAD', color='amber').props('dense')
+                        if is_tip and not is_head:
+                            ui.badge('tip', color='green', outline=True).props('dense')
 
-        ui.button('Delete This Node', icon='delete',
-                  on_click=delete_selected).props('color=negative')
+                        def select_node(node_id=nid):
+                            selected['node_id'] = node_id
+                            render_branch_nodes.refresh()
 
-    # Data preview
-    ui.separator()
-    with ui.expansion('Data Preview', icon='preview').classes('w-full'):
-        @ui.refreshable
-        def render_preview():
-            _render_data_preview(selected_node_id, htree)
-        selected_node_id.on_value_change(lambda _: render_preview.refresh())
-        render_preview()
+                        ui.button(icon='check_circle', on_click=select_node).props(
+                            'flat dense round size=sm'
+                        ).tooltip('Select this node')
+
+        # --- (c) Actions panel ---
+        sel_id = selected['node_id']
+        if not sel_id or sel_id not in htree.nodes:
+            return
+
+        sel_node = htree.nodes[sel_id]
+        sel_note = sel_node.get('note', 'Step')
+        is_head = sel_id == htree.head_id
+
+        ui.separator().classes('q-my-sm')
+        ui.label(f'Selected: {sel_note} ({sel_id[:6]})').classes(
+            'text-caption text-bold')
+
+        with ui.row().classes('w-full items-end q-gutter-sm'):
+            if not is_head:
+                def restore_selected():
+                    if sel_id in htree.nodes:
+                        restore_fn(htree.nodes[sel_id])
+                ui.button('Restore', icon='restore',
+                          on_click=restore_selected).props('color=primary dense')
+
+            # Rename
+            rename_input = ui.input('Rename Label').classes('col').props('dense')
+
+            def rename_node():
+                if sel_id in htree.nodes and rename_input.value:
+                    htree.nodes[sel_id]['note'] = rename_input.value
+                    data[KEY_HISTORY_TREE] = htree.to_dict()
+                    save_json(file_path, data)
+                    ui.notify('Label updated', type='positive')
+                    refresh_fn()
+
+            ui.button('Update Label', on_click=rename_node).props('flat dense')
+
+        # Danger zone
+        with ui.expansion('Danger Zone', icon='warning').classes(
+                'w-full q-mt-sm').style('border-left: 3px solid var(--negative)'):
+            ui.label('Deleting a node cannot be undone.').classes('text-warning')
+
+            def delete_selected():
+                if sel_id in htree.nodes:
+                    _delete_nodes(htree, data, file_path, {sel_id})
+                    ui.notify('Node Deleted', type='positive')
+                    refresh_fn()
+
+            ui.button('Delete This Node', icon='delete',
+                      on_click=delete_selected).props('color=negative dense')
+
+        # Data preview
+        with ui.expansion('Data Preview', icon='preview').classes('w-full q-mt-sm'):
+            _render_data_preview(sel_id, htree)
+
+    render_branch_nodes()
 
 
 def render_timeline_tab(state: AppState):
@@ -301,9 +409,8 @@ def _restore_node(data, node, htree, file_path, state: AppState):
     ui.notify('Restored!', type='positive')
 
 
-def _render_data_preview(selected_node_id, htree):
+def _render_data_preview(nid, htree):
     """Render a read-only preview of the selected node's data."""
-    nid = selected_node_id.value
     if not nid or nid not in htree.nodes:
         ui.label('No node selected.').classes('text-caption')
         return
