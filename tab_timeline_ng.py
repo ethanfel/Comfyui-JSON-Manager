@@ -1,4 +1,5 @@
 import copy
+import re
 import time
 
 from nicegui import ui
@@ -64,14 +65,16 @@ def _render_selection_picker(all_nodes, htree, state, refresh_fn):
 
 
 def _render_graph_or_log(mode, all_nodes, htree, selected_nodes,
-                         selection_mode_on, toggle_select_fn, restore_fn):
+                         selection_mode_on, toggle_select_fn, restore_fn,
+                         selected=None):
     """Render graph visualization or linear log view."""
     if mode in ('Horizontal', 'Vertical'):
         direction = 'LR' if mode == 'Horizontal' else 'TB'
         with ui.card().classes('w-full q-pa-md'):
             try:
                 graph_dot = htree.generate_graph(direction=direction)
-                _render_graphviz(graph_dot)
+                sel_id = selected.get('node_id') if selected else None
+                _render_graphviz(graph_dot, selected_node_id=sel_id)
             except Exception as e:
                 ui.label(f'Graph Error: {e}').classes('text-negative')
 
@@ -165,27 +168,23 @@ def _find_active_branch(htree):
     return None
 
 
-def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn):
+def _find_branch_for_node(htree, node_id):
+    """Return the branch name whose ancestry contains node_id, or None."""
+    for b_name, tip_id in htree.branches.items():
+        current = tip_id
+        while current and current in htree.nodes:
+            if current == node_id:
+                return b_name
+            current = htree.nodes[current].get('parent')
+    return None
+
+
+def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn,
+                         selected):
     """Render branch-grouped node manager with restore, rename, delete, and preview."""
     ui.label('Manage Version').classes('section-header')
 
-    # --- State that survives @ui.refreshable ---
     active_branch = _find_active_branch(htree)
-
-    # Default branch: active branch, or branch whose ancestry contains HEAD
-    default_branch = active_branch
-    if not default_branch and htree.head_id:
-        for b_name, tip_id in htree.branches.items():
-            for n in _walk_branch_nodes(htree, tip_id):
-                if n['id'] == htree.head_id:
-                    default_branch = b_name
-                    break
-            if default_branch:
-                break
-    if not default_branch and htree.branches:
-        default_branch = next(iter(htree.branches))
-
-    selected = {'node_id': htree.head_id, 'branch': default_branch}
 
     # --- (a) Branch selector ---
     def fmt_branch(b_name):
@@ -331,6 +330,21 @@ def render_timeline_tab(state: AppState):
 
     htree = HistoryTree(tree_data)
 
+    # --- Shared selected-node state (survives refreshes, shared by graph + manager) ---
+    active_branch = _find_active_branch(htree)
+    default_branch = active_branch
+    if not default_branch and htree.head_id:
+        for b_name, tip_id in htree.branches.items():
+            for n in _walk_branch_nodes(htree, tip_id):
+                if n['id'] == htree.head_id:
+                    default_branch = b_name
+                    break
+            if default_branch:
+                break
+    if not default_branch and htree.branches:
+        default_branch = next(iter(htree.branches))
+    selected = {'node_id': htree.head_id, 'branch': default_branch}
+
     if state.restored_indicator:
         ui.label(f'Editing Restored Version: {state.restored_indicator}').classes(
             'text-info q-pa-sm')
@@ -354,7 +368,8 @@ def render_timeline_tab(state: AppState):
 
         _render_graph_or_log(
             view_mode.value, all_nodes, htree, selected_nodes,
-            selection_mode.value, _toggle_select, _restore_and_refresh)
+            selection_mode.value, _toggle_select, _restore_and_refresh,
+            selected=selected)
 
         if selection_mode.value and state.timeline_selected_nodes:
             _render_batch_delete(htree, data, file_path, state, render_timeline.refresh)
@@ -362,7 +377,8 @@ def render_timeline_tab(state: AppState):
         with ui.card().classes('w-full q-pa-md q-mt-md'):
             _render_node_manager(
                 all_nodes, htree, data, file_path,
-                _restore_and_refresh, render_timeline.refresh)
+                _restore_and_refresh, render_timeline.refresh,
+                selected)
 
     def _toggle_select(nid, checked):
         if checked:
@@ -380,14 +396,96 @@ def render_timeline_tab(state: AppState):
     selection_mode.on_value_change(lambda _: render_timeline.refresh())
     render_timeline()
 
+    # --- Poll for graph node clicks (JS → Python bridge) ---
+    async def _poll_graph_click():
+        if view_mode.value == 'Linear Log':
+            return
+        try:
+            result = await ui.run_javascript(
+                'const v = window.graphSelectedNode;'
+                'window.graphSelectedNode = null; v;'
+            )
+        except Exception:
+            return
+        if not result:
+            return
+        node_id = str(result)
+        if node_id not in htree.nodes:
+            return
+        branch = _find_branch_for_node(htree, node_id)
+        if branch:
+            selected['branch'] = branch
+        selected['node_id'] = node_id
+        render_timeline.refresh()
 
-def _render_graphviz(dot_source: str):
-    """Render graphviz DOT source as SVG using ui.html."""
+    ui.timer(0.2, _poll_graph_click)
+
+
+def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
+    """Render graphviz DOT source as interactive SVG with click-to-select."""
     try:
         import graphviz
         src = graphviz.Source(dot_source)
         svg = src.pipe(format='svg').decode('utf-8')
-        ui.html(f'<div style="overflow-x: auto;">{svg}</div>')
+
+        # (a) Responsive SVG sizing — replace fixed width/height with 100%
+        svg = re.sub(r'\bwidth="[^"]*"', 'width="100%"', svg, count=1)
+        svg = re.sub(r'\bheight="[^"]*"', 'height="auto"', svg, count=1)
+
+        container_id = f'graph-{id(dot_source)}'
+        html_content = (
+            f'<div id="{container_id}" '
+            f'style="overflow: auto; max-height: 500px; width: 100%;">'
+            f'{svg}</div>'
+        )
+        ui.html(html_content)
+
+        # (b) + (c) JS click handlers + visual feedback
+        sel_escaped = selected_node_id.replace("'", "\\'") if selected_node_id else ''
+        ui.run_javascript(f'''
+        (function() {{
+            const container = document.getElementById('{container_id}');
+            if (!container) return;
+
+            // CSS for interactivity
+            const style = document.createElement('style');
+            style.textContent = `
+                #{container_id} g.node {{ cursor: pointer; }}
+                #{container_id} g.node:hover {{ filter: brightness(1.3); }}
+                #{container_id} g.node.selected ellipse,
+                #{container_id} g.node.selected polygon[stroke]:not([stroke="none"]) {{
+                    stroke: #f59e0b !important;
+                    stroke-width: 3px !important;
+                }}
+            `;
+            container.appendChild(style);
+
+            // Attach click handlers
+            container.querySelectorAll('g.node').forEach(function(g) {{
+                g.addEventListener('click', function() {{
+                    const title = g.querySelector('title');
+                    if (title) {{
+                        window.graphSelectedNode = title.textContent.trim();
+                        // Visual: remove old selection, add new
+                        container.querySelectorAll('g.node.selected').forEach(
+                            el => el.classList.remove('selected'));
+                        g.classList.add('selected');
+                    }}
+                }});
+            }});
+
+            // Re-apply selected class if we already have a selection
+            const selId = '{sel_escaped}';
+            if (selId) {{
+                container.querySelectorAll('g.node').forEach(function(g) {{
+                    const title = g.querySelector('title');
+                    if (title && title.textContent.trim() === selId) {{
+                        g.classList.add('selected');
+                    }}
+                }});
+            }}
+        }})();
+        ''')
     except ImportError:
         ui.label('Install graphviz Python package for graph rendering.').classes('text-warning')
         ui.code(dot_source).classes('w-full')
