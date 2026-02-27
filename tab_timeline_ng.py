@@ -428,9 +428,10 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         src = graphviz.Source(dot_source)
         svg = src.pipe(format='svg').decode('utf-8')
 
-        # (a) Responsive SVG sizing — replace fixed width/height with 100%
+        # (a) Responsive SVG sizing — fill container width, remove fixed height
+        #     so the SVG scales proportionally via its viewBox attribute
         svg = re.sub(r'\bwidth="[^"]*"', 'width="100%"', svg, count=1)
-        svg = re.sub(r'\bheight="[^"]*"', 'height="auto"', svg, count=1)
+        svg = re.sub(r'\s*height="[^"]*"', '', svg, count=1)
 
         container_id = f'graph-{id(dot_source)}'
         html_content = (
