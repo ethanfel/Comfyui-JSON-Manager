@@ -5,8 +5,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import streamlit as st
-
 # --- Magic String Keys ---
 KEY_BATCH_DATA = "batch_data"
 KEY_HISTORY_TREE = "history_tree"
@@ -145,7 +143,7 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
             data = json.load(f)
         return data, path.stat().st_mtime
     except Exception as e:
-        st.error(f"Error loading JSON: {e}")
+        logger.error(f"Error loading JSON: {e}")
         return DEFAULTS.copy(), 0
 
 def save_json(path: str | Path, data: dict[str, Any]) -> None:

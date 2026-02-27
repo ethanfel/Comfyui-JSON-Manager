@@ -21,13 +21,13 @@
 <p align="center">
   <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-green" alt="Python" />
-  <img src="https://img.shields.io/badge/Built%20with-Streamlit-red" alt="Streamlit" />
+  <img src="https://img.shields.io/badge/Built%20with-NiceGUI-FF4B4B" alt="NiceGUI" />
   <img src="https://img.shields.io/badge/ComfyUI-Custom%20Nodes-purple" alt="ComfyUI" />
 </p>
 
 A visual dashboard for managing, versioning, and batch-processing JSON configuration files used in AI video generation workflows (I2V, VACE). Two parts:
 
-1. **Streamlit Web Interface** &mdash; Dockerized editor for prompts, LoRAs, settings, and branching history
+1. **NiceGUI Web Interface** &mdash; Dockerized editor for prompts, LoRAs, settings, and branching history
 2. **ComfyUI Custom Nodes** &mdash; Read JSON files directly into workflows, including a dynamic node that auto-discovers keys
 
 ---
@@ -86,12 +86,12 @@ Dynamic Node (New)
 
 ## Installation
 
-### 1. Unraid / Docker (Streamlit Manager)
+### 1. Unraid / Docker (NiceGUI Manager)
 
 ```bash
 # Repository: python:3.12-slim
 # Network: Bridge
-# WebUI: http://[IP]:[PORT:8501]
+# WebUI: http://[IP]:[PORT:8080]
 ```
 
 **Path Mappings:**
@@ -103,8 +103,8 @@ Dynamic Node (New)
 **Post Arguments:**
 ```bash
 /bin/sh -c "apt-get update && apt-get install -y graphviz && \
-  pip install streamlit opencv-python-headless graphviz streamlit-agraph && \
-  cd /app && streamlit run app.py --server.headless true --server.port 8501"
+  pip install nicegui graphviz requests && \
+  cd /app && python main.py"
 ```
 
 ### 2. ComfyUI (Custom Nodes)
@@ -274,7 +274,7 @@ The **JSON Loader (Dynamic)** node reads your JSON file and automatically create
 
 ## Web Interface Usage
 
-Navigate to your container's IP (e.g., `http://192.168.1.100:8501`).
+Navigate to your container's IP (e.g., `http://192.168.1.100:8080`).
 
 **Path navigation** supports case-insensitive matching &mdash; typing `/media/P5/myFolder` will resolve to `/media/p5/MyFolder` automatically.
 
@@ -315,13 +315,14 @@ ComfyUI-JSON-Manager/
 ├── json_loader.py         # All ComfyUI node classes + /json_manager/get_keys API
 ├── web/
 │   └── json_dynamic.js    # Frontend extension for Dynamic node (refresh, show/hide)
-├── app.py                 # Streamlit main entry point & navigator
+├── main.py                # NiceGUI web UI entry point & navigator
+├── state.py               # Application state management
 ├── utils.py               # I/O, config, defaults, case-insensitive path resolver
 ├── history_tree.py        # Git-style branching engine
-├── tab_batch.py           # Batch processor UI
-├── tab_timeline.py        # Visual timeline UI
-├── tab_comfy.py           # ComfyUI server monitor
-├── tab_raw.py             # Raw JSON editor
+├── tab_batch_ng.py        # Batch processor UI (NiceGUI)
+├── tab_timeline_ng.py     # Visual timeline UI (NiceGUI)
+├── tab_comfy_ng.py        # ComfyUI server monitor (NiceGUI)
+├── tab_raw_ng.py          # Raw JSON editor (NiceGUI)
 └── tests/
     ├── test_json_loader.py
     ├── test_utils.py
