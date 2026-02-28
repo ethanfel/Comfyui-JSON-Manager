@@ -142,10 +142,24 @@ class ProjectLoaderDynamic:
             except (json.JSONDecodeError, TypeError):
                 keys = [k.strip() for k in output_keys.split(",") if k.strip()]
 
+        # Parse types for coercion
+        types = []
+        if output_types:
+            try:
+                types = json.loads(output_types)
+            except (json.JSONDecodeError, TypeError):
+                types = [t.strip() for t in output_types.split(",")]
+
         results = []
-        for key in keys:
+        for i, key in enumerate(keys):
             val = data.get(key, "")
-            if isinstance(val, bool):
+            declared_type = types[i] if i < len(types) else ""
+            # Coerce based on declared output type when possible
+            if declared_type == "INT":
+                results.append(to_int(val))
+            elif declared_type == "FLOAT":
+                results.append(to_float(val))
+            elif isinstance(val, bool):
                 results.append(str(val).lower())
             elif isinstance(val, int):
                 results.append(val)

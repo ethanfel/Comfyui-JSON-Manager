@@ -154,7 +154,7 @@ app.registerExtension({
             let types = [];
             if (otWidget?.value) {
                 try { types = JSON.parse(otWidget.value); } catch (_) {
-                    types = otWidget.value.split(",");
+                    types = otWidget.value.split(",").map(t => t.trim()).filter(Boolean);
                 }
             }
 
@@ -162,7 +162,7 @@ app.registerExtension({
                 // On load, LiteGraph already restored serialized outputs with links.
                 // Rename and set types to match stored state (preserves links).
                 for (let i = 0; i < this.outputs.length && i < keys.length; i++) {
-                    this.outputs[i].name = keys[i].trim();
+                    this.outputs[i].name = keys[i];
                     if (types[i]) this.outputs[i].type = types[i];
                 }
 

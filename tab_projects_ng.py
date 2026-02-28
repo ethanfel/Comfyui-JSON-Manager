@@ -119,6 +119,10 @@ def render_projects_tab(state: AppState):
                                 state.db.delete_project(name)
                                 if state.current_project == name:
                                     state.current_project = ''
+                                    state.config['current_project'] = ''
+                                    save_config(state.current_dir,
+                                                state.config.get('favorites', []),
+                                                state.config)
                                 ui.notify(f'Deleted project "{name}"', type='positive')
                                 render_project_list.refresh()
 

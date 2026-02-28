@@ -202,6 +202,8 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
             if isinstance(batch_data, list):
                 db.conn.execute("DELETE FROM sequences WHERE data_file_id = ?", (df_id,))
                 for item in batch_data:
+                    if not isinstance(item, dict):
+                        continue
                     seq_num = int(item.get(KEY_SEQUENCE_NUMBER, 0))
                     now = __import__('time').time()
                     db.conn.execute(

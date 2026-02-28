@@ -100,6 +100,22 @@ class TestProjectLoaderDynamic:
         assert result[0] == "comma_val"
         assert result[1] == "ok"
 
+    def test_load_dynamic_type_coercion(self):
+        """output_types should coerce values to declared types."""
+        import json as _json
+        data = {"seed": "42", "cfg": "1.5", "prompt": "hello"}
+        node = ProjectLoaderDynamic()
+        keys_json = _json.dumps(["seed", "cfg", "prompt"])
+        types_json = _json.dumps(["INT", "FLOAT", "STRING"])
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.load_dynamic(
+                "http://localhost:8080", "proj1", "batch_i2v", 1,
+                output_keys=keys_json, output_types=types_json
+            )
+        assert result[0] == 42       # string "42" coerced to int
+        assert result[1] == 1.5      # string "1.5" coerced to float
+        assert result[2] == "hello"  # string stays string
+
     def test_load_dynamic_empty_keys(self):
         node = ProjectLoaderDynamic()
         with patch("project_loader._fetch_data", return_value={"prompt": "hello"}):
