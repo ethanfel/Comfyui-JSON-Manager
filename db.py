@@ -295,7 +295,10 @@ class ProjectDB:
             self.conn.execute("COMMIT")
             return df_id
         except Exception:
-            self.conn.execute("ROLLBACK")
+            try:
+                self.conn.execute("ROLLBACK")
+            except Exception:
+                pass
             raise
 
     # ------------------------------------------------------------------

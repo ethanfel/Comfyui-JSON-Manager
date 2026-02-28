@@ -225,7 +225,10 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
 
             db.conn.execute("COMMIT")
         except Exception:
-            db.conn.execute("ROLLBACK")
+            try:
+                db.conn.execute("ROLLBACK")
+            except Exception:
+                pass
             raise
     except Exception as e:
         logger.warning(f"sync_to_db failed: {e}")
