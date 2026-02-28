@@ -143,6 +143,15 @@ def index():
             background: rgba(255,255,255,0.2);
         }
 
+        /* Sub-sequence accent (teal) */
+        .body--dark .subsegment-card > .q-expansion-item__container > .q-item {
+            border-left: 6px solid #06B6D4;
+            padding-left: 10px;
+        }
+        .body--dark .subsegment-card .q-expansion-item__toggle-icon {
+            color: #06B6D4 !important;
+        }
+
         /* Secondary pane teal accent */
         .pane-secondary .q-field--outlined.q-field--focused .q-field__control:after {
             border-color: #06B6D4 !important;

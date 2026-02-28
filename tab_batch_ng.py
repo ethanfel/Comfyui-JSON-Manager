@@ -317,7 +317,8 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
     else:
         label = f'Sequence #{seq_num}'
 
-    with ui.expansion(label, icon='movie').classes('w-full'):
+    exp_classes = 'w-full subsegment-card' if is_subsegment(seq_num) else 'w-full'
+    with ui.expansion(label, icon='movie').classes(exp_classes):
         # --- Action row ---
         with ui.row().classes('w-full q-gutter-sm action-row'):
             # Copy from source
