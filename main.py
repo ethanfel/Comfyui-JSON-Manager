@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from nicegui import ui
@@ -14,6 +15,11 @@ from tab_batch_ng import render_batch_processor
 from tab_timeline_ng import render_timeline_tab
 from tab_raw_ng import render_raw_editor
 from tab_comfy_ng import render_comfy_monitor
+from tab_projects_ng import render_projects_tab
+from db import ProjectDB
+from api_routes import register_api_routes
+
+logger = logging.getLogger(__name__)
 
 
 @ui.page('/')
@@ -156,7 +162,17 @@ def index():
         config=config,
         current_dir=Path(config.get('last_dir', str(Path.cwd()))),
         snippets=load_snippets(),
+        db_enabled=config.get('db_enabled', False),
+        current_project=config.get('current_project', ''),
     )
+
+    # Initialize project database
+    try:
+        state.db = ProjectDB()
+    except Exception as e:
+        logger.warning(f"Failed to initialize ProjectDB: {e}")
+        state.db = None
+
     dual_pane = {'active': False, 'state': None}
 
     # ------------------------------------------------------------------
@@ -178,6 +194,7 @@ def index():
                 ui.tab('batch', label='Batch Processor')
                 ui.tab('timeline', label='Timeline')
                 ui.tab('raw', label='Raw Editor')
+                ui.tab('projects', label='Projects')
 
             with ui.tab_panels(tabs, value='batch').classes('w-full'):
                 with ui.tab_panel('batch'):
@@ -186,6 +203,8 @@ def index():
                     render_timeline_tab(state)
                 with ui.tab_panel('raw'):
                     render_raw_editor(state)
+                with ui.tab_panel('projects'):
+                    render_projects_tab(state)
 
             if state.show_comfy_monitor:
                 ui.separator()
@@ -480,5 +499,12 @@ def render_sidebar(state: AppState, dual_pane: dict):
 
     ui.checkbox('Show Comfy Monitor', value=True, on_change=on_monitor_toggle)
 
+
+# Register REST API routes for ComfyUI connectivity
+try:
+    _api_db = ProjectDB()
+    register_api_routes(_api_db)
+except Exception as e:
+    logger.warning(f"Failed to register API routes: {e}")
 
 ui.run(title='AI Settings Manager', port=8080, reload=True)

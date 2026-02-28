@@ -160,6 +160,43 @@ def get_file_mtime(path: str | Path) -> float:
         return path.stat().st_mtime
     return 0
 
+def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
+    """Dual-write helper: sync JSON data to the project database.
+
+    Resolves (or creates) the data_file, upserts all sequences from batch_data,
+    and saves the history_tree.
+    """
+    if not db or not project_name:
+        return
+    try:
+        proj = db.get_project(project_name)
+        if not proj:
+            return
+        file_name = Path(file_path).stem
+        df = db.get_data_file(proj["id"], file_name)
+        if not df:
+            top_level = {k: v for k, v in data.items()
+                         if k not in (KEY_BATCH_DATA, KEY_HISTORY_TREE)}
+            df_id = db.create_data_file(proj["id"], file_name, "generic", top_level)
+        else:
+            df_id = df["id"]
+
+        # Sync sequences
+        batch_data = data.get(KEY_BATCH_DATA, [])
+        if isinstance(batch_data, list):
+            db.delete_sequences_for_file(df_id)
+            for item in batch_data:
+                seq_num = int(item.get(KEY_SEQUENCE_NUMBER, 0))
+                db.upsert_sequence(df_id, seq_num, item)
+
+        # Sync history tree
+        history_tree = data.get(KEY_HISTORY_TREE)
+        if history_tree and isinstance(history_tree, dict):
+            db.save_history_tree(df_id, history_tree)
+    except Exception as e:
+        logger.warning(f"sync_to_db failed: {e}")
+
+
 def generate_templates(current_dir: Path) -> None:
     """Creates batch template files if folder is empty."""
     first = DEFAULTS.copy()

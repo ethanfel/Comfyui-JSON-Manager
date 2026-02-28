@@ -17,6 +17,11 @@ class AppState:
     live_toggles: dict = field(default_factory=dict)
     show_comfy_monitor: bool = True
 
+    # Project DB fields
+    db: Any = None
+    current_project: str = ""
+    db_enabled: bool = False
+
     # Set at runtime by main.py / tab_comfy_ng.py
     _render_main: Any = None
     _load_file: Callable | None = None
