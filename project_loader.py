@@ -134,7 +134,13 @@ class ProjectLoaderDynamic:
                      output_keys="", output_types=""):
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
 
-        keys = [k.strip() for k in output_keys.split(",") if k.strip()] if output_keys else []
+        # Parse keys — try JSON array first, fall back to comma-split for compat
+        keys = []
+        if output_keys:
+            try:
+                keys = json.loads(output_keys)
+            except (json.JSONDecodeError, TypeError):
+                keys = [k.strip() for k in output_keys.split(",") if k.strip()]
 
         results = []
         for key in keys:

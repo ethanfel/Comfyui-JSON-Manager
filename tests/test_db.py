@@ -272,6 +272,44 @@ class TestImport:
         s1 = db.get_sequence(df_id_2, 1)
         assert s1["prompt"] == "v2"
 
+    def test_import_skips_non_dict_batch_items(self, db, tmp_path):
+        """Non-dict elements in batch_data should be silently skipped, not crash."""
+        pid = db.create_project("p1", "/p1")
+        json_path = tmp_path / "mixed.json"
+        data = {KEY_BATCH_DATA: [
+            {"sequence_number": 1, "prompt": "valid"},
+            "not a dict",
+            42,
+            None,
+            {"sequence_number": 3, "prompt": "also valid"},
+        ]}
+        json_path.write_text(json.dumps(data))
+        df_id = db.import_json_file(pid, json_path)
+
+        seqs = db.list_sequences(df_id)
+        assert seqs == [1, 3]
+
+    def test_import_atomic_on_error(self, db, tmp_path):
+        """If import fails partway, no partial data should be committed."""
+        pid = db.create_project("p1", "/p1")
+        json_path = tmp_path / "batch.json"
+        data = {KEY_BATCH_DATA: [{"sequence_number": 1, "prompt": "hello"}]}
+        json_path.write_text(json.dumps(data))
+        db.import_json_file(pid, json_path)
+
+        # Now try to import with bad data that will cause an error
+        # (overwrite the file with invalid sequence_number that causes int() to fail)
+        bad_data = {KEY_BATCH_DATA: [{"sequence_number": "not_a_number", "prompt": "bad"}]}
+        json_path.write_text(json.dumps(bad_data))
+        with pytest.raises(ValueError):
+            db.import_json_file(pid, json_path)
+
+        # Original data should still be intact (rollback worked)
+        df = db.get_data_file(pid, "batch")
+        assert df is not None
+        s1 = db.get_sequence(df["id"], 1)
+        assert s1["prompt"] == "hello"
+
 
 # ------------------------------------------------------------------
 # Query helpers

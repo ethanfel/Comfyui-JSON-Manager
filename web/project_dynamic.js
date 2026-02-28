@@ -56,20 +56,27 @@ app.registerExtension({
                 const resp = await api.fetchApi(
                     `/json_manager/get_project_keys?url=${encodeURIComponent(urlWidget.value)}&project=${encodeURIComponent(projectWidget.value)}&file=${encodeURIComponent(fileWidget.value)}&seq=${seqWidget?.value || 1}`
                 );
-                const data = await resp.json();
-                const { keys, types } = data;
 
-                // If the API returned an error, keep existing outputs and links intact
-                if (data.error) {
-                    console.warn("[ProjectLoaderDynamic] API error, keeping existing outputs:", data.error);
+                if (!resp.ok) {
+                    console.warn("[ProjectLoaderDynamic] HTTP error", resp.status, "— keeping existing outputs");
                     return;
                 }
 
-                // Store keys and types in hidden widgets for persistence
+                const data = await resp.json();
+                const keys = data.keys;
+                const types = data.types;
+
+                // If the API returned an error or missing data, keep existing outputs and links intact
+                if (data.error || !Array.isArray(keys) || !Array.isArray(types)) {
+                    console.warn("[ProjectLoaderDynamic] API error or missing data, keeping existing outputs:", data.error || "no keys/types");
+                    return;
+                }
+
+                // Store keys and types in hidden widgets for persistence (JSON-encoded)
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
-                if (okWidget) okWidget.value = keys.join(",");
+                if (okWidget) okWidget.value = JSON.stringify(keys);
                 const otWidget = this.widgets?.find(w => w.name === "output_types");
-                if (otWidget) otWidget.value = types.join(",");
+                if (otWidget) otWidget.value = JSON.stringify(types);
 
                 // Build a map of current output names to slot indices
                 const oldSlots = {};
@@ -116,7 +123,7 @@ app.registerExtension({
                 }
 
                 this.setSize(this.computeSize());
-                app.graph.setDirtyCanvas(true, true);
+                app.graph?.setDirtyCanvas(true, true);
             } catch (e) {
                 console.error("[ProjectLoaderDynamic] Refresh failed:", e);
             }
@@ -137,12 +144,19 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            const keys = okWidget?.value
-                ? okWidget.value.split(",").filter(k => k.trim())
-                : [];
-            const types = otWidget?.value
-                ? otWidget.value.split(",")
-                : [];
+            // Parse keys/types — try JSON array first, fall back to comma-split
+            let keys = [];
+            if (okWidget?.value) {
+                try { keys = JSON.parse(okWidget.value); } catch (_) {
+                    keys = okWidget.value.split(",").map(k => k.trim()).filter(Boolean);
+                }
+            }
+            let types = [];
+            if (otWidget?.value) {
+                try { types = JSON.parse(otWidget.value); } catch (_) {
+                    types = otWidget.value.split(",");
+                }
+            }
 
             if (keys.length > 0) {
                 // On load, LiteGraph already restored serialized outputs with links.
@@ -159,8 +173,8 @@ app.registerExtension({
             } else if (this.outputs.length > 0) {
                 // Widget values empty but serialized outputs exist — sync widgets
                 // from the outputs LiteGraph already restored (fallback).
-                if (okWidget) okWidget.value = this.outputs.map(o => o.name).join(",");
-                if (otWidget) otWidget.value = this.outputs.map(o => o.type).join(",");
+                if (okWidget) okWidget.value = JSON.stringify(this.outputs.map(o => o.name));
+                if (otWidget) otWidget.value = JSON.stringify(this.outputs.map(o => o.type));
             }
 
             this.setSize(this.computeSize());

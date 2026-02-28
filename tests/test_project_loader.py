@@ -86,6 +86,20 @@ class TestProjectLoaderDynamic:
         assert result[2] == 1.5
         assert len(result) == MAX_DYNAMIC_OUTPUTS
 
+    def test_load_dynamic_with_json_encoded_keys(self):
+        """JSON-encoded output_keys should be parsed correctly."""
+        import json as _json
+        data = {"my,key": "comma_val", "normal": "ok"}
+        node = ProjectLoaderDynamic()
+        keys_json = _json.dumps(["my,key", "normal"])
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.load_dynamic(
+                "http://localhost:8080", "proj1", "batch_i2v", 1,
+                output_keys=keys_json
+            )
+        assert result[0] == "comma_val"
+        assert result[1] == "ok"
+
     def test_load_dynamic_empty_keys(self):
         node = ProjectLoaderDynamic()
         with patch("project_loader._fetch_data", return_value={"prompt": "hello"}):

@@ -56,12 +56,15 @@ class ProjectDB:
     def __init__(self, db_path: str | Path | None = None):
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn = sqlite3.connect(
+            str(self.db_path),
+            check_same_thread=False,
+            isolation_level=None,  # autocommit — explicit BEGIN/COMMIT only
+        )
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA_SQL)
-        self.conn.commit()
 
     def close(self):
         self.conn.close()
@@ -231,7 +234,7 @@ class ProjectDB:
         """Import a JSON file into the database, splitting batch_data into sequences.
 
         Safe to call repeatedly — existing data_file is updated, sequences are
-        replaced, and history_tree is upserted.
+        replaced, and history_tree is upserted. Atomic: all-or-nothing.
         """
         json_path = Path(json_path)
         data, _ = load_json(json_path)
@@ -239,33 +242,61 @@ class ProjectDB:
 
         top_level = {k: v for k, v in data.items() if k not in (KEY_BATCH_DATA, KEY_HISTORY_TREE)}
 
-        existing = self.get_data_file(project_id, file_name)
-        if existing:
-            df_id = existing["id"]
-            now = time.time()
-            self.conn.execute(
-                "UPDATE data_files SET data_type = ?, top_level = ?, updated_at = ? WHERE id = ?",
-                (data_type, json.dumps(top_level), now, df_id),
-            )
-            self.conn.commit()
-            # Clear old sequences before re-importing
-            self.delete_sequences_for_file(df_id)
-        else:
-            df_id = self.create_data_file(project_id, file_name, data_type, top_level)
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self.conn.execute(
+                "SELECT id FROM data_files WHERE project_id = ? AND name = ?",
+                (project_id, file_name),
+            ).fetchone()
 
-        # Import sequences from batch_data
-        batch_data = data.get(KEY_BATCH_DATA, [])
-        if isinstance(batch_data, list):
-            for item in batch_data:
-                seq_num = int(item.get("sequence_number", 0))
-                self.upsert_sequence(df_id, seq_num, item)
+            if existing:
+                df_id = existing["id"]
+                now = time.time()
+                self.conn.execute(
+                    "UPDATE data_files SET data_type = ?, top_level = ?, updated_at = ? WHERE id = ?",
+                    (data_type, json.dumps(top_level), now, df_id),
+                )
+                self.conn.execute("DELETE FROM sequences WHERE data_file_id = ?", (df_id,))
+            else:
+                now = time.time()
+                cur = self.conn.execute(
+                    "INSERT INTO data_files (project_id, name, data_type, top_level, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (project_id, file_name, data_type, json.dumps(top_level), now, now),
+                )
+                df_id = cur.lastrowid
 
-        # Import history tree
-        history_tree = data.get(KEY_HISTORY_TREE)
-        if history_tree and isinstance(history_tree, dict):
-            self.save_history_tree(df_id, history_tree)
+            # Import sequences from batch_data
+            batch_data = data.get(KEY_BATCH_DATA, [])
+            if isinstance(batch_data, list):
+                for item in batch_data:
+                    if not isinstance(item, dict):
+                        continue
+                    seq_num = int(item.get("sequence_number", 0))
+                    now = time.time()
+                    self.conn.execute(
+                        "INSERT INTO sequences (data_file_id, sequence_number, data, updated_at) "
+                        "VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(data_file_id, sequence_number) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at",
+                        (df_id, seq_num, json.dumps(item), now),
+                    )
 
-        return df_id
+            # Import history tree
+            history_tree = data.get(KEY_HISTORY_TREE)
+            if history_tree and isinstance(history_tree, dict):
+                now = time.time()
+                self.conn.execute(
+                    "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
+                    "VALUES (?, ?, ?) "
+                    "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
+                    (df_id, json.dumps(history_tree), now),
+                )
+
+            self.conn.execute("COMMIT")
+            return df_id
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
 
     # ------------------------------------------------------------------
     # Query helpers (for REST API)

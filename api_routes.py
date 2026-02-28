@@ -35,25 +35,25 @@ def _get_db() -> ProjectDB:
     return _db
 
 
-async def _list_projects() -> dict[str, Any]:
+def _list_projects() -> dict[str, Any]:
     db = _get_db()
     projects = db.list_projects()
     return {"projects": [p["name"] for p in projects]}
 
 
-async def _list_files(name: str) -> dict[str, Any]:
+def _list_files(name: str) -> dict[str, Any]:
     db = _get_db()
     files = db.list_project_files(name)
     return {"files": [{"name": f["name"], "data_type": f["data_type"]} for f in files]}
 
 
-async def _list_sequences(name: str, file_name: str) -> dict[str, Any]:
+def _list_sequences(name: str, file_name: str) -> dict[str, Any]:
     db = _get_db()
     seqs = db.list_project_sequences(name, file_name)
     return {"sequences": seqs}
 
 
-async def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
+def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
     db = _get_db()
     data = db.query_sequence_data(name, file_name, seq)
     if data is None:
@@ -61,7 +61,7 @@ async def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> d
     return data
 
 
-async def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
+def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
     db = _get_db()
     keys, types = db.query_sequence_keys(name, file_name, seq)
     return {"keys": keys, "types": types}

@@ -221,9 +221,9 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                     (df_id, json.dumps(history_tree), now),
                 )
 
-            db.conn.commit()
+            db.conn.execute("COMMIT")
         except Exception:
-            db.conn.rollback()
+            db.conn.execute("ROLLBACK")
             raise
     except Exception as e:
         logger.warning(f"sync_to_db failed: {e}")
