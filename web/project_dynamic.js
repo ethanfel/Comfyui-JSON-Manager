@@ -117,16 +117,11 @@ app.registerExtension({
                     return;
                 }
 
-                // Store keys and types for persistence
-                // Properties are always reliably serialized by LiteGraph
-                this.properties = this.properties || {};
-                this.properties._output_keys = keys;
-                this.properties._output_types = types;
-                // Also update hidden widgets for Python-side access
+                // Store keys and types in hidden widgets for persistence (comma-separated)
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
-                if (okWidget) okWidget.value = JSON.stringify(keys);
+                if (okWidget) okWidget.value = keys.join(",");
                 const otWidget = this.widgets?.find(w => w.name === "output_types");
-                if (otWidget) otWidget.value = JSON.stringify(types);
+                if (otWidget) otWidget.value = types.join(",");
 
                 // Slot 0 is always total_sequences (INT) — ensure it exists
                 if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
@@ -202,23 +197,12 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            // Read keys/types — properties (always persisted) first, then widgets
-            let keys = [];
-            if (Array.isArray(this.properties?._output_keys) && this.properties._output_keys.length > 0) {
-                keys = this.properties._output_keys;
-            } else if (okWidget?.value) {
-                try { keys = JSON.parse(okWidget.value); } catch (_) {
-                    keys = okWidget.value.split(",").map(k => k.trim()).filter(Boolean);
-                }
-            }
-            let types = [];
-            if (Array.isArray(this.properties?._output_types) && this.properties._output_types.length > 0) {
-                types = this.properties._output_types;
-            } else if (otWidget?.value) {
-                try { types = JSON.parse(otWidget.value); } catch (_) {
-                    types = otWidget.value.split(",").map(t => t.trim()).filter(Boolean);
-                }
-            }
+            const keys = okWidget?.value
+                ? okWidget.value.split(",").filter(k => k.trim())
+                : [];
+            const types = otWidget?.value
+                ? otWidget.value.split(",")
+                : [];
 
             // Ensure slot 0 is total_sequences (INT)
             if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
@@ -258,7 +242,7 @@ app.registerExtension({
                 for (let i = 0; i < keys.length; i++) {
                     const slotIdx = i + 1; // offset by 1 for total_sequences
                     if (slotIdx < this.outputs.length) {
-                        this.outputs[slotIdx].name = keys[i];
+                        this.outputs[slotIdx].name = keys[i].trim();
                         if (types[i]) this.outputs[slotIdx].type = types[i];
                     }
                 }
@@ -268,16 +252,11 @@ app.registerExtension({
                     this.removeOutput(this.outputs.length - 1);
                 }
             } else if (this.outputs.length > 1) {
-                // Widget/property values empty but serialized dynamic outputs exist —
-                // sync from the outputs LiteGraph already restored (fallback, skip slot 0).
+                // Widget values empty but serialized dynamic outputs exist — sync widgets
+                // from the outputs LiteGraph already restored (fallback, skip slot 0).
                 const dynamicOutputs = this.outputs.slice(1);
-                const restoredKeys = dynamicOutputs.map(o => o.name);
-                const restoredTypes = dynamicOutputs.map(o => o.type);
-                this.properties = this.properties || {};
-                this.properties._output_keys = restoredKeys;
-                this.properties._output_types = restoredTypes;
-                if (okWidget) okWidget.value = JSON.stringify(restoredKeys);
-                if (otWidget) otWidget.value = JSON.stringify(restoredTypes);
+                if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
+                if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
             }
 
             this.setSize(this.computeSize());
