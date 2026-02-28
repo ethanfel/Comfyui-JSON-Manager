@@ -146,7 +146,7 @@ app.registerExtension({
                         newOutputs.push(slot);
                         delete oldSlots[key];
                     } else {
-                        newOutputs.push({ name: key, type: type, links: null });
+                        newOutputs.push({ name: key, label: key, type: type, links: null });
                     }
                 }
 
@@ -259,6 +259,7 @@ app.registerExtension({
                     const slotIdx = i + 1;
                     if (slotIdx < this.outputs.length) {
                         this.outputs[slotIdx].name = keys[i].trim();
+                        this.outputs[slotIdx].label = keys[i].trim();
                         if (types[i]) this.outputs[slotIdx].type = types[i];
                     }
                 }
