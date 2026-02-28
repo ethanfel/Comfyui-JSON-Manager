@@ -117,7 +117,12 @@ app.registerExtension({
                     return;
                 }
 
-                // Store keys and types in hidden widgets for persistence (JSON-encoded)
+                // Store keys and types for persistence
+                // Properties are always reliably serialized by LiteGraph
+                this.properties = this.properties || {};
+                this.properties._output_keys = keys;
+                this.properties._output_types = types;
+                // Also update hidden widgets for Python-side access
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
                 if (okWidget) okWidget.value = JSON.stringify(keys);
                 const otWidget = this.widgets?.find(w => w.name === "output_types");
@@ -197,15 +202,19 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            // Parse keys/types — try JSON array first, fall back to comma-split
+            // Read keys/types — properties (always persisted) first, then widgets
             let keys = [];
-            if (okWidget?.value) {
+            if (Array.isArray(this.properties?._output_keys) && this.properties._output_keys.length > 0) {
+                keys = this.properties._output_keys;
+            } else if (okWidget?.value) {
                 try { keys = JSON.parse(okWidget.value); } catch (_) {
                     keys = okWidget.value.split(",").map(k => k.trim()).filter(Boolean);
                 }
             }
             let types = [];
-            if (otWidget?.value) {
+            if (Array.isArray(this.properties?._output_types) && this.properties._output_types.length > 0) {
+                types = this.properties._output_types;
+            } else if (otWidget?.value) {
                 try { types = JSON.parse(otWidget.value); } catch (_) {
                     types = otWidget.value.split(",").map(t => t.trim()).filter(Boolean);
                 }
@@ -259,11 +268,16 @@ app.registerExtension({
                     this.removeOutput(this.outputs.length - 1);
                 }
             } else if (this.outputs.length > 1) {
-                // Widget values empty but serialized dynamic outputs exist — sync widgets
-                // from the outputs LiteGraph already restored (fallback, skip slot 0).
+                // Widget/property values empty but serialized dynamic outputs exist —
+                // sync from the outputs LiteGraph already restored (fallback, skip slot 0).
                 const dynamicOutputs = this.outputs.slice(1);
-                if (okWidget) okWidget.value = JSON.stringify(dynamicOutputs.map(o => o.name));
-                if (otWidget) otWidget.value = JSON.stringify(dynamicOutputs.map(o => o.type));
+                const restoredKeys = dynamicOutputs.map(o => o.name);
+                const restoredTypes = dynamicOutputs.map(o => o.type);
+                this.properties = this.properties || {};
+                this.properties._output_keys = restoredKeys;
+                this.properties._output_types = restoredTypes;
+                if (okWidget) okWidget.value = JSON.stringify(restoredKeys);
+                if (otWidget) otWidget.value = JSON.stringify(restoredTypes);
             }
 
             this.setSize(this.computeSize());
