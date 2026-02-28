@@ -4,7 +4,7 @@ import json
 from nicegui import ui
 
 from state import AppState
-from utils import save_json, get_file_mtime, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY
+from utils import save_json, sync_to_db, get_file_mtime, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY
 
 
 def render_raw_editor(state: AppState):
@@ -52,6 +52,8 @@ def render_raw_editor(state: AppState):
                             input_data[KEY_PROMPT_HISTORY] = data[KEY_PROMPT_HISTORY]
 
                     save_json(file_path, input_data)
+                    if state.db_enabled and state.current_project and state.db:
+                        sync_to_db(state.db, state.current_project, file_path, input_data)
 
                     data.clear()
                     data.update(input_data)

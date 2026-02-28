@@ -5,7 +5,7 @@ from nicegui import ui
 
 from state import AppState
 from history_tree import HistoryTree
-from utils import save_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
+from utils import save_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 
 def _delete_nodes(htree, data, file_path, node_ids):
@@ -134,6 +134,8 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
     def do_batch_delete():
         current_valid = state.timeline_selected_nodes & set(htree.nodes.keys())
         _delete_nodes(htree, data, file_path, current_valid)
+        if state.db_enabled and state.current_project and state.db:
+            sync_to_db(state.db, state.current_project, file_path, data)
         state.timeline_selected_nodes = set()
         ui.notify(
             f'Deleted {len(current_valid)} node{"s" if len(current_valid) != 1 else ""}!',
@@ -179,7 +181,7 @@ def _find_branch_for_node(htree, node_id):
 
 
 def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_fn,
-                         selected):
+                         selected, state=None):
     """Render branch-grouped node manager with restore, rename, delete, and preview."""
     ui.label('Manage Version').classes('section-header')
 
@@ -291,6 +293,8 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
                     htree.nodes[sel_id]['note'] = rename_input.value
                     data[KEY_HISTORY_TREE] = htree.to_dict()
                     save_json(file_path, data)
+                    if state and state.db_enabled and state.current_project and state.db:
+                        sync_to_db(state.db, state.current_project, file_path, data)
                     ui.notify('Label updated', type='positive')
                     refresh_fn()
 
@@ -304,6 +308,8 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
             def delete_selected():
                 if sel_id in htree.nodes:
                     _delete_nodes(htree, data, file_path, {sel_id})
+                    if state and state.db_enabled and state.current_project and state.db:
+                        sync_to_db(state.db, state.current_project, file_path, data)
                     ui.notify('Node Deleted', type='positive')
                     refresh_fn()
 
@@ -377,7 +383,7 @@ def render_timeline_tab(state: AppState):
             _render_node_manager(
                 all_nodes, htree, data, file_path,
                 _restore_and_refresh, render_timeline.refresh,
-                selected)
+                selected, state=state)
 
     def _toggle_select(nid, checked):
         if checked:
@@ -492,6 +498,8 @@ def _restore_node(data, node, htree, file_path, state: AppState):
     htree.head_id = node['id']
     data[KEY_HISTORY_TREE] = htree.to_dict()
     save_json(file_path, data)
+    if state.db_enabled and state.current_project and state.db:
+        sync_to_db(state.db, state.current_project, file_path, data)
     label = f"{node.get('note', 'Step')} ({node['id'][:4]})"
     state.restored_indicator = label
     ui.notify('Restored!', type='positive')

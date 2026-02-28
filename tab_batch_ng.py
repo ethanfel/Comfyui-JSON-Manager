@@ -6,7 +6,7 @@ from nicegui import ui
 
 from state import AppState
 from utils import (
-    DEFAULTS, save_json, load_json,
+    DEFAULTS, save_json, load_json, sync_to_db,
     KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
 )
 from history_tree import HistoryTree
@@ -161,6 +161,8 @@ def render_batch_processor(state: AppState):
             new_data = {KEY_BATCH_DATA: [first_item], KEY_HISTORY_TREE: {},
                         KEY_PROMPT_HISTORY: []}
             save_json(new_path, new_data)
+            if state.db_enabled and state.current_project and state.db:
+                sync_to_db(state.db, state.current_project, new_path, new_data)
             ui.notify(f'Created {new_name}', type='positive')
 
         ui.button('Create Batch Copy', icon='content_copy', on_click=create_batch)
@@ -215,6 +217,8 @@ def render_batch_processor(state: AppState):
                 batch_list.append(new_item)
                 data[KEY_BATCH_DATA] = batch_list
                 save_json(file_path, data)
+                if state.db_enabled and state.current_project and state.db:
+                    sync_to_db(state.db, state.current_project, file_path, data)
                 render_sequence_list.refresh()
 
             with ui.row().classes('q-mt-sm'):
@@ -250,6 +254,8 @@ def render_batch_processor(state: AppState):
         batch_list.sort(key=lambda s: int(s.get(KEY_SEQUENCE_NUMBER, 0)))
         data[KEY_BATCH_DATA] = batch_list
         save_json(file_path, data)
+        if state.db_enabled and state.current_project and state.db:
+            sync_to_db(state.db, state.current_project, file_path, data)
         ui.notify('Sorted by sequence number!', type='positive')
         render_sequence_list.refresh()
 
@@ -289,6 +295,8 @@ def render_batch_processor(state: AppState):
                 htree.commit(snapshot_payload, note=note)
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
+                if state.db_enabled and state.current_project and state.db:
+                    sync_to_db(state.db, state.current_project, file_path, data)
                 state.restored_indicator = None
                 commit_input.set_value('')
                 ui.notify('Batch Saved & Snapshot Created!', type='positive')
@@ -306,6 +314,8 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
     def commit(message=None):
         data[KEY_BATCH_DATA] = batch_list
         save_json(file_path, data)
+        if state.db_enabled and state.current_project and state.db:
+            sync_to_db(state.db, state.current_project, file_path, data)
         if message:
             ui.notify(message, type='positive')
         refresh_list.refresh()
@@ -448,7 +458,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
         # --- VACE Settings (full width) ---
         with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
-            _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list)
+            _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_list)
 
         # --- LoRA Settings ---
         with ui.expansion('LoRA Settings', icon='style').classes('w-full'):
@@ -530,7 +540,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 # VACE Settings sub-section
 # ======================================================================
 
-def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
+def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_list):
     # VACE Schedule (needed early for both columns)
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
 
@@ -568,6 +578,8 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
                         shifted += 1
                     data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
+                    if state.db_enabled and state.current_project and state.db:
+                        sync_to_db(state.db, state.current_project, file_path, data)
                     ui.notify(f'Shifted {shifted} sequences by {delta:+d}', type='positive')
                     refresh_list.refresh()
 
@@ -713,6 +725,8 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
             htree.commit(snapshot, f"Mass update: {', '.join(selected_keys)}")
             data[KEY_HISTORY_TREE] = htree.to_dict()
             save_json(file_path, data)
+            if state.db_enabled and state.current_project and state.db:
+                sync_to_db(state.db, state.current_project, file_path, data)
             ui.notify(f'Updated {len(targets)} sequences', type='positive')
             if refresh_list:
                 refresh_list.refresh()

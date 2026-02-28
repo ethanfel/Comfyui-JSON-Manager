@@ -160,6 +160,80 @@ def get_file_mtime(path: str | Path) -> float:
         return path.stat().st_mtime
     return 0
 
+def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
+    """Dual-write helper: sync JSON data to the project database.
+
+    Resolves (or creates) the data_file, upserts all sequences from batch_data,
+    and saves the history_tree. All writes happen in a single transaction.
+    """
+    if not db or not project_name:
+        return
+    try:
+        proj = db.get_project(project_name)
+        if not proj:
+            return
+        file_name = Path(file_path).stem
+
+        # Use a single transaction for atomicity
+        db.conn.execute("BEGIN IMMEDIATE")
+        try:
+            df = db.get_data_file(proj["id"], file_name)
+            top_level = {k: v for k, v in data.items()
+                         if k not in (KEY_BATCH_DATA, KEY_HISTORY_TREE)}
+            if not df:
+                now = __import__('time').time()
+                cur = db.conn.execute(
+                    "INSERT INTO data_files (project_id, name, data_type, top_level, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (proj["id"], file_name, "generic", json.dumps(top_level), now, now),
+                )
+                df_id = cur.lastrowid
+            else:
+                df_id = df["id"]
+                # Update top_level metadata
+                now = __import__('time').time()
+                db.conn.execute(
+                    "UPDATE data_files SET top_level = ?, updated_at = ? WHERE id = ?",
+                    (json.dumps(top_level), now, df_id),
+                )
+
+            # Sync sequences
+            batch_data = data.get(KEY_BATCH_DATA, [])
+            if isinstance(batch_data, list):
+                db.conn.execute("DELETE FROM sequences WHERE data_file_id = ?", (df_id,))
+                for item in batch_data:
+                    if not isinstance(item, dict):
+                        continue
+                    seq_num = int(item.get(KEY_SEQUENCE_NUMBER, 0))
+                    now = __import__('time').time()
+                    db.conn.execute(
+                        "INSERT INTO sequences (data_file_id, sequence_number, data, updated_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        (df_id, seq_num, json.dumps(item), now),
+                    )
+
+            # Sync history tree
+            history_tree = data.get(KEY_HISTORY_TREE)
+            if history_tree and isinstance(history_tree, dict):
+                now = __import__('time').time()
+                db.conn.execute(
+                    "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
+                    "VALUES (?, ?, ?) "
+                    "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
+                    (df_id, json.dumps(history_tree), now),
+                )
+
+            db.conn.execute("COMMIT")
+        except Exception:
+            try:
+                db.conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
+    except Exception as e:
+        logger.warning(f"sync_to_db failed: {e}")
+
+
 def generate_templates(current_dir: Path) -> None:
     """Creates batch template files if folder is empty."""
     first = DEFAULTS.copy()
