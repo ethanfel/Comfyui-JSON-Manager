@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -108,6 +109,47 @@ def render_projects_tab(state: AppState):
 
                                 ui.button('Deactivate', icon='cancel',
                                           on_click=deactivate).props('flat dense')
+
+                            def rename_proj(name=proj['name']):
+                                async def do_rename():
+                                    new_name = await ui.run_javascript(
+                                        f'prompt("Rename project:", {json.dumps(name)})',
+                                        timeout=30.0,
+                                    )
+                                    if new_name and new_name.strip() and new_name.strip() != name:
+                                        new_name = new_name.strip()
+                                        try:
+                                            state.db.rename_project(name, new_name)
+                                            if state.current_project == name:
+                                                state.current_project = new_name
+                                                state.config['current_project'] = new_name
+                                                save_config(state.current_dir,
+                                                            state.config.get('favorites', []),
+                                                            state.config)
+                                            ui.notify(f'Renamed to "{new_name}"', type='positive')
+                                            render_project_list.refresh()
+                                        except Exception as e:
+                                            ui.notify(f'Error: {e}', type='negative')
+                                await do_rename()
+
+                            ui.button('Rename', icon='edit',
+                                      on_click=rename_proj).props('flat dense')
+
+                            def change_path(name=proj['name'], path=proj['folder_path']):
+                                async def do_change():
+                                    new_path = await ui.run_javascript(
+                                        f'prompt("New path for project:", {json.dumps(path)})',
+                                        timeout=30.0,
+                                    )
+                                    if new_path and new_path.strip() and new_path.strip() != path:
+                                        new_path = new_path.strip()
+                                        state.db.update_project_path(name, new_path)
+                                        ui.notify(f'Path updated to "{new_path}"', type='positive')
+                                        render_project_list.refresh()
+                                await do_change()
+
+                            ui.button('Path', icon='folder',
+                                      on_click=change_path).props('flat dense')
 
                             def import_folder(pid=proj['id'], pname=proj['name']):
                                 _import_folder(state, pid, pname, render_project_list)

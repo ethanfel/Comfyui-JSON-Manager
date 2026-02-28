@@ -156,14 +156,19 @@ def index():
             background: rgba(255,255,255,0.2);
         }
 
-        /* Sub-sequence accent (teal) */
-        .body--dark .subsegment-card > .q-expansion-item__container > .q-item {
-            border-left: 6px solid #06B6D4;
-            padding-left: 10px;
-        }
-        .body--dark .subsegment-card .q-expansion-item__toggle-icon {
-            color: #06B6D4 !important;
-        }
+        /* Sub-sequence accent colors (per sub-index, cycling) */
+        .body--dark .subsegment-color-0 > .q-expansion-item__container > .q-item { border-left: 6px solid #06B6D4; padding-left: 10px; }
+        .body--dark .subsegment-color-0 .q-expansion-item__toggle-icon { color: #06B6D4 !important; }
+        .body--dark .subsegment-color-1 > .q-expansion-item__container > .q-item { border-left: 6px solid #A78BFA; padding-left: 10px; }
+        .body--dark .subsegment-color-1 .q-expansion-item__toggle-icon { color: #A78BFA !important; }
+        .body--dark .subsegment-color-2 > .q-expansion-item__container > .q-item { border-left: 6px solid #34D399; padding-left: 10px; }
+        .body--dark .subsegment-color-2 .q-expansion-item__toggle-icon { color: #34D399 !important; }
+        .body--dark .subsegment-color-3 > .q-expansion-item__container > .q-item { border-left: 6px solid #F472B6; padding-left: 10px; }
+        .body--dark .subsegment-color-3 .q-expansion-item__toggle-icon { color: #F472B6 !important; }
+        .body--dark .subsegment-color-4 > .q-expansion-item__container > .q-item { border-left: 6px solid #FBBF24; padding-left: 10px; }
+        .body--dark .subsegment-color-4 .q-expansion-item__toggle-icon { color: #FBBF24 !important; }
+        .body--dark .subsegment-color-5 > .q-expansion-item__container > .q-item { border-left: 6px solid #FB923C; padding-left: 10px; }
+        .body--dark .subsegment-color-5 .q-expansion-item__toggle-icon { color: #FB923C !important; }
 
         /* Secondary pane teal accent */
         .pane-secondary .q-field--outlined.q-field--focused .q-field__control:after {

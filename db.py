@@ -98,6 +98,24 @@ class ProjectDB:
         ).fetchone()
         return dict(row) if row else None
 
+    def rename_project(self, old_name: str, new_name: str) -> bool:
+        now = time.time()
+        cur = self.conn.execute(
+            "UPDATE projects SET name = ?, updated_at = ? WHERE name = ?",
+            (new_name, now, old_name),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def update_project_path(self, name: str, folder_path: str) -> bool:
+        now = time.time()
+        cur = self.conn.execute(
+            "UPDATE projects SET folder_path = ?, updated_at = ? WHERE name = ?",
+            (folder_path, now, name),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def delete_project(self, name: str) -> bool:
         cur = self.conn.execute("DELETE FROM projects WHERE name = ?", (name,))
         self.conn.commit()

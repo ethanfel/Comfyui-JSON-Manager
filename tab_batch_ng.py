@@ -1,4 +1,5 @@
 import copy
+import json
 import random
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from history_tree import HistoryTree
 
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
 SUB_SEGMENT_MULTIPLIER = 1000
+SUB_SEGMENT_NUM_COLORS = 6
 FRAME_TO_SKIP_DEFAULT = DEFAULTS['frame_to_skip']
 
 VACE_MODES = [
@@ -242,7 +244,7 @@ def render_batch_processor(state: AppState):
     lora_keys = ['lora 1 high', 'lora 1 low', 'lora 2 high', 'lora 2 low',
                  'lora 3 high', 'lora 3 low']
     standard_keys = {
-        'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
+        'name', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
         'frame_to_skip', 'end_frame', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
@@ -321,16 +323,36 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         refresh_list.refresh()
 
     seq_num = seq.get(KEY_SEQUENCE_NUMBER, i + 1)
+    seq_name = seq.get('name', '')
 
     if is_subsegment(seq_num):
         label = f'Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)}  ({int(seq_num)})'
     else:
         label = f'Sequence #{seq_num}'
+    if seq_name:
+        label += f' — {seq_name}'
 
-    exp_classes = 'w-full subsegment-card' if is_subsegment(seq_num) else 'w-full'
-    with ui.expansion(label, icon='movie').classes(exp_classes):
+    if is_subsegment(seq_num):
+        color_idx = (sub_index_of(seq_num) - 1) % SUB_SEGMENT_NUM_COLORS
+        exp_classes = f'w-full subsegment-color-{color_idx}'
+    else:
+        exp_classes = 'w-full'
+    with ui.expansion(label, icon='movie').classes(exp_classes) as expansion:
         # --- Action row ---
         with ui.row().classes('w-full q-gutter-sm action-row'):
+            # Rename
+            def rename(idx=i, s=seq, exp=expansion):
+                async def do_rename():
+                    result = await ui.run_javascript(
+                        f'prompt("Rename sequence:", {json.dumps(s.get("name", ""))})',
+                        timeout=30.0,
+                    )
+                    if result is not None:
+                        s['name'] = result
+                        commit('Renamed!')
+                await do_rename()
+
+            ui.button('Rename', icon='edit', on_click=rename).props('outline')
             # Copy from source
             def copy_source(idx=i, sn=seq_num):
                 item = copy.deepcopy(DEFAULTS)
