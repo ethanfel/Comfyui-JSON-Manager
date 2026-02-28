@@ -228,15 +228,30 @@ class ProjectDB:
     # ------------------------------------------------------------------
 
     def import_json_file(self, project_id: int, json_path: str | Path, data_type: str = "generic") -> int:
-        """Import a JSON file into the database, splitting batch_data into sequences."""
+        """Import a JSON file into the database, splitting batch_data into sequences.
+
+        Safe to call repeatedly — existing data_file is updated, sequences are
+        replaced, and history_tree is upserted.
+        """
         json_path = Path(json_path)
         data, _ = load_json(json_path)
         file_name = json_path.stem
 
-        # Extract top-level keys that aren't batch_data or history_tree
         top_level = {k: v for k, v in data.items() if k not in (KEY_BATCH_DATA, KEY_HISTORY_TREE)}
 
-        df_id = self.create_data_file(project_id, file_name, data_type, top_level)
+        existing = self.get_data_file(project_id, file_name)
+        if existing:
+            df_id = existing["id"]
+            now = time.time()
+            self.conn.execute(
+                "UPDATE data_files SET data_type = ?, top_level = ?, updated_at = ? WHERE id = ?",
+                (data_type, json.dumps(top_level), now, df_id),
+            )
+            self.conn.commit()
+            # Clear old sequences before re-importing
+            self.delete_sequences_for_file(df_id)
+        else:
+            df_id = self.create_data_file(project_id, file_name, data_type, top_level)
 
         # Import sequences from batch_data
         batch_data = data.get(KEY_BATCH_DATA, [])

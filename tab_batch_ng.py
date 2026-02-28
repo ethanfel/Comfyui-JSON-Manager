@@ -457,7 +457,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
         # --- VACE Settings (full width) ---
         with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
-            _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list)
+            _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_list)
 
         # --- LoRA Settings ---
         with ui.expansion('LoRA Settings', icon='style').classes('w-full'):
@@ -539,7 +539,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 # VACE Settings sub-section
 # ======================================================================
 
-def _render_vace_settings(i, seq, batch_list, data, file_path, refresh_list):
+def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_list):
     # VACE Schedule (needed early for both columns)
     sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
 

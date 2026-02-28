@@ -34,4 +34,7 @@ class AppState:
             config=self.config,
             current_dir=self.current_dir,
             snippets=self.snippets,
+            db=self.db,
+            current_project=self.current_project,
+            db_enabled=self.db_enabled,
         )

@@ -21,6 +21,13 @@ from api_routes import register_api_routes
 
 logger = logging.getLogger(__name__)
 
+# Single shared DB instance for both the UI and API routes
+_shared_db: ProjectDB | None = None
+try:
+    _shared_db = ProjectDB()
+except Exception as e:
+    logger.warning(f"Failed to initialize ProjectDB: {e}")
+
 
 @ui.page('/')
 def index():
@@ -166,12 +173,8 @@ def index():
         current_project=config.get('current_project', ''),
     )
 
-    # Initialize project database
-    try:
-        state.db = ProjectDB()
-    except Exception as e:
-        logger.warning(f"Failed to initialize ProjectDB: {e}")
-        state.db = None
+    # Use the shared DB instance
+    state.db = _shared_db
 
     dual_pane = {'active': False, 'state': None}
 
@@ -500,11 +503,8 @@ def render_sidebar(state: AppState, dual_pane: dict):
     ui.checkbox('Show Comfy Monitor', value=True, on_change=on_monitor_toggle)
 
 
-# Register REST API routes for ComfyUI connectivity
-try:
-    _api_db = ProjectDB()
-    register_api_routes(_api_db)
-except Exception as e:
-    logger.warning(f"Failed to register API routes: {e}")
+# Register REST API routes for ComfyUI connectivity (uses the shared DB instance)
+if _shared_db is not None:
+    register_api_routes(_shared_db)
 
 ui.run(title='AI Settings Manager', port=8080, reload=True)

@@ -61,6 +61,16 @@ class TestFetchHelpers:
         called_url = mock.call_args[0][0]
         assert "//api" not in called_url
 
+    def test_fetch_data_encodes_special_chars(self):
+        """Project/file names with spaces or special chars should be percent-encoded."""
+        data = {"prompt": "hello"}
+        with patch("project_loader.urllib.request.urlopen", return_value=_mock_urlopen(data)) as mock:
+            _fetch_data("http://localhost:8080", "my project", "batch file", 1)
+        called_url = mock.call_args[0][0]
+        assert "my%20project" in called_url
+        assert "batch%20file" in called_url
+        assert " " not in called_url.split("?")[0]  # no raw spaces in path
+
 
 class TestProjectLoaderDynamic:
     def test_load_dynamic_with_keys(self):

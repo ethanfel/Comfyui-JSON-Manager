@@ -1,5 +1,6 @@
 import json
 import logging
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Any
@@ -49,13 +50,17 @@ def _fetch_json(url: str) -> dict:
 
 def _fetch_data(manager_url: str, project: str, file: str, seq: int) -> dict:
     """Fetch sequence data from the NiceGUI REST API."""
-    url = f"{manager_url.rstrip('/')}/api/projects/{project}/files/{file}/data?seq={seq}"
+    p = urllib.parse.quote(project, safe='')
+    f = urllib.parse.quote(file, safe='')
+    url = f"{manager_url.rstrip('/')}/api/projects/{p}/files/{f}/data?seq={seq}"
     return _fetch_json(url)
 
 
 def _fetch_keys(manager_url: str, project: str, file: str, seq: int) -> dict:
     """Fetch keys/types from the NiceGUI REST API."""
-    url = f"{manager_url.rstrip('/')}/api/projects/{project}/files/{file}/keys?seq={seq}"
+    p = urllib.parse.quote(project, safe='')
+    f = urllib.parse.quote(file, safe='')
+    url = f"{manager_url.rstrip('/')}/api/projects/{p}/files/{f}/keys?seq={seq}"
     return _fetch_json(url)
 
 
@@ -71,7 +76,7 @@ if PromptServer is not None:
     @PromptServer.instance.routes.get("/json_manager/list_project_files")
     async def list_project_files_proxy(request):
         manager_url = request.query.get("url", "http://localhost:8080")
-        project = request.query.get("project", "")
+        project = urllib.parse.quote(request.query.get("project", ""), safe='')
         url = f"{manager_url.rstrip('/')}/api/projects/{project}/files"
         data = _fetch_json(url)
         return web.json_response(data)
@@ -79,8 +84,8 @@ if PromptServer is not None:
     @PromptServer.instance.routes.get("/json_manager/list_project_sequences")
     async def list_project_sequences_proxy(request):
         manager_url = request.query.get("url", "http://localhost:8080")
-        project = request.query.get("project", "")
-        file_name = request.query.get("file", "")
+        project = urllib.parse.quote(request.query.get("project", ""), safe='')
+        file_name = urllib.parse.quote(request.query.get("file", ""), safe='')
         url = f"{manager_url.rstrip('/')}/api/projects/{project}/files/{file_name}/sequences"
         data = _fetch_json(url)
         return web.json_response(data)
@@ -96,6 +101,7 @@ if PromptServer is not None:
             seq = 1
         data = _fetch_keys(manager_url, project, file_name, seq)
         return web.json_response(data)
+
 
 
 # ==========================================

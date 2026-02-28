@@ -246,6 +246,32 @@ class TestImport:
         seqs = db.list_sequences(df_id)
         assert seqs == []
 
+    def test_reimport_updates_existing(self, db, tmp_path):
+        """Re-importing the same file should update data, not crash."""
+        pid = db.create_project("p1", "/p1")
+        json_path = tmp_path / "batch.json"
+
+        # First import
+        data_v1 = {KEY_BATCH_DATA: [{"sequence_number": 1, "prompt": "v1"}]}
+        json_path.write_text(json.dumps(data_v1))
+        df_id_1 = db.import_json_file(pid, json_path, "i2v")
+
+        # Second import (same file, updated data)
+        data_v2 = {KEY_BATCH_DATA: [{"sequence_number": 1, "prompt": "v2"}, {"sequence_number": 2, "prompt": "new"}]}
+        json_path.write_text(json.dumps(data_v2))
+        df_id_2 = db.import_json_file(pid, json_path, "vace")
+
+        # Should reuse the same data_file row
+        assert df_id_1 == df_id_2
+        # Data type should be updated
+        df = db.get_data_file(pid, "batch")
+        assert df["data_type"] == "vace"
+        # Sequences should reflect v2
+        seqs = db.list_sequences(df_id_2)
+        assert seqs == [1, 2]
+        s1 = db.get_sequence(df_id_2, 1)
+        assert s1["prompt"] == "v2"
+
 
 # ------------------------------------------------------------------
 # Query helpers
