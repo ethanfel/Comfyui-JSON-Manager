@@ -341,16 +341,14 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         # --- Action row ---
         with ui.row().classes('w-full q-gutter-sm action-row'):
             # Rename
-            def rename(idx=i, s=seq, exp=expansion):
-                async def do_rename():
-                    result = await ui.run_javascript(
-                        f'prompt("Rename sequence:", {json.dumps(s.get("name", ""))})',
-                        timeout=30.0,
-                    )
-                    if result is not None:
-                        s['name'] = result
-                        commit('Renamed!')
-                await do_rename()
+            async def rename(idx=i, s=seq, exp=expansion):
+                result = await ui.run_javascript(
+                    f'prompt("Rename sequence:", {json.dumps(s.get("name", ""))})',
+                    timeout=30.0,
+                )
+                if result is not None:
+                    s['name'] = result
+                    commit('Renamed!')
 
             ui.button('Rename', icon='edit', on_click=rename).props('outline')
             # Copy from source
