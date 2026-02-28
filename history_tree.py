@@ -111,6 +111,30 @@ class HistoryTree:
             '  edge [color="#888888", arrowsize=0.6, penwidth=1.0];'
         ]
 
+        # Build reverse lookup: node_id -> branch name (walk each branch ancestry)
+        node_to_branch: dict[str, str] = {}
+        for b_name, tip_id in self.branches.items():
+            current = tip_id
+            while current and current in self.nodes:
+                if current not in node_to_branch:
+                    node_to_branch[current] = b_name
+                current = self.nodes[current].get('parent')
+
+        # Per-branch color palette (bg, border) — cycles for many branches
+        _branch_palette = [
+            ('#f9f9f9', '#999999'),  # grey (default/main)
+            ('#eef4ff', '#6699cc'),  # blue
+            ('#f5eeff', '#9977cc'),  # purple
+            ('#fff0ee', '#cc7766'),  # coral
+            ('#eefff5', '#66aa88'),  # teal
+            ('#fff8ee', '#ccaa55'),  # sand
+        ]
+        branch_names = list(self.branches.keys())
+        branch_colors = {
+            b: _branch_palette[i % len(_branch_palette)]
+            for i, b in enumerate(branch_names)
+        }
+
         sorted_nodes = sorted(self.nodes.values(), key=lambda x: x["timestamp"])
 
         # Font sizes and padding - smaller for vertical
@@ -138,9 +162,10 @@ class HistoryTree:
             if nid in tip_to_branches:
                 branch_label = ", ".join(tip_to_branches[nid])
 
-            # COLORS
-            bg_color = "#f9f9f9"
-            border_color = "#999999"
+            # COLORS — per-branch tint, overridden for HEAD and tips
+            b_name = node_to_branch.get(nid)
+            bg_color, border_color = branch_colors.get(
+                b_name, _branch_palette[0])
             border_width = "1"
 
             if nid == self.head_id:
