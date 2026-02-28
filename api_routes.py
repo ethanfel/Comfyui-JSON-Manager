@@ -55,13 +55,26 @@ def _list_sequences(name: str, file_name: str) -> dict[str, Any]:
 
 def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
     db = _get_db()
-    data = db.query_sequence_data(name, file_name, seq)
+    proj = db.get_project(name)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    df = db.get_data_file_by_names(name, file_name)
+    if not df:
+        raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in project '{name}'")
+    data = db.get_sequence(df["id"], seq)
     if data is None:
-        raise HTTPException(status_code=404, detail="Sequence not found")
+        raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
     return data
 
 
 def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
     db = _get_db()
-    keys, types = db.query_sequence_keys(name, file_name, seq)
-    return {"keys": keys, "types": types}
+    proj = db.get_project(name)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    df = db.get_data_file_by_names(name, file_name)
+    if not df:
+        raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in project '{name}'")
+    keys, types = db.get_sequence_keys(df["id"], seq)
+    total = db.count_sequences(df["id"])
+    return {"keys": keys, "types": types, "total_sequences": total}

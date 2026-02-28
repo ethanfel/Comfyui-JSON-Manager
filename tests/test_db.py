@@ -172,6 +172,25 @@ class TestSequences:
         db.delete_sequences_for_file(df_id)
         assert db.list_sequences(df_id) == []
 
+    def test_count_sequences(self, db):
+        pid = db.create_project("p1", "/p1")
+        df_id = db.create_data_file(pid, "batch", "generic")
+        assert db.count_sequences(df_id) == 0
+        db.upsert_sequence(df_id, 1, {"a": 1})
+        db.upsert_sequence(df_id, 2, {"b": 2})
+        db.upsert_sequence(df_id, 3, {"c": 3})
+        assert db.count_sequences(df_id) == 3
+
+    def test_query_total_sequences(self, db):
+        pid = db.create_project("p1", "/p1")
+        df_id = db.create_data_file(pid, "batch", "generic")
+        db.upsert_sequence(df_id, 1, {"a": 1})
+        db.upsert_sequence(df_id, 2, {"b": 2})
+        assert db.query_total_sequences("p1", "batch") == 2
+
+    def test_query_total_sequences_nonexistent(self, db):
+        assert db.query_total_sequences("nope", "nope") == 0
+
 
 # ------------------------------------------------------------------
 # History trees

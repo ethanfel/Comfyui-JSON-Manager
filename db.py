@@ -182,6 +182,21 @@ class ProjectDB:
         ).fetchall()
         return [r["sequence_number"] for r in rows]
 
+    def count_sequences(self, data_file_id: int) -> int:
+        """Return the number of sequences for a data file."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS cnt FROM sequences WHERE data_file_id = ?",
+            (data_file_id,),
+        ).fetchone()
+        return row["cnt"]
+
+    def query_total_sequences(self, project_name: str, file_name: str) -> int:
+        """Return total sequence count by project and file names."""
+        df = self.get_data_file_by_names(project_name, file_name)
+        if not df:
+            return 0
+        return self.count_sequences(df["id"])
+
     def get_sequence_keys(self, data_file_id: int, sequence_number: int) -> tuple[list[str], list[str]]:
         """Returns (keys, types) for a sequence's data dict."""
         data = self.get_sequence(data_file_id, sequence_number)

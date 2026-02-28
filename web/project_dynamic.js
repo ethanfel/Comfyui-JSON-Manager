@@ -32,16 +32,53 @@ app.registerExtension({
                 this.refreshDynamicOutputs();
             });
 
+            // Auto-refresh with 500ms debounce on widget changes
+            this._refreshTimer = null;
+            const autoRefreshWidgets = ["project_name", "file_name", "sequence_number"];
+            for (const widgetName of autoRefreshWidgets) {
+                const w = this.widgets?.find(w => w.name === widgetName);
+                if (w) {
+                    const origCallback = w.callback;
+                    const node = this;
+                    w.callback = function (...args) {
+                        origCallback?.apply(this, args);
+                        clearTimeout(node._refreshTimer);
+                        node._refreshTimer = setTimeout(() => {
+                            node.refreshDynamicOutputs();
+                        }, 500);
+                    };
+                }
+            }
+
             queueMicrotask(() => {
                 if (!this._configured) {
-                    // New node (not loading) — remove the 32 Python default outputs
+                    // New node (not loading) — remove the Python default outputs
+                    // and add only the fixed total_sequences slot
                     while (this.outputs.length > 0) {
                         this.removeOutput(0);
                     }
+                    this.addOutput("total_sequences", "INT");
                     this.setSize(this.computeSize());
                     app.graph?.setDirtyCanvas(true, true);
                 }
             });
+        };
+
+        nodeType.prototype._setStatus = function (status, message) {
+            const baseTitle = "Project Loader (Dynamic)";
+            if (status === "ok") {
+                this.title = baseTitle;
+                this.color = undefined;
+                this.bgcolor = undefined;
+            } else if (status === "error") {
+                this.title = baseTitle + " - ERROR";
+                this.color = "#ff4444";
+                this.bgcolor = "#331111";
+                if (message) this.title = baseTitle + ": " + message;
+            } else if (status === "loading") {
+                this.title = baseTitle + " - Loading...";
+            }
+            app.graph?.setDirtyCanvas(true, true);
         };
 
         nodeType.prototype.refreshDynamicOutputs = async function () {
@@ -52,13 +89,20 @@ app.registerExtension({
 
             if (!urlWidget?.value || !projectWidget?.value || !fileWidget?.value) return;
 
+            this._setStatus("loading");
+
             try {
                 const resp = await api.fetchApi(
                     `/json_manager/get_project_keys?url=${encodeURIComponent(urlWidget.value)}&project=${encodeURIComponent(projectWidget.value)}&file=${encodeURIComponent(fileWidget.value)}&seq=${seqWidget?.value || 1}`
                 );
 
                 if (!resp.ok) {
-                    console.warn("[ProjectLoaderDynamic] HTTP error", resp.status, "— keeping existing outputs");
+                    let errorMsg = `HTTP ${resp.status}`;
+                    try {
+                        const errData = await resp.json();
+                        if (errData.message) errorMsg = errData.message;
+                    } catch (_) {}
+                    this._setStatus("error", errorMsg);
                     return;
                 }
 
@@ -68,7 +112,8 @@ app.registerExtension({
 
                 // If the API returned an error or missing data, keep existing outputs and links intact
                 if (data.error || !Array.isArray(keys) || !Array.isArray(types)) {
-                    console.warn("[ProjectLoaderDynamic] API error or missing data, keeping existing outputs:", data.error || "no keys/types");
+                    const errMsg = data.error ? data.message || data.error : "Missing keys/types";
+                    this._setStatus("error", errMsg);
                     return;
                 }
 
@@ -78,14 +123,20 @@ app.registerExtension({
                 const otWidget = this.widgets?.find(w => w.name === "output_types");
                 if (otWidget) otWidget.value = JSON.stringify(types);
 
-                // Build a map of current output names to slot indices
+                // Slot 0 is always total_sequences (INT) — ensure it exists
+                if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
+                    this.outputs.unshift({ name: "total_sequences", type: "INT", links: null });
+                }
+                this.outputs[0].type = "INT";
+
+                // Build a map of current dynamic output names to slot indices (skip slot 0)
                 const oldSlots = {};
-                for (let i = 0; i < this.outputs.length; i++) {
+                for (let i = 1; i < this.outputs.length; i++) {
                     oldSlots[this.outputs[i].name] = i;
                 }
 
-                // Build new outputs, reusing existing slots to preserve links
-                const newOutputs = [];
+                // Build new dynamic outputs, reusing existing slots to preserve links
+                const newOutputs = [this.outputs[0]]; // Keep total_sequences at slot 0
                 for (let k = 0; k < keys.length; k++) {
                     const key = keys[k];
                     const type = types[k] || "*";
@@ -122,10 +173,12 @@ app.registerExtension({
                     }
                 }
 
+                this._setStatus("ok");
                 this.setSize(this.computeSize());
                 app.graph?.setDirtyCanvas(true, true);
             } catch (e) {
                 console.error("[ProjectLoaderDynamic] Refresh failed:", e);
+                this._setStatus("error", "Server unreachable");
             }
         };
 
@@ -158,23 +211,59 @@ app.registerExtension({
                 }
             }
 
+            // Ensure slot 0 is total_sequences (INT)
+            if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
+                this.outputs.unshift({ name: "total_sequences", type: "INT", links: null });
+                // LiteGraph restores links AFTER onConfigure, so graph.links is
+                // empty here. Defer link fixup to a microtask that runs after the
+                // synchronous graph.configure() finishes (including link restoration).
+                // We must also rebuild output.links arrays because LiteGraph will
+                // place link IDs on the wrong outputs (shifted by the unshift above).
+                const node = this;
+                queueMicrotask(() => {
+                    if (!node.graph) return;
+                    // Clear all output.links — they were populated at old indices
+                    for (const output of node.outputs) {
+                        output.links = null;
+                    }
+                    // Rebuild from graph.links with corrected origin_slot (+1)
+                    for (const linkId in node.graph.links) {
+                        const link = node.graph.links[linkId];
+                        if (!link || link.origin_id !== node.id) continue;
+                        link.origin_slot += 1;
+                        const output = node.outputs[link.origin_slot];
+                        if (output) {
+                            if (!output.links) output.links = [];
+                            output.links.push(link.id);
+                        }
+                    }
+                    app.graph?.setDirtyCanvas(true, true);
+                });
+            }
+            this.outputs[0].type = "INT";
+            this.outputs[0].name = "total_sequences";
+
             if (keys.length > 0) {
                 // On load, LiteGraph already restored serialized outputs with links.
-                // Rename and set types to match stored state (preserves links).
-                for (let i = 0; i < this.outputs.length && i < keys.length; i++) {
-                    this.outputs[i].name = keys[i];
-                    if (types[i]) this.outputs[i].type = types[i];
+                // Dynamic outputs start at slot 1. Rename and set types to match stored state.
+                for (let i = 0; i < keys.length; i++) {
+                    const slotIdx = i + 1; // offset by 1 for total_sequences
+                    if (slotIdx < this.outputs.length) {
+                        this.outputs[slotIdx].name = keys[i];
+                        if (types[i]) this.outputs[slotIdx].type = types[i];
+                    }
                 }
 
-                // Remove any extra outputs beyond the key count
-                while (this.outputs.length > keys.length) {
+                // Remove any extra outputs beyond keys + total_sequences
+                while (this.outputs.length > keys.length + 1) {
                     this.removeOutput(this.outputs.length - 1);
                 }
-            } else if (this.outputs.length > 0) {
-                // Widget values empty but serialized outputs exist — sync widgets
-                // from the outputs LiteGraph already restored (fallback).
-                if (okWidget) okWidget.value = JSON.stringify(this.outputs.map(o => o.name));
-                if (otWidget) otWidget.value = JSON.stringify(this.outputs.map(o => o.type));
+            } else if (this.outputs.length > 1) {
+                // Widget values empty but serialized dynamic outputs exist — sync widgets
+                // from the outputs LiteGraph already restored (fallback, skip slot 0).
+                const dynamicOutputs = this.outputs.slice(1);
+                if (okWidget) okWidget.value = JSON.stringify(dynamicOutputs.map(o => o.name));
+                if (otWidget) otWidget.value = JSON.stringify(dynamicOutputs.map(o => o.type));
             }
 
             this.setSize(this.computeSize());

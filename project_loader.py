@@ -39,13 +39,31 @@ def to_int(val: Any) -> int:
 
 
 def _fetch_json(url: str) -> dict:
-    """Fetch JSON from a URL using stdlib urllib."""
+    """Fetch JSON from a URL using stdlib urllib.
+
+    On error, returns a dict with an "error" key describing the failure.
+    """
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
             return json.loads(resp.read())
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
-        logger.warning(f"Failed to fetch {url}: {e}")
-        return {}
+    except urllib.error.HTTPError as e:
+        # HTTPError is a subclass of URLError — must be caught first
+        body = ""
+        try:
+            raw = e.read()
+            detail = json.loads(raw)
+            body = detail.get("detail", str(raw, "utf-8", errors="replace"))
+        except Exception:
+            body = str(e)
+        logger.warning(f"HTTP {e.code} from {url}: {body}")
+        return {"error": "http_error", "status": e.code, "message": body}
+    except (urllib.error.URLError, OSError) as e:
+        reason = str(e.reason) if hasattr(e, "reason") else str(e)
+        logger.warning(f"Network error fetching {url}: {reason}")
+        return {"error": "network_error", "message": reason}
+    except json.JSONDecodeError as e:
+        logger.warning(f"Invalid JSON from {url}: {e}")
+        return {"error": "parse_error", "message": str(e)}
 
 
 def _fetch_data(manager_url: str, project: str, file: str, seq: int) -> dict:
@@ -100,6 +118,9 @@ if PromptServer is not None:
         except (ValueError, TypeError):
             seq = 1
         data = _fetch_keys(manager_url, project, file_name, seq)
+        if data.get("error") in ("http_error", "network_error", "parse_error"):
+            status = data.get("status", 502)
+            return web.json_response(data, status=status)
         return web.json_response(data)
 
 
@@ -124,15 +145,25 @@ class ProjectLoaderDynamic:
             },
         }
 
-    RETURN_TYPES = tuple(any_type for _ in range(MAX_DYNAMIC_OUTPUTS))
-    RETURN_NAMES = tuple(f"output_{i}" for i in range(MAX_DYNAMIC_OUTPUTS))
+    RETURN_TYPES = ("INT",) + tuple(any_type for _ in range(MAX_DYNAMIC_OUTPUTS))
+    RETURN_NAMES = ("total_sequences",) + tuple(f"output_{i}" for i in range(MAX_DYNAMIC_OUTPUTS))
     FUNCTION = "load_dynamic"
     CATEGORY = "utils/json/project"
     OUTPUT_NODE = False
 
     def load_dynamic(self, manager_url, project_name, file_name, sequence_number,
                      output_keys="", output_types=""):
+        # Fetch keys metadata (includes total_sequences count)
+        keys_meta = _fetch_keys(manager_url, project_name, file_name, sequence_number)
+        if keys_meta.get("error") in ("http_error", "network_error", "parse_error"):
+            msg = keys_meta.get("message", "Unknown error")
+            raise RuntimeError(f"Failed to fetch project keys: {msg}")
+        total_sequences = keys_meta.get("total_sequences", 0)
+
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
+        if data.get("error") in ("http_error", "network_error", "parse_error"):
+            msg = data.get("message", "Unknown error")
+            raise RuntimeError(f"Failed to fetch sequence data: {msg}")
 
         # Parse keys — try JSON array first, fall back to comma-split for compat
         keys = []
@@ -171,111 +202,14 @@ class ProjectLoaderDynamic:
         while len(results) < MAX_DYNAMIC_OUTPUTS:
             results.append("")
 
-        return tuple(results)
-
-
-# ==========================================
-# 1. STANDARD NODE (Project-based I2V)
-# ==========================================
-
-class ProjectLoaderStandard:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
-            "project_name": ("STRING", {"default": "", "multiline": False}),
-            "file_name": ("STRING", {"default": "", "multiline": False}),
-            "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
-        }}
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "FLOAT", "INT", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("general_prompt", "general_negative", "current_prompt", "negative", "camera", "flf", "seed", "video_file_path", "reference_image_path", "flf_image_path")
-    FUNCTION = "load_standard"
-    CATEGORY = "utils/json/project"
-
-    def load_standard(self, manager_url, project_name, file_name, sequence_number):
-        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
-        return (
-            str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
-            str(data.get("current_prompt", "")), str(data.get("negative", "")),
-            str(data.get("camera", "")), to_float(data.get("flf", 0.0)),
-            to_int(data.get("seed", 0)), str(data.get("video file path", "")),
-            str(data.get("reference image path", "")), str(data.get("flf image path", ""))
-        )
-
-
-# ==========================================
-# 2. VACE NODE (Project-based)
-# ==========================================
-
-class ProjectLoaderVACE:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
-            "project_name": ("STRING", {"default": "", "multiline": False}),
-            "file_name": ("STRING", {"default": "", "multiline": False}),
-            "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
-        }}
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "FLOAT", "INT", "INT", "INT", "INT", "STRING", "INT", "INT", "STRING", "STRING")
-    RETURN_NAMES = ("general_prompt", "general_negative", "current_prompt", "negative", "camera", "flf", "seed", "frame_to_skip", "input_a_frames", "input_b_frames", "reference_path", "reference_switch", "vace_schedule", "video_file_path", "reference_image_path")
-    FUNCTION = "load_vace"
-    CATEGORY = "utils/json/project"
-
-    def load_vace(self, manager_url, project_name, file_name, sequence_number):
-        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
-        return (
-            str(data.get("general_prompt", "")), str(data.get("general_negative", "")),
-            str(data.get("current_prompt", "")), str(data.get("negative", "")),
-            str(data.get("camera", "")), to_float(data.get("flf", 0.0)),
-            to_int(data.get("seed", 0)), to_int(data.get("frame_to_skip", 81)),
-            to_int(data.get("input_a_frames", 16)), to_int(data.get("input_b_frames", 16)),
-            str(data.get("reference path", "")), to_int(data.get("reference switch", 1)),
-            to_int(data.get("vace schedule", 1)), str(data.get("video file path", "")),
-            str(data.get("reference image path", ""))
-        )
-
-
-# ==========================================
-# 3. LoRA NODE (Project-based)
-# ==========================================
-
-class ProjectLoaderLoRA:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
-            "project_name": ("STRING", {"default": "", "multiline": False}),
-            "file_name": ("STRING", {"default": "", "multiline": False}),
-            "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
-        }}
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("lora_1_high", "lora_1_low", "lora_2_high", "lora_2_low", "lora_3_high", "lora_3_low")
-    FUNCTION = "load_loras"
-    CATEGORY = "utils/json/project"
-
-    def load_loras(self, manager_url, project_name, file_name, sequence_number):
-        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
-        return (
-            str(data.get("lora 1 high", "")), str(data.get("lora 1 low", "")),
-            str(data.get("lora 2 high", "")), str(data.get("lora 2 low", "")),
-            str(data.get("lora 3 high", "")), str(data.get("lora 3 low", ""))
-        )
+        return (total_sequences,) + tuple(results)
 
 
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
-    "ProjectLoaderStandard": ProjectLoaderStandard,
-    "ProjectLoaderVACE": ProjectLoaderVACE,
-    "ProjectLoaderLoRA": ProjectLoaderLoRA,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectLoaderDynamic": "Project Loader (Dynamic)",
-    "ProjectLoaderStandard": "Project Loader (Standard/I2V)",
-    "ProjectLoaderVACE": "Project Loader (VACE Full)",
-    "ProjectLoaderLoRA": "Project Loader (LoRAs)",
 }
