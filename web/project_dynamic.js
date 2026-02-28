@@ -143,6 +143,7 @@ app.registerExtension({
                     if (key in oldSlots) {
                         const slot = this.outputs[oldSlots[key]];
                         slot.type = type;
+                        slot.label = key;
                         newOutputs.push(slot);
                         delete oldSlots[key];
                     } else {
@@ -197,37 +198,12 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            // Primary source: read output names from serialized node info.
-            // Hidden widget values may not survive ComfyUI's serialization,
-            // but info.outputs always contains the correct saved output names.
-            let keys = [];
-            let types = [];
-            const savedOutputs = info.outputs || [];
-            for (let i = 0; i < savedOutputs.length; i++) {
-                if (savedOutputs[i].name === "total_sequences") continue;
-                if (/^output_\d+$/.test(savedOutputs[i].name)) continue;
-                keys.push(savedOutputs[i].name);
-                types.push(savedOutputs[i].type || "*");
-            }
-
-            // Fallback: try hidden widget values
-            if (keys.length === 0) {
-                const wKeys = okWidget?.value
-                    ? okWidget.value.split(",").filter(k => k.trim())
-                    : [];
-                if (wKeys.length > 0) {
-                    keys = wKeys;
-                    types = otWidget?.value
-                        ? otWidget.value.split(",")
-                        : [];
-                }
-            }
-
-            // Update hidden widgets so the Python backend has keys for execution
-            if (keys.length > 0) {
-                if (okWidget) okWidget.value = keys.join(",");
-                if (otWidget) otWidget.value = types.join(",");
-            }
+            const keys = okWidget?.value
+                ? okWidget.value.split(",").filter(k => k.trim())
+                : [];
+            const types = otWidget?.value
+                ? otWidget.value.split(",")
+                : [];
 
             // Ensure slot 0 is total_sequences (INT)
             if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
@@ -267,13 +243,10 @@ app.registerExtension({
                     this.removeOutput(this.outputs.length - 1);
                 }
             } else if (this.outputs.length > 1) {
-                const dynamicOutputs = this.outputs.slice(1).filter(
-                    o => !/^output_\d+$/.test(o.name)
-                );
-                if (dynamicOutputs.length > 0) {
-                    if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
-                    if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
-                }
+                // Widget values empty but serialized dynamic outputs exist — sync widgets
+                const dynamicOutputs = this.outputs.slice(1);
+                if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
+                if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
             }
 
             this.setSize(this.computeSize());
