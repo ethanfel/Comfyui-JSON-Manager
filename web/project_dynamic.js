@@ -197,29 +197,47 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            const keys = okWidget?.value
-                ? okWidget.value.split(",").filter(k => k.trim())
-                : [];
-            const types = otWidget?.value
-                ? otWidget.value.split(",")
-                : [];
+            // Primary source: read output names from serialized node info.
+            // Hidden widget values may not survive ComfyUI's serialization,
+            // but info.outputs always contains the correct saved output names.
+            let keys = [];
+            let types = [];
+            const savedOutputs = info.outputs || [];
+            for (let i = 0; i < savedOutputs.length; i++) {
+                if (savedOutputs[i].name === "total_sequences") continue;
+                if (/^output_\d+$/.test(savedOutputs[i].name)) continue;
+                keys.push(savedOutputs[i].name);
+                types.push(savedOutputs[i].type || "*");
+            }
+
+            // Fallback: try hidden widget values
+            if (keys.length === 0) {
+                const wKeys = okWidget?.value
+                    ? okWidget.value.split(",").filter(k => k.trim())
+                    : [];
+                if (wKeys.length > 0) {
+                    keys = wKeys;
+                    types = otWidget?.value
+                        ? otWidget.value.split(",")
+                        : [];
+                }
+            }
+
+            // Update hidden widgets so the Python backend has keys for execution
+            if (keys.length > 0) {
+                if (okWidget) okWidget.value = keys.join(",");
+                if (otWidget) otWidget.value = types.join(",");
+            }
 
             // Ensure slot 0 is total_sequences (INT)
             if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
                 this.outputs.unshift({ name: "total_sequences", type: "INT", links: null });
-                // LiteGraph restores links AFTER onConfigure, so graph.links is
-                // empty here. Defer link fixup to a microtask that runs after the
-                // synchronous graph.configure() finishes (including link restoration).
-                // We must also rebuild output.links arrays because LiteGraph will
-                // place link IDs on the wrong outputs (shifted by the unshift above).
                 const node = this;
                 queueMicrotask(() => {
                     if (!node.graph) return;
-                    // Clear all output.links — they were populated at old indices
                     for (const output of node.outputs) {
                         output.links = null;
                     }
-                    // Rebuild from graph.links with corrected origin_slot (+1)
                     for (const linkId in node.graph.links) {
                         const link = node.graph.links[linkId];
                         if (!link || link.origin_id !== node.id) continue;
@@ -237,26 +255,24 @@ app.registerExtension({
             this.outputs[0].name = "total_sequences";
 
             if (keys.length > 0) {
-                // On load, LiteGraph already restored serialized outputs with links.
-                // Dynamic outputs start at slot 1. Rename and set types to match stored state.
                 for (let i = 0; i < keys.length; i++) {
-                    const slotIdx = i + 1; // offset by 1 for total_sequences
+                    const slotIdx = i + 1;
                     if (slotIdx < this.outputs.length) {
                         this.outputs[slotIdx].name = keys[i].trim();
                         if (types[i]) this.outputs[slotIdx].type = types[i];
                     }
                 }
-
-                // Remove any extra outputs beyond keys + total_sequences
                 while (this.outputs.length > keys.length + 1) {
                     this.removeOutput(this.outputs.length - 1);
                 }
             } else if (this.outputs.length > 1) {
-                // Widget values empty but serialized dynamic outputs exist — sync widgets
-                // from the outputs LiteGraph already restored (fallback, skip slot 0).
-                const dynamicOutputs = this.outputs.slice(1);
-                if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
-                if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
+                const dynamicOutputs = this.outputs.slice(1).filter(
+                    o => !/^output_\d+$/.test(o.name)
+                );
+                if (dynamicOutputs.length > 0) {
+                    if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
+                    if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
+                }
             }
 
             this.setSize(this.computeSize());
