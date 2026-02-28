@@ -75,6 +75,8 @@ if PromptServer is not None:
         except (ValueError, TypeError):
             seq = 1
         data = read_json_data(json_path)
+        if not data:
+            return web.json_response({"keys": [], "types": [], "error": "file_not_found"})
         target = get_batch_item(data, seq)
         keys = []
         types = []
