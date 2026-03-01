@@ -78,6 +78,48 @@ def find_insert_position(batch_list, parent_index, parent_seq_num):
     return pos
 
 
+# --- Auto change note ---
+
+def _auto_change_note(htree, batch_list):
+    """Compare current batch_list against last snapshot and describe changes."""
+    # Get previous batch data from the current head
+    if not htree.head_id or htree.head_id not in htree.nodes:
+        return f'Initial save ({len(batch_list)} sequences)'
+
+    prev_data = htree.nodes[htree.head_id].get('data', {})
+    prev_batch = prev_data.get(KEY_BATCH_DATA, [])
+
+    prev_by_seq = {int(s.get(KEY_SEQUENCE_NUMBER, 0)): s for s in prev_batch}
+    curr_by_seq = {int(s.get(KEY_SEQUENCE_NUMBER, 0)): s for s in batch_list}
+
+    added = sorted(set(curr_by_seq) - set(prev_by_seq))
+    removed = sorted(set(prev_by_seq) - set(curr_by_seq))
+
+    changed_keys = set()
+    for seq_num in sorted(set(curr_by_seq) & set(prev_by_seq)):
+        old, new = prev_by_seq[seq_num], curr_by_seq[seq_num]
+        all_keys = set(old) | set(new)
+        for k in all_keys:
+            if old.get(k) != new.get(k):
+                changed_keys.add(k)
+
+    parts = []
+    if added:
+        parts.append(f'Added seq {", ".join(str(s) for s in added)}')
+    if removed:
+        parts.append(f'Removed seq {", ".join(str(s) for s in removed)}')
+    if changed_keys:
+        # Show up to 4 changed field names
+        keys_list = sorted(changed_keys)
+        if len(keys_list) > 4:
+            keys_str = ', '.join(keys_list[:4]) + f' +{len(keys_list) - 4} more'
+        else:
+            keys_str = ', '.join(keys_list)
+        parts.append(f'Changed: {keys_str}')
+
+    return '; '.join(parts) if parts else 'No changes detected'
+
+
 # --- Helper for repetitive dict-bound inputs ---
 
 def dict_input(element_fn, label, seq, key, **kwargs):
@@ -293,7 +335,7 @@ def render_batch_processor(state: AppState):
                 htree = HistoryTree(tree_data)
                 snapshot_payload = copy.deepcopy(data)
                 snapshot_payload.pop(KEY_HISTORY_TREE, None)
-                note = commit_input.value if commit_input.value else 'Batch Update'
+                note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list)
                 htree.commit(snapshot_payload, note=note)
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
