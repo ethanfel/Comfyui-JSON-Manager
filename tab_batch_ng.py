@@ -608,7 +608,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
 def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_list):
     # VACE Schedule (needed early for both columns)
-    sched_val = max(0, min(int(seq.get('vace schedule', 1)), len(VACE_MODES) - 1))
+    def _safe_int(val, default=0):
+        try:
+            return int(float(val))
+        except (ValueError, TypeError, OverflowError):
+            return default
+
+    sched_val = max(0, min(_safe_int(seq.get('vace schedule', 1), 1), len(VACE_MODES) - 1))
 
     # Mode reference dialog
     with ui.dialog() as ref_dlg, ui.card():
@@ -678,10 +684,10 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_li
                 'outlined').classes('w-full q-mt-sm')
 
             # VACE Length + output calculation
-            input_a = int(seq.get('input_a_frames', 16))
-            input_b = int(seq.get('input_b_frames', 16))
-            stored_total = int(seq.get('vace_length', 49))
-            mode_idx = int(seq.get('vace schedule', 1))
+            input_a = _safe_int(seq.get('input_a_frames', 16), 16)
+            input_b = _safe_int(seq.get('input_b_frames', 16), 16)
+            stored_total = _safe_int(seq.get('vace_length', 49), 49)
+            mode_idx = _safe_int(seq.get('vace schedule', 1), 1)
 
             if mode_idx == 0:
                 base_length = max(stored_total - input_a, 1)

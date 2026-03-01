@@ -210,7 +210,8 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                     now = time.time()
                     db.conn.execute(
                         "INSERT INTO sequences (data_file_id, sequence_number, data, updated_at) "
-                        "VALUES (?, ?, ?, ?)",
+                        "VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(data_file_id, sequence_number) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at",
                         (df_id, seq_num, json.dumps(item), now),
                     )
 

@@ -1,3 +1,4 @@
+import html
 import time
 import uuid
 from typing import Any
@@ -154,13 +155,14 @@ class HistoryTree:
             full_note = n.get('note', 'Step')
 
             display_note = (full_note[:max_note_len] + '..') if len(full_note) > max_note_len else full_note
+            display_note = html.escape(display_note)
 
             ts = time.strftime('%b %d %H:%M', time.localtime(n['timestamp']))
 
             # Branch label for tip nodes
             branch_label = ""
             if nid in tip_to_branches:
-                branch_label = ", ".join(tip_to_branches[nid])
+                branch_label = html.escape(", ".join(tip_to_branches[nid]))
 
             # COLORS — per-branch tint, overridden for HEAD and tips
             b_name = node_to_branch.get(nid)
@@ -190,7 +192,7 @@ class HistoryTree:
                 + '</TABLE>>'
             )
 
-            safe_tooltip = full_note.replace('"', "'")
+            safe_tooltip = full_note.replace('\\', '\\\\').replace('"', '\\"')
             dot.append(f'  "{nid}" [label={label}, tooltip="{safe_tooltip}"];')
 
             if n["parent"] and n["parent"] in self.nodes:

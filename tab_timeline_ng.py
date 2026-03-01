@@ -13,6 +13,7 @@ def _delete_nodes(htree, data, file_path, node_ids):
     if 'history_tree_backup' not in data:
         data['history_tree_backup'] = []
     data['history_tree_backup'].append(copy.deepcopy(htree.to_dict()))
+    data['history_tree_backup'] = data['history_tree_backup'][-10:]
     for nid in node_ids:
         htree.nodes.pop(nid, None)
     for b, tip in list(htree.branches.items()):
