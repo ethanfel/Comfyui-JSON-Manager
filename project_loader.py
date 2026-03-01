@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import urllib.parse
@@ -88,7 +89,7 @@ if PromptServer is not None:
     async def list_projects_proxy(request):
         manager_url = request.query.get("url", "http://localhost:8080")
         url = f"{manager_url.rstrip('/')}/api/projects"
-        data = _fetch_json(url)
+        data = await asyncio.to_thread(_fetch_json, url)
         return web.json_response(data)
 
     @PromptServer.instance.routes.get("/json_manager/list_project_files")
@@ -96,7 +97,7 @@ if PromptServer is not None:
         manager_url = request.query.get("url", "http://localhost:8080")
         project = urllib.parse.quote(request.query.get("project", ""), safe='')
         url = f"{manager_url.rstrip('/')}/api/projects/{project}/files"
-        data = _fetch_json(url)
+        data = await asyncio.to_thread(_fetch_json, url)
         return web.json_response(data)
 
     @PromptServer.instance.routes.get("/json_manager/list_project_sequences")
@@ -105,7 +106,7 @@ if PromptServer is not None:
         project = urllib.parse.quote(request.query.get("project", ""), safe='')
         file_name = urllib.parse.quote(request.query.get("file", ""), safe='')
         url = f"{manager_url.rstrip('/')}/api/projects/{project}/files/{file_name}/sequences"
-        data = _fetch_json(url)
+        data = await asyncio.to_thread(_fetch_json, url)
         return web.json_response(data)
 
     @PromptServer.instance.routes.get("/json_manager/get_project_keys")
@@ -117,7 +118,7 @@ if PromptServer is not None:
             seq = int(request.query.get("seq", "1"))
         except (ValueError, TypeError):
             seq = 1
-        data = _fetch_keys(manager_url, project, file_name, seq)
+        data = await asyncio.to_thread(_fetch_keys, manager_url, project, file_name, seq)
         if data.get("error") in ("http_error", "network_error", "parse_error"):
             status = data.get("status", 502)
             return web.json_response(data, status=status)

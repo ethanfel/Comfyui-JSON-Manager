@@ -1,5 +1,6 @@
 import json
 import logging
+import sqlite3
 from pathlib import Path
 
 from nicegui import ui
@@ -127,6 +128,9 @@ def render_projects_tab(state: AppState):
                                                         state.config)
                                         ui.notify(f'Renamed to "{new_name}"', type='positive')
                                         render_project_list.refresh()
+                                    except sqlite3.IntegrityError:
+                                        ui.notify(f'A project named "{new_name}" already exists',
+                                                  type='warning')
                                     except Exception as e:
                                         ui.notify(f'Error: {e}', type='negative')
 
@@ -140,6 +144,9 @@ def render_projects_tab(state: AppState):
                                 )
                                 if new_path and new_path.strip() and new_path.strip() != path:
                                     new_path = new_path.strip()
+                                    if not Path(new_path).is_dir():
+                                        ui.notify(f'Warning: "{new_path}" does not exist',
+                                                  type='warning')
                                     state.db.update_project_path(name, new_path)
                                     ui.notify(f'Path updated to "{new_path}"', type='positive')
                                     render_project_list.refresh()

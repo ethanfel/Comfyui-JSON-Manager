@@ -267,7 +267,7 @@ def render_batch_processor(state: AppState):
 
             with ui.row().classes('q-mt-sm'):
                 def add_empty():
-                    _add_sequence(DEFAULTS.copy())
+                    _add_sequence(copy.deepcopy(DEFAULTS))
 
                 def add_from_source():
                     item = copy.deepcopy(DEFAULTS)
@@ -383,7 +383,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         # --- Action row ---
         with ui.row().classes('w-full q-gutter-sm action-row'):
             # Rename
-            async def rename(idx=i, s=seq, exp=expansion):
+            async def rename(s=seq):
                 result = await ui.run_javascript(
                     f'prompt("Rename sequence:", {json.dumps(s.get("name", ""))})',
                     timeout=30.0,

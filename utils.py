@@ -30,6 +30,7 @@ DEFAULTS = {
     "cfg": 1.5,
 
     # --- Settings ---
+    "mode": 0,
     "camera": "static",
     "flf": 0.0,
 

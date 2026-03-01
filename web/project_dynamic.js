@@ -117,11 +117,11 @@ app.registerExtension({
                     return;
                 }
 
-                // Store keys and types in hidden widgets for persistence (comma-separated)
+                // Store keys and types in hidden widgets for persistence (JSON)
                 const okWidget = this.widgets?.find(w => w.name === "output_keys");
-                if (okWidget) okWidget.value = keys.join(",");
+                if (okWidget) okWidget.value = JSON.stringify(keys);
                 const otWidget = this.widgets?.find(w => w.name === "output_types");
-                if (otWidget) otWidget.value = types.join(",");
+                if (otWidget) otWidget.value = JSON.stringify(types);
 
                 // Slot 0 is always total_sequences (INT) — ensure it exists
                 if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
@@ -198,12 +198,18 @@ app.registerExtension({
             const okWidget = this.widgets?.find(w => w.name === "output_keys");
             const otWidget = this.widgets?.find(w => w.name === "output_types");
 
-            const keys = okWidget?.value
-                ? okWidget.value.split(",").filter(k => k.trim())
-                : [];
-            const types = otWidget?.value
-                ? otWidget.value.split(",")
-                : [];
+            let keys = [];
+            let types = [];
+            if (okWidget?.value) {
+                try { keys = JSON.parse(okWidget.value); } catch (_) {
+                    keys = okWidget.value.split(",").filter(k => k.trim());
+                }
+            }
+            if (otWidget?.value) {
+                try { types = JSON.parse(otWidget.value); } catch (_) {
+                    types = otWidget.value.split(",");
+                }
+            }
 
             // Ensure slot 0 is total_sequences (INT)
             if (this.outputs.length === 0 || this.outputs[0].name !== "total_sequences") {
