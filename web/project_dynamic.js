@@ -34,7 +34,7 @@ app.registerExtension({
 
             // Auto-refresh with 500ms debounce on widget changes
             this._refreshTimer = null;
-            const autoRefreshWidgets = ["project_name", "file_name", "sequence_number"];
+            const autoRefreshWidgets = ["project_name", "file_name", "sequence_number", "refresh"];
             for (const widgetName of autoRefreshWidgets) {
                 const w = this.widgets?.find(w => w.name === widgetName);
                 if (w) {

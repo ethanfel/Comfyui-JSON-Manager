@@ -138,6 +138,7 @@ class ProjectLoaderDynamic:
                 "project_name": ("STRING", {"default": "", "multiline": False}),
                 "file_name": ("STRING", {"default": "", "multiline": False}),
                 "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
+                "refresh": ("INT", {"default": 0, "min": 0, "max": 9999}),
             },
             "optional": {
                 "output_keys": ("STRING", {"default": ""}),
@@ -152,7 +153,7 @@ class ProjectLoaderDynamic:
     OUTPUT_NODE = False
 
     def load_dynamic(self, manager_url, project_name, file_name, sequence_number,
-                     output_keys="", output_types=""):
+                     refresh=0, output_keys="", output_types=""):
         # Fetch keys metadata (includes total_sequences count)
         keys_meta = _fetch_keys(manager_url, project_name, file_name, sequence_number)
         if keys_meta.get("error") in ("http_error", "network_error", "parse_error"):
