@@ -7,7 +7,7 @@ from nicegui import ui
 
 from state import AppState
 from db import ProjectDB
-from utils import save_config, sync_to_db, KEY_BATCH_DATA
+from utils import save_config, sync_to_db
 
 logger = logging.getLogger(__name__)
 

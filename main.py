@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 from pathlib import Path
@@ -481,7 +482,7 @@ def render_sidebar(state: AppState, dual_pane: dict):
                     if not fn.endswith('.json'):
                         fn += '.json'
                     path = state.current_dir / fn
-                    first_item = DEFAULTS.copy()
+                    first_item = copy.deepcopy(DEFAULTS)
                     first_item[KEY_SEQUENCE_NUMBER] = 1
                     save_json(path, {KEY_BATCH_DATA: [first_item]})
                     new_fn_input.set_value('')
@@ -514,7 +515,7 @@ def render_sidebar(state: AppState, dual_pane: dict):
         state.show_comfy_monitor = e.value
         state._render_main.refresh()
 
-    ui.checkbox('Show Comfy Monitor', value=True, on_change=on_monitor_toggle)
+    ui.checkbox('Show Comfy Monitor', value=state.show_comfy_monitor, on_change=on_monitor_toggle)
 
 
 # Register REST API routes for ComfyUI connectivity (uses the shared DB instance)

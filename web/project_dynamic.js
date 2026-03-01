@@ -251,8 +251,8 @@ app.registerExtension({
             } else if (this.outputs.length > 1) {
                 // Widget values empty but serialized dynamic outputs exist — sync widgets
                 const dynamicOutputs = this.outputs.slice(1);
-                if (okWidget) okWidget.value = dynamicOutputs.map(o => o.name).join(",");
-                if (otWidget) otWidget.value = dynamicOutputs.map(o => o.type).join(",");
+                if (okWidget) okWidget.value = JSON.stringify(dynamicOutputs.map(o => o.name));
+                if (otWidget) otWidget.value = JSON.stringify(dynamicOutputs.map(o => o.type));
             }
 
             this.setSize(this.computeSize());

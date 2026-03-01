@@ -273,7 +273,7 @@ def render_batch_processor(state: AppState):
                     item = copy.deepcopy(DEFAULTS)
                     src_batch = _src_cache['batch']
                     sel_idx = src_seq_select.value
-                    if src_batch and sel_idx is not None:
+                    if src_batch and sel_idx is not None and int(sel_idx) < len(src_batch):
                         item.update(copy.deepcopy(src_batch[int(sel_idx)]))
                     elif _src_cache['data']:
                         item.update(copy.deepcopy(_src_cache['data']))
@@ -398,7 +398,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 item = copy.deepcopy(DEFAULTS)
                 src_batch = src_cache['batch']
                 sel_idx = src_seq_select.value
-                if src_batch and sel_idx is not None:
+                if src_batch and sel_idx is not None and int(sel_idx) < len(src_batch):
                     item.update(copy.deepcopy(src_batch[int(sel_idx)]))
                 elif src_cache['data']:
                     item.update(copy.deepcopy(src_cache['data']))
@@ -453,8 +453,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
             # Delete
             def delete(idx=i):
-                batch_list.pop(idx)
-                commit()
+                if idx < len(batch_list):
+                    batch_list.pop(idx)
+                    commit()
 
             ui.button(icon='delete', on_click=delete).props('color=negative')
 
