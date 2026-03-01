@@ -244,7 +244,7 @@ def render_batch_processor(state: AppState):
     lora_keys = ['lora 1 high', 'lora 1 low', 'lora 2 high', 'lora 2 low',
                  'lora 3 high', 'lora 3 low']
     standard_keys = {
-        'name', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
+        'name', 'mode', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
         'frame_to_skip', 'end_frame', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
@@ -431,6 +431,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                     'w-full q-mt-sm').props('outlined rows=2')
 
             with splitter.after:
+                # Mode
+                dict_number('Mode', seq, 'mode').props('outlined').classes('w-full')
+
                 # Sequence number
                 sn_label = (
                     f'Seq Number (Sub #{parent_of(seq_num)}.{sub_index_of(seq_num)})'
