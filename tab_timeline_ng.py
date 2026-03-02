@@ -1,4 +1,5 @@
 import copy
+import json
 import time
 
 from nicegui import ui
@@ -9,16 +10,37 @@ from utils import save_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 
 def _delete_nodes(htree, data, file_path, node_ids):
-    """Delete nodes with backup, branch cleanup, and head fallback."""
+    """Delete nodes with backup, branch cleanup, re-parenting, and head fallback."""
     if 'history_tree_backup' not in data:
         data['history_tree_backup'] = []
     data['history_tree_backup'].append(copy.deepcopy(htree.to_dict()))
     data['history_tree_backup'] = data['history_tree_backup'][-10:]
+    # Save deleted node parents before removal (needed for branch re-pointing)
+    deleted_parents = {}
+    for nid in node_ids:
+        deleted_node = htree.nodes.get(nid)
+        if deleted_node:
+            deleted_parents[nid] = deleted_node.get('parent')
+    # Re-parent children of deleted nodes — walk up to find a surviving ancestor
+    for nid in node_ids:
+        surviving_parent = deleted_parents.get(nid)
+        while surviving_parent in node_ids:
+            surviving_parent = deleted_parents.get(surviving_parent)
+        for child in htree.nodes.values():
+            if child.get('parent') == nid:
+                child['parent'] = surviving_parent
     for nid in node_ids:
         htree.nodes.pop(nid, None)
+    # Re-point branches whose tip was deleted to a surviving ancestor
     for b, tip in list(htree.branches.items()):
         if tip in node_ids:
-            del htree.branches[b]
+            new_tip = deleted_parents.get(tip)
+            while new_tip in node_ids:
+                new_tip = deleted_parents.get(new_tip)
+            if new_tip and new_tip in htree.nodes:
+                htree.branches[b] = new_tip
+            else:
+                del htree.branches[b]
     if htree.head_id in node_ids:
         if htree.nodes:
             htree.head_id = sorted(htree.nodes.values(),
@@ -153,8 +175,12 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
 def _walk_branch_nodes(htree, tip_id):
     """Walk parent pointers from tip, returning nodes newest-first."""
     nodes = []
+    visited = set()
     current = tip_id
     while current and current in htree.nodes:
+        if current in visited:
+            break
+        visited.add(current)
         nodes.append(htree.nodes[current])
         current = htree.nodes[current].get('parent')
     return nodes
@@ -173,10 +199,14 @@ def _find_active_branch(htree):
 def _find_branch_for_node(htree, node_id):
     """Return the branch name whose ancestry contains node_id, or None."""
     for b_name, tip_id in htree.branches.items():
+        visited = set()
         current = tip_id
         while current and current in htree.nodes:
+            if current in visited:
+                break
             if current == node_id:
                 return b_name
+            visited.add(current)
             current = htree.nodes[current].get('parent')
     return None
 
@@ -311,6 +341,10 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
                     _delete_nodes(htree, data, file_path, {sel_id})
                     if state and state.db_enabled and state.current_project and state.db:
                         sync_to_db(state.db, state.current_project, file_path, data)
+                    # Reset selection if branch was removed
+                    if selected['branch'] not in htree.branches:
+                        selected['branch'] = next(iter(htree.branches), None)
+                    selected['node_id'] = htree.head_id
                     ui.notify('Node Deleted', type='positive')
                     refresh_fn()
 
@@ -434,7 +468,7 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         src = graphviz.Source(dot_source)
         svg = src.pipe(format='svg').decode('utf-8')
 
-        sel_escaped = selected_node_id.replace("'", "\\'") if selected_node_id else ''
+        sel_escaped = json.dumps(selected_node_id or '')[1:-1]  # strip quotes, get JS-safe content
 
         # CSS inline (allowed), JS via run_javascript (script tags blocked)
         css = '''<style>
@@ -491,11 +525,18 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
 
 
 def _restore_node(data, node, htree, file_path, state: AppState):
-    """Restore a history node as the current version."""
-    node_data = copy.deepcopy(node['data'])
-    if KEY_BATCH_DATA not in node_data and KEY_BATCH_DATA in data:
-        del data[KEY_BATCH_DATA]
+    """Restore a history node as the current version (full replace, not merge)."""
+    node_data = copy.deepcopy(node.get('data', {}))
+    # Preserve the history tree before clearing
+    preserved_tree = data.get(KEY_HISTORY_TREE)
+    preserved_backup = data.get('history_tree_backup')
+    data.clear()
     data.update(node_data)
+    # Re-attach history tree (not part of snapshot data)
+    if preserved_tree is not None:
+        data[KEY_HISTORY_TREE] = preserved_tree
+    if preserved_backup is not None:
+        data['history_tree_backup'] = preserved_backup
     htree.head_id = node['id']
     data[KEY_HISTORY_TREE] = htree.to_dict()
     save_json(file_path, data)
@@ -512,7 +553,7 @@ def _render_data_preview(nid, htree):
         ui.label('No node selected.').classes('text-caption')
         return
 
-    node_data = htree.nodes[nid]['data']
+    node_data = htree.nodes[nid].get('data', {})
     batch_list = node_data.get(KEY_BATCH_DATA, [])
 
     if batch_list and isinstance(batch_list, list) and len(batch_list) > 0:

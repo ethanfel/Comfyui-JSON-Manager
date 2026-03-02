@@ -139,7 +139,7 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
 
     async def refresh_status():
         status_container.clear()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         res, err = await loop.run_in_executor(
             None, lambda: _fetch_blocking(f'{comfy_url}/queue'))
         with status_container:
@@ -237,7 +237,7 @@ def _render_single_instance(state: AppState, instance_config: dict, index: int,
 
         async def check_image():
             img_container.clear()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             res, err = await loop.run_in_executor(
                 None, lambda: _fetch_blocking(f'{comfy_url}/history', timeout=2))
             with img_container:

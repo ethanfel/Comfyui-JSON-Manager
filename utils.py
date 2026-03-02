@@ -114,14 +114,17 @@ def save_config(current_dir, favorites, extra_data=None):
     existing = load_config()
     data.update(existing)
     
-    data["last_dir"] = str(current_dir)
-    data["favorites"] = favorites
-    
     if extra_data:
         data.update(extra_data)
-        
-    with open(CONFIG_FILE, 'w') as f:
+
+    # Force-set explicit params last so extra_data can't override them
+    data["last_dir"] = str(current_dir)
+    data["favorites"] = favorites
+
+    tmp = CONFIG_FILE.with_suffix('.json.tmp')
+    with open(tmp, 'w') as f:
         json.dump(data, f, indent=4)
+    os.replace(tmp, CONFIG_FILE)
 
 def load_snippets():
     if SNIPPETS_FILE.exists():
@@ -133,8 +136,10 @@ def load_snippets():
     return {}
 
 def save_snippets(snippets):
-    with open(SNIPPETS_FILE, 'w') as f:
+    tmp = SNIPPETS_FILE.with_suffix('.json.tmp')
+    with open(tmp, 'w') as f:
         json.dump(snippets, f, indent=4)
+    os.replace(tmp, SNIPPETS_FILE)
 
 def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
     path = Path(path)

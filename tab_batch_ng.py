@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 import random
 from pathlib import Path
 
@@ -143,6 +144,8 @@ def dict_number(label, seq, key, default=0, **kwargs):
     try:
         # Try float first to handle "1.5" strings, then check if it's a clean int
         fval = float(val)
+        if not math.isfinite(fval):
+            fval = float(default)
         val = int(fval) if fval == int(fval) else fval
     except (ValueError, TypeError, OverflowError):
         val = default
@@ -153,10 +156,13 @@ def dict_number(label, seq, key, default=0, **kwargs):
         if v is None:
             v = d
         elif isinstance(v, float):
-            try:
-                v = int(v) if v == int(v) else v
-            except (OverflowError, ValueError):
+            if not math.isfinite(v):
                 v = d
+            else:
+                try:
+                    v = int(v) if v == int(v) else v
+                except (OverflowError, ValueError):
+                    v = d
         seq[k] = v
 
     el.on('blur', lambda _: _sync())
@@ -336,7 +342,11 @@ def render_batch_processor(state: AppState):
                 snapshot_payload = copy.deepcopy(data)
                 snapshot_payload.pop(KEY_HISTORY_TREE, None)
                 note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list)
-                htree.commit(snapshot_payload, note=note)
+                try:
+                    htree.commit(snapshot_payload, note=note)
+                except ValueError as e:
+                    ui.notify(f'Save failed: {e}', type='negative')
+                    return
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 save_json(file_path, data)
                 if state.db_enabled and state.current_project and state.db:
@@ -635,18 +645,18 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_li
                 fts_input = dict_number('Frame to Skip', seq, 'frame_to_skip').classes(
                     'col').props('outlined')
 
-                _original_fts = int(seq.get('frame_to_skip', FRAME_TO_SKIP_DEFAULT))
+                _original_fts = _safe_int(seq.get('frame_to_skip', FRAME_TO_SKIP_DEFAULT), FRAME_TO_SKIP_DEFAULT)
 
                 def shift_fts(idx=i, orig=_original_fts):
-                    new_fts = int(fts_input.value) if fts_input.value is not None else orig
+                    new_fts = _safe_int(fts_input.value, orig)
                     delta = new_fts - orig
                     if delta == 0:
                         ui.notify('No change to shift', type='info')
                         return
                     shifted = 0
                     for j in range(idx + 1, len(batch_list)):
-                        batch_list[j]['frame_to_skip'] = int(
-                            batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT)) + delta
+                        batch_list[j]['frame_to_skip'] = _safe_int(
+                            batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT), FRAME_TO_SKIP_DEFAULT) + delta
                         shifted += 1
                     data[KEY_BATCH_DATA] = batch_list
                     save_json(file_path, data)
@@ -670,7 +680,7 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_li
                 ui.button(icon='help', on_click=ref_dlg.open).props('flat dense round')
 
                 def update_mode_label(e):
-                    idx = int(e.sender.value) if e.sender.value is not None else 0
+                    idx = _safe_int(e.sender.value, 0)
                     idx = max(0, min(idx, len(VACE_MODES) - 1))
                     mode_label.set_text(VACE_MODES[idx])
 
@@ -706,10 +716,10 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_li
 
     # Recalculate VACE output when any input changes
     def recalc_vace(*_args):
-        mi = int(vs_input.value) if vs_input.value is not None else 0
-        ia = int(ia_input.value) if ia_input.value is not None else 16
-        ib = int(ib_input.value) if ib_input.value is not None else 16
-        nb = int(vl_input.value) if vl_input.value is not None else 1
+        mi = _safe_int(vs_input.value, 0)
+        ia = _safe_int(ia_input.value, 16)
+        ib = _safe_int(ib_input.value, 16)
+        nb = _safe_int(vl_input.value, 1)
 
         if mi == 0:
             raw = nb + ia
@@ -794,7 +804,11 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
             htree = HistoryTree(data.get(KEY_HISTORY_TREE, {}))
             snapshot = copy.deepcopy(data)
             snapshot.pop(KEY_HISTORY_TREE, None)
-            htree.commit(snapshot, f"Mass update: {', '.join(selected_keys)}")
+            try:
+                htree.commit(snapshot, f"Mass update: {', '.join(selected_keys)}")
+            except ValueError as e:
+                ui.notify(f'Mass update failed: {e}', type='negative')
+                return
             data[KEY_HISTORY_TREE] = htree.to_dict()
             save_json(file_path, data)
             if state.db_enabled and state.current_project and state.db:

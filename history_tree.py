@@ -18,7 +18,10 @@ class HistoryTree:
     def _migrate_legacy(self, old_list: list[dict[str, Any]]) -> None:
         parent = None
         for item in reversed(old_list):
-            node_id = str(uuid.uuid4())[:8]
+            for _ in range(10):
+                node_id = str(uuid.uuid4())[:8]
+                if node_id not in self.nodes:
+                    break
             self.nodes[node_id] = {
                 "id": node_id, "parent": parent, "timestamp": time.time(),
                 "data": item, "note": item.get("note", "Legacy Import")
@@ -28,7 +31,13 @@ class HistoryTree:
         self.head_id = parent
 
     def commit(self, data: dict[str, Any], note: str = "Snapshot") -> str:
-        new_id = str(uuid.uuid4())[:8]
+        # Generate unique node ID with collision check
+        for _ in range(10):
+            new_id = str(uuid.uuid4())[:8]
+            if new_id not in self.nodes:
+                break
+        else:
+            raise ValueError("Failed to generate unique node ID after 10 attempts")
 
         # Cycle detection: walk parent chain from head to verify no cycle
         if self.head_id:
@@ -39,7 +48,7 @@ class HistoryTree:
                     raise ValueError(f"Cycle detected in history tree at node {current}")
                 visited.add(current)
                 node = self.nodes.get(current)
-                current = node["parent"] if node else None
+                current = node.get("parent") if node else None
 
         active_branch = None
         for b_name, tip_id in self.branches.items():
@@ -115,8 +124,12 @@ class HistoryTree:
         # Build reverse lookup: node_id -> branch name (walk each branch ancestry)
         node_to_branch: dict[str, str] = {}
         for b_name, tip_id in self.branches.items():
+            visited = set()
             current = tip_id
             while current and current in self.nodes:
+                if current in visited:
+                    break
+                visited.add(current)
                 if current not in node_to_branch:
                     node_to_branch[current] = b_name
                 current = self.nodes[current].get('parent')
@@ -192,11 +205,18 @@ class HistoryTree:
                 + '</TABLE>>'
             )
 
-            safe_tooltip = full_note.replace('\\', '\\\\').replace('"', '\\"')
-            dot.append(f'  "{nid}" [label={label}, tooltip="{safe_tooltip}"];')
+            safe_tooltip = (full_note
+                .replace('\\', '\\\\')
+                .replace('"', '\\"')
+                .replace('\n', ' ')
+                .replace('\r', '')
+                .replace(']', '&#93;'))
+            safe_nid = nid.replace('"', '_')
+            dot.append(f'  "{safe_nid}" [label={label}, tooltip="{safe_tooltip}"];')
 
-            if n["parent"] and n["parent"] in self.nodes:
-                dot.append(f'  "{n["parent"]}" -> "{nid}";')
+            if n.get("parent") and n["parent"] in self.nodes:
+                safe_parent = n["parent"].replace('"', '_')
+                dot.append(f'  "{safe_parent}" -> "{safe_nid}";')
 
         dot.append("}")
         return "\n".join(dot)
