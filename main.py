@@ -522,4 +522,4 @@ def render_sidebar(state: AppState, dual_pane: dict):
 if _shared_db is not None:
     register_api_routes(_shared_db)
 
-ui.run(title='AI Settings Manager', port=8080, reload=True)
+ui.run(title='AI Settings Manager', port=8080, reload=True, reload_includes=['*.py'])
