@@ -82,15 +82,18 @@ def render_comfy_monitor(state: AppState):
     _live_refreshables = state._live_refreshables
 
     def poll_all():
-        timeout_val = config.get('monitor_timeout', 0)
-        if timeout_val > 0:
-            for key, start_time in list(state.live_toggles.items()):
-                if start_time and (time.time() - start_time) > (timeout_val * 60):
-                    state.live_toggles[key] = None
-                    if key in _live_checkboxes:
-                        _live_checkboxes[key].set_value(False)
-                    if key in _live_refreshables:
-                        _live_refreshables[key].refresh()
+        try:
+            timeout_val = config.get('monitor_timeout', 0)
+            if timeout_val > 0:
+                for key, start_time in list(state.live_toggles.items()):
+                    if start_time and (time.time() - start_time) > (timeout_val * 60):
+                        state.live_toggles[key] = None
+                        if key in _live_checkboxes:
+                            _live_checkboxes[key].set_value(False)
+                        if key in _live_refreshables:
+                            _live_refreshables[key].refresh()
+        except RuntimeError:
+            pass  # Parent slot deleted during refresh
 
     ui.timer(300, poll_all)
 

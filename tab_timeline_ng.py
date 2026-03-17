@@ -437,6 +437,8 @@ def render_timeline_tab(state: AppState):
     render_timeline()
 
     # --- Poll for graph node clicks (JS → Python bridge) ---
+    graph_timer = None
+
     async def _poll_graph_click():
         if view_mode.value == 'Linear Log':
             return
@@ -446,6 +448,9 @@ def render_timeline_tab(state: AppState):
                 'window.graphSelectedNode = null; v;'
             )
         except Exception:
+            # Deactivate timer if parent slot was deleted
+            if graph_timer is not None:
+                graph_timer.active = False
             return
         if not result:
             return
@@ -458,7 +463,7 @@ def render_timeline_tab(state: AppState):
         selected['node_id'] = node_id
         render_timeline.refresh()
 
-    ui.timer(0.2, _poll_graph_click)
+    graph_timer = ui.timer(0.2, _poll_graph_click)
 
 
 def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
