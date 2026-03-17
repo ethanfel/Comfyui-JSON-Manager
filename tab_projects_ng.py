@@ -60,8 +60,40 @@ def render_projects_tab(state: AppState):
 
         # --- Active project indicator ---
         if state.current_project:
-            ui.label(f'Active Project: {state.current_project}').classes(
-                'text-bold text-primary q-pa-sm')
+            # Check if active project actually exists in the database
+            projects_list = state.db.list_projects()
+            project_exists = any(p['name'] == state.current_project for p in projects_list)
+            if project_exists:
+                ui.label(f'Active Project: {state.current_project}').classes(
+                    'text-bold text-primary q-pa-sm')
+            else:
+                with ui.card().classes('w-full q-pa-sm q-mb-sm').style(
+                        'border-left: 3px solid orange;'):
+                    ui.label(f'Stale project reference: "{state.current_project}" '
+                             '(not found in database)').classes('text-warning')
+                    with ui.row().classes('q-gutter-sm'):
+                        def clear_stale():
+                            state.current_project = ''
+                            state.config['current_project'] = ''
+                            save_config(state.current_dir,
+                                        state.config.get('favorites', []),
+                                        state.config)
+                            ui.notify('Cleared stale project reference', type='info')
+                            render_project_content.refresh()
+
+                        def recreate_project():
+                            name = state.current_project
+                            try:
+                                state.db.create_project(name, str(state.current_dir))
+                                ui.notify(f'Recreated project "{name}"', type='positive')
+                                render_project_content.refresh()
+                            except Exception as e:
+                                ui.notify(f'Error: {e}', type='negative')
+
+                        ui.button('Clear Reference', icon='clear',
+                                  on_click=clear_stale).props('flat dense')
+                        ui.button('Recreate Project', icon='add_circle',
+                                  on_click=recreate_project).props('flat dense color=primary')
 
         # --- Project list ---
         @ui.refreshable
