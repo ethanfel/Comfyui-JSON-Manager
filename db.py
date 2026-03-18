@@ -197,12 +197,38 @@ class ProjectDB:
         )
         self.conn.commit()
 
+    @staticmethod
+    def _migrate_lora_keys(data: dict) -> dict:
+        """Split legacy <lora:name:strength> values into separate name/strength keys."""
+        for idx in range(1, 4):
+            for tier in ('high', 'low'):
+                name_key = f'lora {idx} {tier}'
+                str_key = f'lora {idx} {tier} strength'
+                raw = str(data.get(name_key, ''))
+                if raw.startswith('<lora:'):
+                    inner = raw.replace('<lora:', '').replace('>', '')
+                    if ':' in inner:
+                        parts = inner.rsplit(':', 1)
+                        data[name_key] = parts[0]
+                        try:
+                            data[str_key] = float(parts[1])
+                        except ValueError:
+                            data.setdefault(str_key, 1.0)
+                    else:
+                        data[name_key] = inner
+                        data.setdefault(str_key, 1.0)
+                elif name_key in data and str_key not in data:
+                    data[str_key] = 1.0
+        return data
+
     def get_sequence(self, data_file_id: int, sequence_number: int) -> dict | None:
         row = self.conn.execute(
             "SELECT data FROM sequences WHERE data_file_id = ? AND sequence_number = ?",
             (data_file_id, sequence_number),
         ).fetchone()
-        return json.loads(row["data"]) if row else None
+        if not row:
+            return None
+        return self._migrate_lora_keys(json.loads(row["data"]))
 
     def list_sequences(self, data_file_id: int) -> list[int]:
         rows = self.conn.execute(
