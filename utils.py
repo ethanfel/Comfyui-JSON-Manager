@@ -253,6 +253,9 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                 for item in batch_data:
                     if not isinstance(item, dict):
                         continue
+                    # Ensure all default keys are present before storing
+                    for dk, dv in DEFAULTS.items():
+                        item.setdefault(dk, dv)
                     seq_num = int(item.get(KEY_SEQUENCE_NUMBER, 0))
                     new_seq_nums.add(seq_num)
                     db.conn.execute(
