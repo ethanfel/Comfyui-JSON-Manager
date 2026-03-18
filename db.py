@@ -68,6 +68,26 @@ class ProjectDB:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA_SQL)
+        self._migrate_all_lora_data()
+
+    def _migrate_all_lora_data(self) -> None:
+        """One-time bulk migration: merge separate lora strength keys in all stored sequences."""
+        rows = self.conn.execute("SELECT id, data FROM sequences").fetchall()
+        updated = 0
+        for row in rows:
+            data = json.loads(row["data"])
+            original = row["data"]
+            migrated = self._migrate_lora_keys(data)
+            new_json = json.dumps(migrated)
+            if new_json != original:
+                self.conn.execute(
+                    "UPDATE sequences SET data = ? WHERE id = ?",
+                    (new_json, row["id"]),
+                )
+                updated += 1
+        if updated:
+            self.conn.execute("COMMIT")
+            logger.info("Migrated lora keys in %d/%d sequences", updated, len(rows))
 
     def close(self):
         self.conn.close()
