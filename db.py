@@ -406,6 +406,48 @@ class ProjectDB:
             raise
 
     # ------------------------------------------------------------------
+    # Full data reconstruction (replaces load_json for DB-backed files)
+    # ------------------------------------------------------------------
+
+    def load_full_data(self, project_name: str, file_name: str) -> dict | None:
+        """Reconstruct the full data dict from DB, matching load_json format.
+
+        Returns None if the project or file doesn't exist in the DB.
+        Result has the same structure as a JSON file: top-level keys +
+        batch_data list + history_tree dict.
+        """
+        t0 = time.time()
+        df = self.get_data_file_by_names(project_name, file_name)
+        if not df:
+            return None
+
+        # Start with top-level keys
+        data = df.get("top_level", {})
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        # Load all sequences as batch_data
+        rows = self.conn.execute(
+            "SELECT data FROM sequences WHERE data_file_id = ? ORDER BY sequence_number",
+            (df["id"],),
+        ).fetchall()
+        batch_data = []
+        for row in rows:
+            seq = json.loads(row["data"])
+            self._migrate_lora_keys(seq)
+            batch_data.append(seq)
+        data["batch_data"] = batch_data
+
+        # Load history tree
+        tree = self.get_history_tree(df["id"])
+        if tree:
+            data["history_tree"] = tree
+
+        logger.info("load_full_data %s/%s (%d seqs): %.3fs",
+                     project_name, file_name, len(batch_data), time.time() - t0)
+        return data
+
+    # ------------------------------------------------------------------
     # Query helpers (for REST API)
     # ------------------------------------------------------------------
 
