@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import time
 
 from nicegui import ui
@@ -8,6 +9,8 @@ from nicegui import ui
 from state import AppState
 from history_tree import HistoryTree
 from utils import save_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
+
+logger = logging.getLogger(__name__)
 
 
 def _delete_nodes(htree, data, file_path, node_ids):
@@ -361,6 +364,8 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
 
 
 def render_timeline_tab(state: AppState):
+    t0 = time.perf_counter()
+    logger.info("render_timeline_tab START")
     data = state.data_cache
     file_path = state.file_path
 
@@ -402,6 +407,8 @@ def render_timeline_tab(state: AppState):
 
     @ui.refreshable
     def render_timeline():
+        t_rt = time.perf_counter()
+        logger.info("render_timeline START (%d nodes)", len(htree.nodes))
         all_nodes = sorted(htree.nodes.values(), key=lambda x: x['timestamp'], reverse=True)
         selected_nodes = state.timeline_selected_nodes if selection_mode.value else set()
 
@@ -421,6 +428,7 @@ def render_timeline_tab(state: AppState):
                 all_nodes, htree, data, file_path,
                 _restore_and_refresh, render_timeline.refresh,
                 selected, state=state)
+        logger.info("render_timeline END (%.3fs)", time.perf_counter() - t_rt)
 
     def _toggle_select(nid, checked):
         if checked:
@@ -437,6 +445,7 @@ def render_timeline_tab(state: AppState):
     view_mode.on_value_change(lambda _: render_timeline.refresh())
     selection_mode.on_value_change(lambda _: render_timeline.refresh())
     render_timeline()
+    logger.info("render_timeline_tab END (%.3fs)", time.perf_counter() - t0)
 
     # --- Poll for graph node clicks (JS → Python bridge) ---
     graph_timer = None
@@ -481,6 +490,7 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
     """Render graphviz DOT source as interactive SVG with click-to-select."""
     try:
         import graphviz
+        t_gv = time.perf_counter()
         cache_key = hashlib.md5(dot_source.encode()).hexdigest()
         svg = _graphviz_svg_cache.get(cache_key)
         if svg is None:
@@ -489,6 +499,9 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
             if len(_graphviz_svg_cache) >= _GRAPHVIZ_CACHE_MAX:
                 _graphviz_svg_cache.pop(next(iter(_graphviz_svg_cache)))
             _graphviz_svg_cache[cache_key] = svg
+            logger.info("_render_graphviz MISS (generated): %.3fs", time.perf_counter() - t_gv)
+        else:
+            logger.info("_render_graphviz HIT (cached): %.3fs", time.perf_counter() - t_gv)
 
         sel_escaped = json.dumps(selected_node_id or '')[1:-1]  # strip quotes, get JS-safe content
 
@@ -548,6 +561,8 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
 
 async def _restore_node(data, node, htree, file_path, state: AppState):
     """Restore a history node as the current version (full replace, not merge)."""
+    t0 = time.perf_counter()
+    logger.info("_restore_node START: %s", node.get('note', 'Step'))
     node_data = json.loads(json.dumps(node.get('data', {})))
     # Preserve the history tree before clearing
     preserved_tree = data.get(KEY_HISTORY_TREE)
@@ -566,6 +581,7 @@ async def _restore_node(data, node, htree, file_path, state: AppState):
         await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
     label = f"{node.get('note', 'Step')} ({node['id'][:4]})"
     state.restored_indicator = label
+    logger.info("_restore_node END (%.3fs)", time.perf_counter() - t0)
     ui.notify('Restored!', type='positive')
 
 

@@ -174,24 +174,32 @@ def _migrate_lora_keys(data: dict) -> None:
 
 
 def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
+    t0 = time.time()
     path = Path(path)
     if not path.exists():
         return DEFAULTS.copy(), 0
     try:
         with open(path, 'r') as f:
             data = json.load(f)
+        t1 = time.time()
         _migrate_lora_keys(data)
-        return data, path.stat().st_mtime
+        t2 = time.time()
+        mtime = path.stat().st_mtime
+        logger.info("load_json %s: read=%.3fs migrate=%.3fs total=%.3fs",
+                     path.name, t1 - t0, t2 - t1, t2 - t0)
+        return data, mtime
     except Exception as e:
         logger.error(f"Error loading JSON: {e}")
         return DEFAULTS.copy(), 0
 
 def save_json(path: str | Path, data: dict[str, Any]) -> None:
+    t0 = time.time()
     path = Path(path)
     tmp = path.with_suffix('.json.tmp')
     with open(tmp, 'w') as f:
         json.dump(data, f, indent=4)
     os.replace(tmp, path)
+    logger.info("save_json %s: %.3fs", path.name, time.time() - t0)
 
 def get_file_mtime(path: str | Path) -> float:
     """Returns the modification time of a file, or 0 if it doesn't exist."""
@@ -206,6 +214,7 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
     Resolves (or creates) the data_file, upserts all sequences from batch_data,
     and saves the history_tree. All writes happen in a single transaction.
     """
+    t0 = time.time()
     if not db or not project_name:
         return
     try:
@@ -280,6 +289,10 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
             raise
     except Exception as e:
         logger.warning(f"sync_to_db failed: {e}")
+        return
+    batch_count = len(data.get(KEY_BATCH_DATA, []))
+    logger.info("sync_to_db %s (%d seqs): %.3fs",
+                 Path(file_path).name, batch_count, time.time() - t0)
 
 
 def generate_templates(current_dir: Path) -> None:

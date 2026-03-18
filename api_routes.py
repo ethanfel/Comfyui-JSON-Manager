@@ -4,6 +4,7 @@ All endpoints are read-only. Mounted on the NiceGUI/FastAPI server.
 """
 
 import logging
+import time
 from typing import Any
 
 from fastapi import HTTPException, Query
@@ -54,6 +55,7 @@ def _list_sequences(name: str, file_name: str) -> dict[str, Any]:
 
 
 def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
+    t0 = time.perf_counter()
     db = _get_db()
     proj = db.get_project(name)
     if not proj:
@@ -64,10 +66,13 @@ def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
     data = db.get_sequence(df["id"], seq)
     if data is None:
         raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
+    logger.info("API _get_data %s/%s seq=%d (%d keys): %.3fs",
+                 name, file_name, seq, len(data), time.perf_counter() - t0)
     return data
 
 
 def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
+    t0 = time.perf_counter()
     db = _get_db()
     proj = db.get_project(name)
     if not proj:
@@ -77,4 +82,6 @@ def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
         raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in project '{name}'")
     keys, types = db.get_sequence_keys(df["id"], seq)
     total = db.count_sequences(df["id"])
+    logger.info("API _get_keys %s/%s seq=%d (%d keys): %.3fs",
+                 name, file_name, seq, len(keys), time.perf_counter() - t0)
     return {"keys": keys, "types": types, "total_sequences": total}

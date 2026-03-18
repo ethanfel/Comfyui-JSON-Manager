@@ -1,11 +1,15 @@
 import asyncio
 import copy
 import json
+import logging
 import math
 import random
+import time
 from pathlib import Path
 
 from nicegui import ui
+
+logger = logging.getLogger(__name__)
 
 from state import AppState
 from utils import (
@@ -188,6 +192,8 @@ def dict_textarea(label, seq, key, **kwargs):
 # ======================================================================
 
 def render_batch_processor(state: AppState):
+    t0 = time.perf_counter()
+    logger.info("render_batch_processor START")
     data = state.data_cache
     file_path = state.file_path
     if isinstance(data, list):
@@ -314,6 +320,8 @@ def render_batch_processor(state: AppState):
     # --- Sequence list + mass update (inside refreshable so they stay in sync) ---
     @ui.refreshable
     def render_sequence_list():
+        t1 = time.perf_counter()
+        logger.info("render_sequence_list START (%d sequences)", len(batch_list))
         # Mass update (rebuilt on refresh so checkboxes match current sequences)
         _render_mass_update(batch_list, data, file_path, state, render_sequence_list)
 
@@ -328,8 +336,10 @@ def render_batch_processor(state: AppState):
                     _src_cache, src_seq_select,
                     standard_keys, render_sequence_list,
                 )
+        logger.info("render_sequence_list END (%.3fs)", time.perf_counter() - t1)
 
     render_sequence_list()
+    logger.info("render_batch_processor END (%.3fs)", time.perf_counter() - t0)
 
     # --- Save & Snap ---
     with ui.card().classes('w-full q-pa-md q-mt-lg'):
@@ -338,12 +348,15 @@ def render_batch_processor(state: AppState):
                                     placeholder='e.g. Added sequence 3').classes('col')
 
             async def save_and_snap():
+                t_ss = time.perf_counter()
+                logger.info("save_and_snap START")
                 data[KEY_BATCH_DATA] = batch_list
                 tree_data = data.get(KEY_HISTORY_TREE, {})
                 htree = HistoryTree(tree_data)
-                # Only deepcopy the data we need (skip history tree — it's huge and gets discarded)
+                t1 = time.perf_counter()
                 snapshot_payload = {k: copy.deepcopy(v) for k, v in data.items()
                                     if k != KEY_HISTORY_TREE}
+                logger.info("save_and_snap deepcopy %.3fs", time.perf_counter() - t1)
                 note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list)
                 try:
                     htree.commit(snapshot_payload, note=note)
@@ -351,12 +364,16 @@ def render_batch_processor(state: AppState):
                     ui.notify(f'Save failed: {e}', type='negative')
                     return
                 data[KEY_HISTORY_TREE] = htree.to_dict()
-                # Run heavy I/O off the event loop to prevent websocket timeout
+                t1 = time.perf_counter()
                 await asyncio.to_thread(save_json, file_path, data)
+                logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 if state.db_enabled and state.current_project and state.db:
+                    t1 = time.perf_counter()
                     await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                    logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
                 state.restored_indicator = None
                 commit_input.set_value('')
+                logger.info("save_and_snap END (%.3fs)", time.perf_counter() - t_ss)
                 ui.notify('Batch Saved & Snapshot Created!', type='positive')
 
             ui.button('Save & Snap', icon='save', on_click=save_and_snap).props('color=primary')

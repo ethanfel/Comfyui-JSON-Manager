@@ -200,6 +200,9 @@ def index():
 
     @ui.refreshable
     def render_main_content():
+        import time as _time
+        _t0 = _time.perf_counter()
+        logger.info("render_main_content START")
         max_w = '2400px' if dual_pane['active'] else '1200px'
         with ui.column().classes('w-full q-pa-md').style(f'max-width: {max_w}; margin: 0 auto'):
             if not state.file_path or not state.file_path.exists():
@@ -229,6 +232,8 @@ def index():
                 ui.separator()
                 with ui.expansion('ComfyUI Monitor', icon='dns').classes('w-full'):
                     render_comfy_monitor(state)
+
+        logger.info("render_main_content END (%.3fs)", _time.perf_counter() - _t0)
 
     @ui.refreshable
     def _render_batch_tab_content():
@@ -274,6 +279,9 @@ def index():
         async def on_select(e):
             if not e.value:
                 return
+            import time as _time
+            _t0 = _time.perf_counter()
+            logger.info("on_select START: %s", e.value)
             fp = pane_state.current_dir / e.value
             data, mtime = await asyncio.to_thread(load_json, fp)
             pane_state.data_cache = data
@@ -282,6 +290,7 @@ def index():
             pane_state.file_path = fp
             pane_state.restored_indicator = None
             _render_batch_tab_content.refresh()
+            logger.info("on_select END (%.3fs)", _time.perf_counter() - _t0)
 
         ui.select(
             file_names,
@@ -292,6 +301,9 @@ def index():
 
     async def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
+        import time as _time
+        _t0 = _time.perf_counter()
+        logger.info("load_file START: %s", file_name)
         fp = state.current_dir / file_name
         if state.loaded_file == str(fp):
             return
@@ -303,6 +315,7 @@ def index():
         state.restored_indicator = None
         if state._main_rendered:
             render_main_content.refresh()
+        logger.info("load_file END (%.3fs)", _time.perf_counter() - _t0)
 
     # Attach helpers to state so sidebar can call them
     state._load_file = load_file
