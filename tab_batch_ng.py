@@ -253,7 +253,11 @@ def render_batch_processor(state: AppState):
             def _update_src():
                 name = src_file_select.value
                 if name and name != _src_cache['name']:
-                    src_data, _ = load_json(state.current_dir / name)
+                    # Reuse current data if source is the same file
+                    if name == file_path.name:
+                        src_data = data
+                    else:
+                        src_data, _ = load_json(state.current_dir / name)
                     _src_cache['data'] = src_data
                     _src_cache['batch'] = src_data.get(KEY_BATCH_DATA, [])
                     _src_cache['name'] = name

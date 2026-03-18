@@ -283,9 +283,15 @@ def index():
             _t0 = _time.perf_counter()
             logger.info("on_select START: %s", e.value)
             fp = pane_state.current_dir / e.value
-            data, mtime = await asyncio.to_thread(load_json, fp)
+            file_stem = fp.stem
+            data = None
+            if pane_state.db and pane_state.db_enabled and pane_state.current_project:
+                data = await asyncio.to_thread(
+                    pane_state.db.load_full_data, pane_state.current_project, file_stem)
+            if data is None:
+                data, _ = await asyncio.to_thread(load_json, fp)
             pane_state.data_cache = data
-            pane_state.last_mtime = mtime
+            pane_state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
             pane_state.loaded_file = str(fp)
             pane_state.file_path = fp
             pane_state.restored_indicator = None
@@ -300,16 +306,22 @@ def index():
         ).classes('w-full')
 
     async def load_file(file_name: str):
-        """Load a JSON file and refresh the main content."""
+        """Load data from DB (fast) with JSON fallback, and refresh the main content."""
         import time as _time
         _t0 = _time.perf_counter()
         logger.info("load_file START: %s", file_name)
         fp = state.current_dir / file_name
         if state.loaded_file == str(fp):
             return
-        data, mtime = await asyncio.to_thread(load_json, fp)
+        file_stem = fp.stem
+        data = None
+        if state.db and state.db_enabled and state.current_project:
+            data = await asyncio.to_thread(
+                state.db.load_full_data, state.current_project, file_stem)
+        if data is None:
+            data, _ = await asyncio.to_thread(load_json, fp)
         state.data_cache = data
-        state.last_mtime = mtime
+        state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
         state.loaded_file = str(fp)
         state.file_path = fp
         state.restored_indicator = None
@@ -508,15 +520,19 @@ def render_sidebar(state: AppState, dual_pane: dict):
             file_names = [f.name for f in json_files]
             current = Path(state.loaded_file).name if state.loaded_file else None
             selected = current if current in file_names else (file_names[0] if file_names else None)
+            async def _on_radio(e):
+                if e.value:
+                    await state._load_file(e.value)
+
             ui.radio(
                 file_names,
                 value=selected,
-                on_change=lambda e: state._load_file(e.value) if e.value else None,
+                on_change=_on_radio,
             ).classes('w-full')
 
             # Auto-load first file if nothing loaded yet
             if file_names and not state.loaded_file:
-                state._load_file(file_names[0])
+                asyncio.ensure_future(state._load_file(file_names[0]))
 
         def _gen_templates():
             generate_templates(state.current_dir)
