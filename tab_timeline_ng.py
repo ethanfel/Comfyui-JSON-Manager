@@ -467,6 +467,11 @@ def render_timeline_tab(state: AppState):
 
     graph_timer = ui.timer(0.5, _poll_graph_click)
 
+    def _cleanup_timer():
+        if graph_timer is not None:
+            graph_timer.active = False
+    ui.context.client.on_disconnect(_cleanup_timer)
+
 
 _graphviz_svg_cache: dict[str, str] = {}
 _GRAPHVIZ_CACHE_MAX = 20
