@@ -50,9 +50,12 @@ DEFAULTS = {
     "flf image path": "",
 
     # --- LoRAs ---
-    "lora 1 high": "", "lora 1 low": "",
-    "lora 2 high": "", "lora 2 low": "",
-    "lora 3 high": "", "lora 3 low": ""
+    "lora 1 high": "", "lora 1 high strength": 1.0,
+    "lora 1 low": "", "lora 1 low strength": 1.0,
+    "lora 2 high": "", "lora 2 high strength": 1.0,
+    "lora 2 low": "", "lora 2 low strength": 1.0,
+    "lora 3 high": "", "lora 3 high strength": 1.0,
+    "lora 3 low": "", "lora 3 low strength": 1.0
 }
 
 CONFIG_FILE = Path(".editor_config.json")
