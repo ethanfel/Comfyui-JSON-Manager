@@ -476,7 +476,7 @@ def render_sidebar(state: AppState, dual_pane: dict):
             with ui.expansion('Create New JSON'):
                 new_fn_input = ui.input('Filename', placeholder='my_prompt_vace').classes('w-full')
 
-                def create_new():
+                async def create_new():
                     fn = new_fn_input.value
                     if not fn:
                         return
@@ -485,7 +485,7 @@ def render_sidebar(state: AppState, dual_pane: dict):
                     path = state.current_dir / fn
                     first_item = copy.deepcopy(DEFAULTS)
                     first_item[KEY_SEQUENCE_NUMBER] = 1
-                    save_json(path, {KEY_BATCH_DATA: [first_item]})
+                    await asyncio.to_thread(save_json, path, {KEY_BATCH_DATA: [first_item]})
                     new_fn_input.set_value('')
                     render_file_list.refresh()
 

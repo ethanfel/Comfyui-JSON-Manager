@@ -93,6 +93,16 @@ class ProjectDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def list_projects_with_file_counts(self) -> list[dict]:
+        """List projects with data file counts in a single query."""
+        rows = self.conn.execute(
+            "SELECT p.id, p.name, p.folder_path, p.description, p.created_at, p.updated_at, "
+            "COUNT(df.id) AS file_count "
+            "FROM projects p LEFT JOIN data_files df ON df.project_id = p.id "
+            "GROUP BY p.id ORDER BY p.name"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_project(self, name: str) -> dict | None:
         row = self.conn.execute(
             "SELECT id, name, folder_path, description, created_at, updated_at "

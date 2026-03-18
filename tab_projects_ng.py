@@ -60,8 +60,8 @@ def render_projects_tab(state: AppState):
             ui.button('Create Project', icon='add', on_click=create_project).classes('w-full')
 
         # --- Active project indicator ---
-        # Fetch once and reuse in render_project_list
-        _cached_projects = state.db.list_projects()
+        # Fetch once with file counts and reuse in render_project_list
+        _cached_projects = state.db.list_projects_with_file_counts()
 
         if state.current_project:
             # Check if active project actually exists in the database
@@ -102,7 +102,7 @@ def render_projects_tab(state: AppState):
         @ui.refreshable
         def render_project_list():
             nonlocal _cached_projects
-            projects = state.db.list_projects()
+            projects = state.db.list_projects_with_file_counts()
             _cached_projects = projects
             if not projects:
                 ui.label('No projects yet. Create one above.').classes('text-caption q-pa-md')
@@ -119,8 +119,7 @@ def render_projects_tab(state: AppState):
                             if proj['description']:
                                 ui.label(proj['description']).classes('text-caption')
                             ui.label(f'Path: {proj["folder_path"]}').classes('text-caption')
-                            file_count = state.db.count_data_files(proj['id'])
-                            ui.label(f'{file_count} data file(s)').classes('text-caption')
+                            ui.label(f'{proj["file_count"]} data file(s)').classes('text-caption')
 
                         with ui.row().classes('q-gutter-xs'):
                             if not is_active:

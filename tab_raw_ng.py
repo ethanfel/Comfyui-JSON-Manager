@@ -1,4 +1,4 @@
-import copy
+import asyncio
 import json
 
 from nicegui import ui
@@ -21,11 +21,10 @@ def render_raw_editor(state: AppState):
 
         @ui.refreshable
         def render_editor():
-            # Prepare display data
+            # Prepare display data — shallow copy, just pop keys
             if hide_history.value:
-                display_data = copy.deepcopy(data)
-                display_data.pop(KEY_HISTORY_TREE, None)
-                display_data.pop(KEY_PROMPT_HISTORY, None)
+                display_data = {k: v for k, v in data.items()
+                                if k not in (KEY_HISTORY_TREE, KEY_PROMPT_HISTORY)}
             else:
                 display_data = data
 
@@ -40,7 +39,7 @@ def render_raw_editor(state: AppState):
                 value=json_str,
             ).classes('w-full font-mono').props('outlined rows=30')
 
-            def do_save():
+            async def do_save():
                 try:
                     input_data = json.loads(text_area.value)
 
@@ -51,9 +50,9 @@ def render_raw_editor(state: AppState):
                         if KEY_PROMPT_HISTORY in data:
                             input_data[KEY_PROMPT_HISTORY] = data[KEY_PROMPT_HISTORY]
 
-                    save_json(file_path, input_data)
+                    await asyncio.to_thread(save_json, file_path, input_data)
                     if state.db_enabled and state.current_project and state.db:
-                        sync_to_db(state.db, state.current_project, file_path, input_data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, input_data)
 
                     data.clear()
                     data.update(input_data)

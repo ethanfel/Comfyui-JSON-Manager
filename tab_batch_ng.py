@@ -199,7 +199,7 @@ def render_batch_processor(state: AppState):
         ui.label('This is a Single file. To use Batch mode, create a copy.').classes(
             'text-warning')
 
-        def create_batch():
+        async def create_batch():
             new_name = f'batch_{file_path.name}'
             new_path = file_path.parent / new_name
             if new_path.exists():
@@ -211,9 +211,9 @@ def render_batch_processor(state: AppState):
             first_item[KEY_SEQUENCE_NUMBER] = 1
             new_data = {KEY_BATCH_DATA: [first_item], KEY_HISTORY_TREE: {},
                         KEY_PROMPT_HISTORY: []}
-            save_json(new_path, new_data)
+            await asyncio.to_thread(save_json, new_path, new_data)
             if state.db_enabled and state.current_project and state.db:
-                sync_to_db(state.db, state.current_project, new_path, new_data)
+                await asyncio.to_thread(sync_to_db, state.db, state.current_project, new_path, new_data)
             ui.notify(f'Created {new_name}', type='positive')
 
         ui.button('Create Batch Copy', icon='content_copy', on_click=create_batch)
