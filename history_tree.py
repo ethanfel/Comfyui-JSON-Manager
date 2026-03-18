@@ -129,9 +129,10 @@ class HistoryTree:
             while current and current in self.nodes:
                 if current in visited:
                     break
+                if current in node_to_branch:
+                    break  # this node and all ancestors already assigned
                 visited.add(current)
-                if current not in node_to_branch:
-                    node_to_branch[current] = b_name
+                node_to_branch[current] = b_name
                 current = self.nodes[current].get('parent')
 
         # Per-branch color palette (bg, border) — cycles for many branches

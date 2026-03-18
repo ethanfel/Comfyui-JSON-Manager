@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS history_trees (
     tree_data     TEXT NOT NULL DEFAULT '{}',
     updated_at    REAL NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_data_files_project_id ON data_files(project_id);
+CREATE INDEX IF NOT EXISTS idx_sequences_data_file_id ON sequences(data_file_id);
 """
 
 
@@ -145,6 +148,14 @@ class ProjectDB:
             (project_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def count_data_files(self, project_id: int) -> int:
+        """Return the number of data files for a project."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS cnt FROM data_files WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        return row["cnt"]
 
     def get_data_file(self, project_id: int, name: str) -> dict | None:
         row = self.conn.execute(

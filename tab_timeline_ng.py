@@ -1,4 +1,5 @@
-import copy
+import asyncio
+import hashlib
 import json
 import time
 
@@ -13,7 +14,7 @@ def _delete_nodes(htree, data, file_path, node_ids):
     """Delete nodes with backup, branch cleanup, re-parenting, and head fallback."""
     if 'history_tree_backup' not in data:
         data['history_tree_backup'] = []
-    data['history_tree_backup'].append(copy.deepcopy(htree.to_dict()))
+    data['history_tree_backup'].append(json.loads(json.dumps(htree.to_dict())))
     data['history_tree_backup'] = data['history_tree_backup'][-10:]
     # Save deleted node parents before removal (needed for branch re-pointing)
     deleted_parents = {}
@@ -48,7 +49,6 @@ def _delete_nodes(htree, data, file_path, node_ids):
         else:
             htree.head_id = None
     data[KEY_HISTORY_TREE] = htree.to_dict()
-    save_json(file_path, data)
 
 
 def _render_selection_picker(all_nodes, htree, state, refresh_fn):
@@ -154,11 +154,12 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
         f'{count} node{"s" if count != 1 else ""} selected for deletion.'
     ).classes('text-warning q-mt-md')
 
-    def do_batch_delete():
+    async def do_batch_delete():
         current_valid = state.timeline_selected_nodes & set(htree.nodes.keys())
         _delete_nodes(htree, data, file_path, current_valid)
+        await asyncio.to_thread(save_json, file_path, data)
         if state.db_enabled and state.current_project and state.db:
-            sync_to_db(state.db, state.current_project, file_path, data)
+            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
         state.timeline_selected_nodes = set()
         ui.notify(
             f'Deleted {len(current_valid)} node{"s" if len(current_valid) != 1 else ""}!',
@@ -319,13 +320,13 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
             # Rename
             rename_input = ui.input('Rename Label').classes('col').props('dense')
 
-            def rename_node():
+            async def rename_node():
                 if sel_id in htree.nodes and rename_input.value:
                     htree.nodes[sel_id]['note'] = rename_input.value
                     data[KEY_HISTORY_TREE] = htree.to_dict()
-                    save_json(file_path, data)
+                    await asyncio.to_thread(save_json, file_path, data)
                     if state and state.db_enabled and state.current_project and state.db:
-                        sync_to_db(state.db, state.current_project, file_path, data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
                     ui.notify('Label updated', type='positive')
                     refresh_fn()
 
@@ -336,11 +337,12 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
                 'w-full q-mt-sm').style('border-left: 3px solid var(--negative)'):
             ui.label('Deleting a node cannot be undone.').classes('text-warning')
 
-            def delete_selected():
+            async def delete_selected():
                 if sel_id in htree.nodes:
                     _delete_nodes(htree, data, file_path, {sel_id})
+                    await asyncio.to_thread(save_json, file_path, data)
                     if state and state.db_enabled and state.current_project and state.db:
-                        sync_to_db(state.db, state.current_project, file_path, data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
                     # Reset selection if branch was removed
                     if selected['branch'] not in htree.branches:
                         selected['branch'] = next(iter(htree.branches), None)
@@ -427,8 +429,8 @@ def render_timeline_tab(state: AppState):
             state.timeline_selected_nodes.discard(nid)
         render_timeline.refresh()
 
-    def _restore_and_refresh(node):
-        _restore_node(data, node, htree, file_path, state)
+    async def _restore_and_refresh(node):
+        await _restore_node(data, node, htree, file_path, state)
         # Refresh all tabs (batch, raw, timeline) so they pick up the restored data
         state._render_main.refresh()
 
@@ -463,15 +465,25 @@ def render_timeline_tab(state: AppState):
         selected['node_id'] = node_id
         render_timeline.refresh()
 
-    graph_timer = ui.timer(0.2, _poll_graph_click)
+    graph_timer = ui.timer(0.5, _poll_graph_click)
+
+
+_graphviz_svg_cache: dict[str, str] = {}
+_GRAPHVIZ_CACHE_MAX = 20
 
 
 def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
     """Render graphviz DOT source as interactive SVG with click-to-select."""
     try:
         import graphviz
-        src = graphviz.Source(dot_source)
-        svg = src.pipe(format='svg').decode('utf-8')
+        cache_key = hashlib.md5(dot_source.encode()).hexdigest()
+        svg = _graphviz_svg_cache.get(cache_key)
+        if svg is None:
+            src = graphviz.Source(dot_source)
+            svg = src.pipe(format='svg').decode('utf-8')
+            if len(_graphviz_svg_cache) >= _GRAPHVIZ_CACHE_MAX:
+                _graphviz_svg_cache.pop(next(iter(_graphviz_svg_cache)))
+            _graphviz_svg_cache[cache_key] = svg
 
         sel_escaped = json.dumps(selected_node_id or '')[1:-1]  # strip quotes, get JS-safe content
 
@@ -529,9 +541,9 @@ def _render_graphviz(dot_source: str, selected_node_id: str | None = None):
         ui.label(f'Graph rendering error: {e}').classes('text-negative')
 
 
-def _restore_node(data, node, htree, file_path, state: AppState):
+async def _restore_node(data, node, htree, file_path, state: AppState):
     """Restore a history node as the current version (full replace, not merge)."""
-    node_data = copy.deepcopy(node.get('data', {}))
+    node_data = json.loads(json.dumps(node.get('data', {})))
     # Preserve the history tree before clearing
     preserved_tree = data.get(KEY_HISTORY_TREE)
     preserved_backup = data.get('history_tree_backup')
@@ -544,9 +556,9 @@ def _restore_node(data, node, htree, file_path, state: AppState):
         data['history_tree_backup'] = preserved_backup
     htree.head_id = node['id']
     data[KEY_HISTORY_TREE] = htree.to_dict()
-    save_json(file_path, data)
+    await asyncio.to_thread(save_json, file_path, data)
     if state.db_enabled and state.current_project and state.db:
-        sync_to_db(state.db, state.current_project, file_path, data)
+        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
     label = f"{node.get('note', 'Step')} ({node['id'][:4]})"
     state.restored_indicator = label
     ui.notify('Restored!', type='positive')

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import sqlite3
@@ -42,13 +43,13 @@ def render_projects_tab(state: AppState):
             name_input = ui.input('Project Name', placeholder='my_project').classes('w-full')
             desc_input = ui.input('Description (optional)', placeholder='A short description').classes('w-full')
 
-            def create_project():
+            async def create_project():
                 name = name_input.value.strip()
                 if not name:
                     ui.notify('Please enter a project name', type='warning')
                     return
                 try:
-                    state.db.create_project(name, str(state.current_dir), desc_input.value.strip())
+                    await asyncio.to_thread(state.db.create_project, name, str(state.current_dir), desc_input.value.strip())
                     name_input.set_value('')
                     desc_input.set_value('')
                     ui.notify(f'Created project "{name}"', type='positive')
@@ -59,10 +60,12 @@ def render_projects_tab(state: AppState):
             ui.button('Create Project', icon='add', on_click=create_project).classes('w-full')
 
         # --- Active project indicator ---
+        # Fetch once and reuse in render_project_list
+        _cached_projects = state.db.list_projects()
+
         if state.current_project:
             # Check if active project actually exists in the database
-            projects_list = state.db.list_projects()
-            project_exists = any(p['name'] == state.current_project for p in projects_list)
+            project_exists = any(p['name'] == state.current_project for p in _cached_projects)
             if project_exists:
                 ui.label(f'Active Project: {state.current_project}').classes(
                     'text-bold text-primary q-pa-sm')
@@ -98,7 +101,9 @@ def render_projects_tab(state: AppState):
         # --- Project list ---
         @ui.refreshable
         def render_project_list():
+            nonlocal _cached_projects
             projects = state.db.list_projects()
+            _cached_projects = projects
             if not projects:
                 ui.label('No projects yet. Create one above.').classes('text-caption q-pa-md')
                 return
@@ -114,8 +119,8 @@ def render_projects_tab(state: AppState):
                             if proj['description']:
                                 ui.label(proj['description']).classes('text-caption')
                             ui.label(f'Path: {proj["folder_path"]}').classes('text-caption')
-                            files = state.db.list_data_files(proj['id'])
-                            ui.label(f'{len(files)} data file(s)').classes('text-caption')
+                            file_count = state.db.count_data_files(proj['id'])
+                            ui.label(f'{file_count} data file(s)').classes('text-caption')
 
                         with ui.row().classes('q-gutter-xs'):
                             if not is_active:
@@ -151,7 +156,7 @@ def render_projects_tab(state: AppState):
                                 if new_name and new_name.strip() and new_name.strip() != name:
                                     new_name = new_name.strip()
                                     try:
-                                        state.db.rename_project(name, new_name)
+                                        await asyncio.to_thread(state.db.rename_project, name, new_name)
                                         if state.current_project == name:
                                             state.current_project = new_name
                                             state.config['current_project'] = new_name
@@ -179,7 +184,7 @@ def render_projects_tab(state: AppState):
                                     if not Path(new_path).is_dir():
                                         ui.notify(f'Warning: "{new_path}" does not exist',
                                                   type='warning')
-                                    state.db.update_project_path(name, new_path)
+                                    await asyncio.to_thread(state.db.update_project_path, name, new_path)
                                     ui.notify(f'Path updated to "{new_path}"', type='positive')
                                     render_project_list.refresh()
 
@@ -192,8 +197,8 @@ def render_projects_tab(state: AppState):
                             ui.button('Import Folder', icon='folder_open',
                                       on_click=import_folder).props('flat dense')
 
-                            def delete_proj(name=proj['name']):
-                                state.db.delete_project(name)
+                            async def delete_proj(name=proj['name']):
+                                await asyncio.to_thread(state.db.delete_project, name)
                                 if state.current_project == name:
                                     state.current_project = ''
                                     state.config['current_project'] = ''
@@ -211,7 +216,7 @@ def render_projects_tab(state: AppState):
     render_project_content()
 
 
-def _import_folder(state: AppState, project_id: int, project_name: str, refresh_fn):
+async def _import_folder(state: AppState, project_id: int, project_name: str, refresh_fn):
     """Bulk import all .json files from current directory into a project."""
     json_files = sorted(state.current_dir.glob('*.json'))
     json_files = [f for f in json_files if f.name not in (
@@ -221,19 +226,23 @@ def _import_folder(state: AppState, project_id: int, project_name: str, refresh_
         ui.notify('No JSON files in current directory', type='warning')
         return
 
-    imported = 0
-    skipped = 0
-    for jf in json_files:
-        file_name = jf.stem
-        existing = state.db.get_data_file(project_id, file_name)
-        if existing:
-            skipped += 1
-            continue
-        try:
-            state.db.import_json_file(project_id, jf)
-            imported += 1
-        except Exception as e:
-            logger.warning(f"Failed to import {jf}: {e}")
+    def _do_import():
+        imported = 0
+        skipped = 0
+        for jf in json_files:
+            file_name = jf.stem
+            existing = state.db.get_data_file(project_id, file_name)
+            if existing:
+                skipped += 1
+                continue
+            try:
+                state.db.import_json_file(project_id, jf)
+                imported += 1
+            except Exception as e:
+                logger.warning(f"Failed to import {jf}: {e}")
+        return imported, skipped
+
+    imported, skipped = await asyncio.to_thread(_do_import)
 
     msg = f'Imported {imported} file(s)'
     if skipped:

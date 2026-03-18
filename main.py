@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import logging
@@ -270,11 +271,11 @@ def index():
 
         current_val = pane_state.file_path.name if pane_state.file_path else None
 
-        def on_select(e):
+        async def on_select(e):
             if not e.value:
                 return
             fp = pane_state.current_dir / e.value
-            data, mtime = load_json(fp)
+            data, mtime = await asyncio.to_thread(load_json, fp)
             pane_state.data_cache = data
             pane_state.last_mtime = mtime
             pane_state.loaded_file = str(fp)
@@ -289,12 +290,12 @@ def index():
             on_change=on_select,
         ).classes('w-full')
 
-    def load_file(file_name: str):
+    async def load_file(file_name: str):
         """Load a JSON file and refresh the main content."""
         fp = state.current_dir / file_name
         if state.loaded_file == str(fp):
             return
-        data, mtime = load_json(fp)
+        data, mtime = await asyncio.to_thread(load_json, fp)
         state.data_cache = data
         state.last_mtime = mtime
         state.loaded_file = str(fp)
