@@ -168,6 +168,9 @@ def _migrate_lora_keys(data: dict) -> None:
                         item.setdefault(str_key, 1.0)
                 elif name_key in item and str_key not in item:
                     item[str_key] = 1.0
+                # Ensure strength is always a float (JSON may deserialize 1 as int)
+                if str_key in item:
+                    item[str_key] = float(item[str_key])
 
 
 def load_json(path: str | Path) -> tuple[dict[str, Any], float]:

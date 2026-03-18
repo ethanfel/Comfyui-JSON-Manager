@@ -219,6 +219,9 @@ class ProjectDB:
                         data.setdefault(str_key, 1.0)
                 elif name_key in data and str_key not in data:
                     data[str_key] = 1.0
+                # Ensure strength is always a float (JSON may deserialize 1 as int)
+                if str_key in data:
+                    data[str_key] = float(data[str_key])
         return data
 
     def get_sequence(self, data_file_id: int, sequence_number: int) -> dict | None:
@@ -252,6 +255,11 @@ class ProjectDB:
             return 0
         return self.count_sequences(df["id"])
 
+    _FLOAT_KEYS = frozenset(
+        f'lora {idx} {tier} strength'
+        for idx in range(1, 4) for tier in ('high', 'low')
+    )
+
     def get_sequence_keys(self, data_file_id: int, sequence_number: int) -> tuple[list[str], list[str]]:
         """Returns (keys, types) for a sequence's data dict."""
         data = self.get_sequence(data_file_id, sequence_number)
@@ -261,7 +269,9 @@ class ProjectDB:
         types = []
         for k, v in data.items():
             keys.append(k)
-            if isinstance(v, bool):
+            if k in self._FLOAT_KEYS:
+                types.append("FLOAT")
+            elif isinstance(v, bool):
                 types.append("STRING")
             elif isinstance(v, int):
                 types.append("INT")
