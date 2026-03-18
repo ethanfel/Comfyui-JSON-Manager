@@ -144,6 +144,32 @@ def save_snippets(snippets):
         json.dump(snippets, f, indent=4)
     os.replace(tmp, SNIPPETS_FILE)
 
+def _migrate_lora_keys(data: dict) -> None:
+    """Split legacy <lora:name:strength> values into separate name/strength keys in-place."""
+    for item in data.get(KEY_BATCH_DATA, []):
+        if not isinstance(item, dict):
+            continue
+        for idx in range(1, 4):
+            for tier in ('high', 'low'):
+                name_key = f'lora {idx} {tier}'
+                str_key = f'lora {idx} {tier} strength'
+                raw = str(item.get(name_key, ''))
+                if raw.startswith('<lora:'):
+                    inner = raw.replace('<lora:', '').replace('>', '')
+                    if ':' in inner:
+                        parts = inner.rsplit(':', 1)
+                        item[name_key] = parts[0]
+                        try:
+                            item[str_key] = float(parts[1])
+                        except ValueError:
+                            item.setdefault(str_key, 1.0)
+                    else:
+                        item[name_key] = inner
+                        item.setdefault(str_key, 1.0)
+                elif name_key in item and str_key not in item:
+                    item[str_key] = 1.0
+
+
 def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
     path = Path(path)
     if not path.exists():
@@ -151,6 +177,7 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
     try:
         with open(path, 'r') as f:
             data = json.load(f)
+        _migrate_lora_keys(data)
         return data, path.stat().st_mtime
     except Exception as e:
         logger.error(f"Error loading JSON: {e}")
