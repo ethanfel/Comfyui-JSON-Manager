@@ -420,6 +420,7 @@ class ProjectDB:
         df = self.get_data_file_by_names(project_name, file_name)
         if not df:
             return None
+        t1 = time.time()
 
         # Start with top-level keys
         data = df.get("top_level", {})
@@ -437,14 +438,17 @@ class ProjectDB:
             self._migrate_lora_keys(seq)
             batch_data.append(seq)
         data["batch_data"] = batch_data
+        t2 = time.time()
 
         # Load history tree
         tree = self.get_history_tree(df["id"])
         if tree:
             data["history_tree"] = tree
+        t3 = time.time()
 
-        logger.info("load_full_data %s/%s (%d seqs): %.3fs",
-                     project_name, file_name, len(batch_data), time.time() - t0)
+        logger.info("load_full_data %s/%s (%d seqs): lookup=%.3fs seqs=%.3fs tree=%.3fs total=%.3fs",
+                     project_name, file_name, len(batch_data),
+                     t1 - t0, t2 - t1, t3 - t2, t3 - t0)
         return data
 
     # ------------------------------------------------------------------
