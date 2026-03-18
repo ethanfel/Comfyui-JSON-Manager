@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from utils import load_json, DEFAULTS, KEY_BATCH_DATA, KEY_HISTORY_TREE
+from utils import load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 logger = logging.getLogger(__name__)
 
@@ -232,8 +232,6 @@ class ProjectDB:
         if not row:
             return None
         data = json.loads(row["data"])
-        for k, v in DEFAULTS.items():
-            data.setdefault(k, v)
         return self._migrate_lora_keys(data)
 
     def list_sequences(self, data_file_id: int) -> list[int]:
