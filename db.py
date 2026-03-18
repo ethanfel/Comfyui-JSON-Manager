@@ -74,19 +74,24 @@ class ProjectDB:
         """One-time bulk migration: merge separate lora strength keys in all stored sequences."""
         rows = self.conn.execute("SELECT id, data FROM sequences").fetchall()
         updated = 0
-        for row in rows:
-            data = json.loads(row["data"])
-            original = row["data"]
-            migrated = self._migrate_lora_keys(data)
-            new_json = json.dumps(migrated)
-            if new_json != original:
-                self.conn.execute(
-                    "UPDATE sequences SET data = ? WHERE id = ?",
-                    (new_json, row["id"]),
-                )
-                updated += 1
-        if updated:
+        self.conn.execute("BEGIN")
+        try:
+            for row in rows:
+                data = json.loads(row["data"])
+                original = row["data"]
+                migrated = self._migrate_lora_keys(data)
+                new_json = json.dumps(migrated)
+                if new_json != original:
+                    self.conn.execute(
+                        "UPDATE sequences SET data = ? WHERE id = ?",
+                        (new_json, row["id"]),
+                    )
+                    updated += 1
             self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
+        if updated:
             logger.info("Migrated lora keys in %d/%d sequences", updated, len(rows))
 
     def close(self):
