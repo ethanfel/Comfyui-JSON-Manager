@@ -144,15 +144,6 @@ def save_snippets(snippets):
         json.dump(snippets, f, indent=4)
     os.replace(tmp, SNIPPETS_FILE)
 
-def _ensure_default_keys(data: dict) -> None:
-    """Ensure all sequences have required keys from DEFAULTS."""
-    for item in data.get(KEY_BATCH_DATA, []):
-        if not isinstance(item, dict):
-            continue
-        for k, v in DEFAULTS.items():
-            item.setdefault(k, v)
-
-
 def _migrate_lora_keys(data: dict) -> None:
     """Split legacy <lora:name:strength> values into separate name/strength keys in-place."""
     for item in data.get(KEY_BATCH_DATA, []):
@@ -189,7 +180,6 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
     try:
         with open(path, 'r') as f:
             data = json.load(f)
-        _ensure_default_keys(data)
         _migrate_lora_keys(data)
         return data, path.stat().st_mtime
     except Exception as e:
@@ -253,9 +243,6 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                 for item in batch_data:
                     if not isinstance(item, dict):
                         continue
-                    # Ensure all default keys are present before storing
-                    for dk, dv in DEFAULTS.items():
-                        item.setdefault(dk, dv)
                     seq_num = int(item.get(KEY_SEQUENCE_NUMBER, 0))
                     new_seq_nums.add(seq_num)
                     db.conn.execute(
