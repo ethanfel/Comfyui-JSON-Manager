@@ -428,8 +428,13 @@ class ProjectDB:
             data = json.loads(data)
 
         # Load all sequences as batch_data
+        # Group sub-segments (>=1000) after their parent: parent = seq_num / 1000
         rows = self.conn.execute(
-            "SELECT data FROM sequences WHERE data_file_id = ? ORDER BY sequence_number",
+            "SELECT data FROM sequences WHERE data_file_id = ? "
+            "ORDER BY CASE WHEN sequence_number >= 1000 THEN sequence_number / 1000 "
+            "ELSE sequence_number END, "
+            "CASE WHEN sequence_number >= 1000 THEN 1 ELSE 0 END, "
+            "sequence_number",
             (df["id"],),
         ).fetchall()
         batch_data = []
