@@ -209,7 +209,7 @@ class ProjectDB:
 
     @staticmethod
     def _migrate_lora_keys(data: dict) -> dict:
-        """Split legacy <lora:name:strength> values into separate name/strength keys."""
+        """Merge lora name + strength into single 'name:strength' key, remove separate strength keys."""
         for idx in range(1, 4):
             for tier in ('high', 'low'):
                 name_key = f'lora {idx} {tier}'
@@ -217,21 +217,16 @@ class ProjectDB:
                 raw = str(data.get(name_key, ''))
                 if raw.startswith('<lora:'):
                     inner = raw.replace('<lora:', '').replace('>', '')
-                    if ':' in inner:
-                        parts = inner.rsplit(':', 1)
-                        data[name_key] = parts[0]
-                        try:
-                            data[str_key] = float(parts[1])
-                        except ValueError:
-                            data.setdefault(str_key, 1.0)
+                    data[name_key] = inner
+                    if ':' not in inner:
+                        strength = data.pop(str_key, 1.0)
+                        data[name_key] = f'{inner}:{float(strength)}' if inner else ''
                     else:
-                        data[name_key] = inner
-                        data.setdefault(str_key, 1.0)
-                elif name_key in data and str_key not in data:
-                    data[str_key] = 1.0
-                # Ensure strength is always a float (JSON may deserialize 1 as int)
-                if str_key in data:
-                    data[str_key] = float(data[str_key])
+                        data.pop(str_key, None)
+                elif str_key in data:
+                    strength = float(data.pop(str_key))
+                    if raw and ':' not in raw:
+                        data[name_key] = f'{raw}:{strength}'
         return data
 
     def get_sequence(self, data_file_id: int, sequence_number: int) -> dict | None:
@@ -266,11 +261,6 @@ class ProjectDB:
             return 0
         return self.count_sequences(df["id"])
 
-    _FLOAT_KEYS = frozenset(
-        f'lora {idx} {tier} strength'
-        for idx in range(1, 4) for tier in ('high', 'low')
-    )
-
     def get_sequence_keys(self, data_file_id: int, sequence_number: int) -> tuple[list[str], list[str]]:
         """Returns (keys, types) for a sequence's data dict."""
         data = self.get_sequence(data_file_id, sequence_number)
@@ -280,9 +270,7 @@ class ProjectDB:
         types = []
         for k, v in data.items():
             keys.append(k)
-            if k in self._FLOAT_KEYS:
-                types.append("FLOAT")
-            elif isinstance(v, bool):
+            if isinstance(v, bool):
                 types.append("STRING")
             elif isinstance(v, int):
                 types.append("INT")

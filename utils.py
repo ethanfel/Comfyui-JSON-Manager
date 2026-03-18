@@ -49,13 +49,13 @@ DEFAULTS = {
     "reference path": "",
     "flf image path": "",
 
-    # --- LoRAs ---
-    "lora 1 high": "", "lora 1 high strength": 1.0,
-    "lora 1 low": "", "lora 1 low strength": 1.0,
-    "lora 2 high": "", "lora 2 high strength": 1.0,
-    "lora 2 low": "", "lora 2 low strength": 1.0,
-    "lora 3 high": "", "lora 3 high strength": 1.0,
-    "lora 3 low": "", "lora 3 low strength": 1.0
+    # --- LoRAs (format: "name:strength" or empty) ---
+    "lora 1 high": "",
+    "lora 1 low": "",
+    "lora 2 high": "",
+    "lora 2 low": "",
+    "lora 3 high": "",
+    "lora 3 low": ""
 }
 
 CONFIG_FILE = Path(".editor_config.json")
@@ -145,7 +145,13 @@ def save_snippets(snippets):
     os.replace(tmp, SNIPPETS_FILE)
 
 def _migrate_lora_keys(data: dict) -> None:
-    """Split legacy <lora:name:strength> values into separate name/strength keys in-place."""
+    """Merge lora name + strength into single 'name:strength' key, remove separate strength keys.
+
+    Handles three legacy formats:
+    1. <lora:Name:0.5> → Name:0.5
+    2. Separate name_key + str_key → name:strength (then delete str_key)
+    3. Already merged name:strength → no change
+    """
     for item in data.get(KEY_BATCH_DATA, []):
         if not isinstance(item, dict):
             continue
@@ -154,23 +160,26 @@ def _migrate_lora_keys(data: dict) -> None:
                 name_key = f'lora {idx} {tier}'
                 str_key = f'lora {idx} {tier} strength'
                 raw = str(item.get(name_key, ''))
+
                 if raw.startswith('<lora:'):
+                    # Legacy <lora:Name:0.5> format → Name:0.5
                     inner = raw.replace('<lora:', '').replace('>', '')
-                    if ':' in inner:
-                        parts = inner.rsplit(':', 1)
-                        item[name_key] = parts[0]
-                        try:
-                            item[str_key] = float(parts[1])
-                        except ValueError:
-                            item.setdefault(str_key, 1.0)
+                    item[name_key] = inner  # already name:strength or just name
+                    if ':' not in inner:
+                        # No strength in the wrapper, check separate key
+                        strength = item.pop(str_key, 1.0)
+                        item[name_key] = f'{inner}:{float(strength)}' if inner else ''
                     else:
-                        item[name_key] = inner
-                        item.setdefault(str_key, 1.0)
-                elif name_key in item and str_key not in item:
-                    item[str_key] = 1.0
-                # Ensure strength is always a float (JSON may deserialize 1 as int)
-                if str_key in item:
-                    item[str_key] = float(item[str_key])
+                        item.pop(str_key, None)
+                elif str_key in item:
+                    # Separate strength key exists → merge into name:strength
+                    strength = float(item.pop(str_key))
+                    if raw:
+                        # Avoid double-merging if already has name:strength format
+                        if ':' not in raw:
+                            item[name_key] = f'{raw}:{strength}'
+                        # else: already merged, just remove the stale strength key
+                # No change needed if already in name:strength format or empty
 
 
 def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
