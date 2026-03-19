@@ -277,9 +277,10 @@ def render_batch_processor(state: AppState):
                     new_item.pop(k, None)
                 batch_list.append(new_item)
                 data[KEY_BATCH_DATA] = batch_list
-                await asyncio.to_thread(save_json, file_path, data)
+                snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(save_json, file_path, snapshot)
                 if state.db_enabled and state.current_project and state.db:
-                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
                 render_sequence_list.refresh()
 
             with ui.row().classes('q-mt-sm'):
@@ -315,9 +316,10 @@ def render_batch_processor(state: AppState):
     async def sort_by_number():
         batch_list.sort(key=lambda s: int(s.get(KEY_SEQUENCE_NUMBER, 0)))
         data[KEY_BATCH_DATA] = batch_list
-        await asyncio.to_thread(save_json, file_path, data)
+        snapshot = json.loads(json.dumps(data))
+        await asyncio.to_thread(save_json, file_path, snapshot)
         if state.db_enabled and state.current_project and state.db:
-            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
         ui.notify('Sorted by sequence number!', type='positive')
         render_sequence_list.refresh()
 
@@ -369,11 +371,12 @@ def render_batch_processor(state: AppState):
                     return
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 t1 = time.perf_counter()
-                await asyncio.to_thread(save_json, file_path, data)
+                snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(save_json, file_path, snapshot)
                 logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 if state.db_enabled and state.current_project and state.db:
                     t1 = time.perf_counter()
-                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
                     logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
                 state.restored_indicator = None
                 commit_input.set_value('')
@@ -392,9 +395,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                           refresh_list):
     async def commit(message=None):
         data[KEY_BATCH_DATA] = batch_list
-        await asyncio.to_thread(save_json, file_path, data)
+        snapshot = json.loads(json.dumps(data))
+        await asyncio.to_thread(save_json, file_path, snapshot)
         if state.db_enabled and state.current_project and state.db:
-            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
         if message:
             ui.notify(message, type='positive')
         refresh_list.refresh()
@@ -689,9 +693,10 @@ def _render_vace_settings(i, seq, batch_list, data, file_path, state, refresh_li
                             batch_list[j].get('frame_to_skip', FRAME_TO_SKIP_DEFAULT), FRAME_TO_SKIP_DEFAULT) + delta
                         shifted += 1
                     data[KEY_BATCH_DATA] = batch_list
-                    await asyncio.to_thread(save_json, file_path, data)
+                    snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(save_json, file_path, snapshot)
                     if state.db_enabled and state.current_project and state.db:
-                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
                     ui.notify(f'Shifted {shifted} sequences by {delta:+d}', type='positive')
                     refresh_list.refresh()
 
@@ -840,9 +845,10 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
                 ui.notify(f'Mass update failed: {e}', type='negative')
                 return
             data[KEY_HISTORY_TREE] = htree.to_dict()
-            await asyncio.to_thread(save_json, file_path, data)
+            save_snapshot = json.loads(json.dumps(data))
+            await asyncio.to_thread(save_json, file_path, save_snapshot)
             if state.db_enabled and state.current_project and state.db:
-                await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
             ui.notify(f'Updated {len(targets)} sequences', type='positive')
             if refresh_list:
                 refresh_list.refresh()

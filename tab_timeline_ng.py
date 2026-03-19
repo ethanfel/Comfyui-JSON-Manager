@@ -160,9 +160,10 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
     async def do_batch_delete():
         current_valid = state.timeline_selected_nodes & set(htree.nodes.keys())
         _delete_nodes(htree, data, file_path, current_valid)
-        await asyncio.to_thread(save_json, file_path, data)
+        snapshot = json.loads(json.dumps(data))
+        await asyncio.to_thread(save_json, file_path, snapshot)
         if state.db_enabled and state.current_project and state.db:
-            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+            await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
         state.timeline_selected_nodes = set()
         ui.notify(
             f'Deleted {len(current_valid)} node{"s" if len(current_valid) != 1 else ""}!',
@@ -327,9 +328,10 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
                 if sel_id in htree.nodes and rename_input.value:
                     htree.nodes[sel_id]['note'] = rename_input.value
                     data[KEY_HISTORY_TREE] = htree.to_dict()
-                    await asyncio.to_thread(save_json, file_path, data)
+                    snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(save_json, file_path, snapshot)
                     if state and state.db_enabled and state.current_project and state.db:
-                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
                     ui.notify('Label updated', type='positive')
                     refresh_fn()
 
@@ -343,9 +345,10 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
             async def delete_selected():
                 if sel_id in htree.nodes:
                     _delete_nodes(htree, data, file_path, {sel_id})
-                    await asyncio.to_thread(save_json, file_path, data)
+                    snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(save_json, file_path, snapshot)
                     if state and state.db_enabled and state.current_project and state.db:
-                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+                        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
                     # Reset selection if branch was removed
                     if selected['branch'] not in htree.branches:
                         selected['branch'] = next(iter(htree.branches), None)
@@ -576,9 +579,10 @@ async def _restore_node(data, node, htree, file_path, state: AppState):
         data['history_tree_backup'] = preserved_backup
     htree.head_id = node['id']
     data[KEY_HISTORY_TREE] = htree.to_dict()
-    await asyncio.to_thread(save_json, file_path, data)
+    snapshot = json.loads(json.dumps(data))
+    await asyncio.to_thread(save_json, file_path, snapshot)
     if state.db_enabled and state.current_project and state.db:
-        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, data)
+        await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
     label = f"{node.get('note', 'Step')} ({node['id'][:4]})"
     state.restored_indicator = label
     logger.info("_restore_node END (%.3fs)", time.perf_counter() - t0)
