@@ -207,11 +207,37 @@ class ProjectLoaderDynamic:
         return (total_sequences,) + tuple(results)
 
 
+class ProjectSource:
+    """Config-only node — holds project connection settings, no outputs."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
+                "project_name": ("STRING", {"default": "", "multiline": False}),
+                "file_name": ("STRING", {"default": "", "multiline": False}),
+                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
+                "label": ("STRING", {"default": "source", "multiline": False}),
+            },
+        }
+
+    RETURN_TYPES = ()
+    RETURN_NAMES = ()
+    FUNCTION = "hold_config"
+    CATEGORY = "utils/json/project"
+    OUTPUT_NODE = True
+
+    def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
+        return ()
+
+
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
+    "ProjectSource": ProjectSource,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectLoaderDynamic": "Project Loader (Dynamic)",
+    "ProjectSource": "Project Source",
 }

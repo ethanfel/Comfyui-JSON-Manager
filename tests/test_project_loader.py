@@ -203,6 +203,38 @@ class TestProjectLoaderDynamic:
         assert ProjectLoaderDynamic.CATEGORY == "utils/json/project"
 
 
+class TestProjectSource:
+    def test_input_types(self):
+        from project_loader import ProjectSource
+        inputs = ProjectSource.INPUT_TYPES()
+        assert "manager_url" in inputs["required"]
+        assert "project_name" in inputs["required"]
+        assert "file_name" in inputs["required"]
+        assert "sequence_number" in inputs["required"]
+        assert "label" in inputs["required"]
+
+    def test_no_outputs(self):
+        from project_loader import ProjectSource
+        assert ProjectSource.RETURN_TYPES == ()
+        assert ProjectSource.RETURN_NAMES == ()
+
+    def test_hold_config_returns_empty(self):
+        from project_loader import ProjectSource
+        node = ProjectSource()
+        result = node.hold_config(
+            manager_url="http://localhost:8080",
+            project_name="proj1",
+            file_name="batch_i2v",
+            sequence_number=1,
+            label="my_source"
+        )
+        assert result == ()
+
+    def test_category(self):
+        from project_loader import ProjectSource
+        assert ProjectSource.CATEGORY == "utils/json/project"
+
+
 class TestNodeMappings:
     def test_mappings_exist(self):
         from project_loader import PROJECT_NODE_CLASS_MAPPINGS, PROJECT_NODE_DISPLAY_NAME_MAPPINGS
