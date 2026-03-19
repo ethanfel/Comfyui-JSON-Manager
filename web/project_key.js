@@ -33,10 +33,13 @@ app.registerExtension({
             if (idx === -1 || idx === undefined) return null;
             const oldWidget = node.widgets[idx];
             const savedValue = oldWidget.value || "";
+            // Ensure values list is never empty (combo shows undefined otherwise)
+            const comboValues = values.length > 0 ? values : [""];
+            const defaultValue = comboValues.includes(savedValue) ? savedValue : comboValues[0];
             // Remove old STRING widget
             node.widgets.splice(idx, 1);
             // Insert a real combo widget at the same position
-            const combo = node.addWidget("combo", name, savedValue, callback, { values: values });
+            const combo = node.addWidget("combo", name, defaultValue, callback, { values: comboValues });
             // Move it from the end to the original position
             if (node.widgets.length > 1) {
                 node.widgets.splice(node.widgets.length - 1, 1);
@@ -58,15 +61,19 @@ app.registerExtension({
 
             // Replace source_label STRING with a proper combo widget
             const node = this;
-            replaceWithCombo(this, "source_label", [], function (value) {
+            const sourceLabels = this._getSourceLabels?.() || [];
+            const srcCombo = replaceWithCombo(this, "source_label", sourceLabels, function (value) {
                 node._syncFromSource();
                 node._refreshKeys();
             });
+            // Set first available source or "none" placeholder
+            if (srcCombo) srcCombo.value = sourceLabels[0] || "";
 
             // Replace key_name STRING with a proper combo widget
-            replaceWithCombo(this, "key_name", [], function (value) {
+            const keyCombo = replaceWithCombo(this, "key_name", [], function (value) {
                 node._applyKeySelection();
             });
+            if (keyCombo) keyCombo.value = "";
 
             queueMicrotask(() => {
                 if (!this._configured) {
