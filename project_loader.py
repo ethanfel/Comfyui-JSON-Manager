@@ -231,13 +231,61 @@ class ProjectSource:
         return ()
 
 
+class ProjectKey:
+    """Single-output relay — fetches one key from a ProjectSource."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "source_label": ("STRING", {"default": "", "multiline": False}),
+                "key_name": ("STRING", {"default": "", "multiline": False}),
+                "key_type": ("STRING", {"default": "STRING", "multiline": False}),
+            },
+            "optional": {
+                "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
+                "project_name": ("STRING", {"default": "", "multiline": False}),
+                "file_name": ("STRING", {"default": "", "multiline": False}),
+                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
+            },
+        }
+
+    RETURN_TYPES = (any_type,)
+    RETURN_NAMES = ("value",)
+    FUNCTION = "fetch_key"
+    CATEGORY = "utils/json/project"
+    OUTPUT_NODE = False
+
+    def fetch_key(self, source_label, key_name, key_type,
+                  manager_url="http://localhost:8080", project_name="",
+                  file_name="", sequence_number=1):
+        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
+        if data.get("error") in ("http_error", "network_error", "parse_error"):
+            msg = data.get("message", "Unknown error")
+            raise RuntimeError(f"Failed to fetch data: {msg}")
+
+        val = data.get(key_name, "")
+
+        if key_type == "INT":
+            return (to_int(val),)
+        elif key_type == "FLOAT":
+            return (to_float(val),)
+        elif isinstance(val, bool):
+            return (str(val).lower(),)
+        elif isinstance(val, (int, float)):
+            return (val,)
+        else:
+            return (str(val),)
+
+
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
     "ProjectSource": ProjectSource,
+    "ProjectKey": ProjectKey,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectLoaderDynamic": "Project Loader (Dynamic)",
     "ProjectSource": "Project Source",
+    "ProjectKey": "Project Key",
 }
