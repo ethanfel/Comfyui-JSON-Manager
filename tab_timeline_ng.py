@@ -619,6 +619,14 @@ def _render_data_preview(nid, htree, state: AppState = None, file_path=None):
         df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
         if df:
             node_data = state.db.get_node_snapshot(df['id'], nid)
+    if not node_data and file_path:
+        # Disk fallback: read snapshot from JSON file
+        try:
+            raw_data, _ = load_json(file_path)
+            tree_on_disk = raw_data.get(KEY_HISTORY_TREE, {})
+            node_data = tree_on_disk.get('nodes', {}).get(nid, {}).get('data')
+        except Exception:
+            pass
     if not node_data:
         ui.label('Snapshot data not available.').classes('text-caption text-warning')
         return

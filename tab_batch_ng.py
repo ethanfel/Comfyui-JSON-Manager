@@ -86,14 +86,19 @@ def find_insert_position(batch_list, parent_index, parent_seq_num):
 
 # --- Auto change note ---
 
-def _auto_change_note(htree, batch_list):
+def _auto_change_note(htree, batch_list, state=None, file_path=None):
     """Compare current batch_list against last snapshot and describe changes."""
     # Get previous batch data from the current head
     if not htree.head_id or htree.head_id not in htree.nodes:
         return f'Initial save ({len(batch_list)} sequences)'
 
-    prev_data = htree.nodes[htree.head_id].get('data', {})
-    prev_batch = prev_data.get(KEY_BATCH_DATA, [])
+    # Load previous snapshot from DB (nodes no longer hold data in memory)
+    prev_data = htree.nodes[htree.head_id].get('data')
+    if not prev_data and state and state.db_enabled and state.db and state.current_project and file_path:
+        df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
+        if df:
+            prev_data = state.db.get_node_snapshot(df['id'], htree.head_id)
+    prev_batch = (prev_data or {}).get(KEY_BATCH_DATA, [])
 
     prev_by_seq = {int(s.get(KEY_SEQUENCE_NUMBER, 0)): s for s in prev_batch}
     curr_by_seq = {int(s.get(KEY_SEQUENCE_NUMBER, 0)): s for s in batch_list}
@@ -359,7 +364,7 @@ def render_batch_processor(state: AppState):
                 data[KEY_BATCH_DATA] = batch_list
                 tree_data = data.get(KEY_HISTORY_TREE, {})
                 htree = HistoryTree(tree_data)
-                note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list)
+                note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list, state=state, file_path=file_path)
                 # Single serialization: json roundtrip gives us an isolated snapshot
                 # without the expensive deepcopy
                 t1 = time.perf_counter()
@@ -381,9 +386,9 @@ def render_batch_processor(state: AppState):
                     t1 = time.perf_counter()
                     await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
                     logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
-                # Free snapshot data from memory — it's persisted in DB now
-                htree.strip_snapshots()
-                data[KEY_HISTORY_TREE] = htree.to_dict()
+                    # Free snapshot data from memory — it's persisted in DB now
+                    htree.strip_snapshots()
+                    data[KEY_HISTORY_TREE] = htree.to_dict()
                 state.restored_indicator = None
                 commit_input.set_value('')
                 logger.info("save_and_snap END (%.3fs)", time.perf_counter() - t_ss)
@@ -843,8 +848,9 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
 
             data[KEY_BATCH_DATA] = batch_list
             htree = HistoryTree(data.get(KEY_HISTORY_TREE, {}))
-            snapshot = {k: copy.deepcopy(v) for k, v in data.items()
-                        if k != KEY_HISTORY_TREE}
+            snapshot_json = json.dumps({k: v for k, v in data.items()
+                                        if k != KEY_HISTORY_TREE})
+            snapshot = json.loads(snapshot_json)
             try:
                 htree.commit(snapshot, f"Mass update: {', '.join(selected_keys)}")
             except ValueError as e:
@@ -855,6 +861,9 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
             await asyncio.to_thread(save_json, file_path, save_snapshot)
             if state.db_enabled and state.current_project and state.db:
                 await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
+                # Free snapshot data from memory after persisting
+                htree.strip_snapshots()
+                data[KEY_HISTORY_TREE] = htree.to_dict()
             ui.notify(f'Updated {len(targets)} sequences', type='positive')
             if refresh_list:
                 refresh_list.refresh()
