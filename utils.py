@@ -312,6 +312,20 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                     "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
                     (df_id, json.dumps(slim_tree), now),
                 )
+                # Clean up orphaned snapshots for nodes no longer in tree
+                current_node_ids = set(nodes.keys())
+                if current_node_ids:
+                    placeholders = ",".join("?" for _ in current_node_ids)
+                    db.conn.execute(
+                        f"DELETE FROM history_snapshots WHERE data_file_id = ? "
+                        f"AND node_id NOT IN ({placeholders})",
+                        (df_id, *current_node_ids),
+                    )
+                else:
+                    db.conn.execute(
+                        "DELETE FROM history_snapshots WHERE data_file_id = ?",
+                        (df_id,),
+                    )
 
             db.conn.execute("COMMIT")
         except Exception:

@@ -8,7 +8,7 @@ from nicegui import ui
 
 from state import AppState
 from history_tree import HistoryTree
-from utils import save_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
+from utils import save_json, load_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 logger = logging.getLogger(__name__)
 
@@ -580,8 +580,7 @@ async def _restore_node(data, node, htree, file_path, state: AppState):
                 state.db.get_node_snapshot, df['id'], node['id'])
     if not raw_snap:
         # Last resort: read from JSON file on disk
-        from utils import load_json as _load_json
-        raw_file, _ = await asyncio.to_thread(_load_json, file_path)
+        raw_file, _ = await asyncio.to_thread(load_json, file_path)
         tree_on_disk = raw_file.get(KEY_HISTORY_TREE, {})
         raw_snap = tree_on_disk.get('nodes', {}).get(node['id'], {}).get('data', {})
     node_data = json.loads(json.dumps(raw_snap)) if raw_snap else {}

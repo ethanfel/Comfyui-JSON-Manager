@@ -326,30 +326,39 @@ class ProjectDB:
     def save_history_tree(self, data_file_id: int, tree_data: dict) -> None:
         """Save history tree, extracting node snapshots into separate table."""
         now = time.time()
-        # Extract snapshot data from nodes into history_snapshots table
         nodes = tree_data.get("nodes", {})
         slim_tree = dict(tree_data)
         slim_nodes = {}
         for nid, node in nodes.items():
-            snap = node.get("data")
-            if snap:
-                self.conn.execute(
-                    "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
-                    "VALUES (?, ?, ?, ?) "
-                    "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
-                    "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
-                    (data_file_id, nid, json.dumps(snap), now),
-                )
-            # Store node without data in tree
             slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
         slim_tree["nodes"] = slim_nodes
-        self.conn.execute(
-            "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
-            "VALUES (?, ?, ?) "
-            "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
-            (data_file_id, json.dumps(slim_tree), now),
-        )
-        self.conn.commit()
+
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            # Extract snapshot data from nodes into history_snapshots table
+            for nid, node in nodes.items():
+                snap = node.get("data")
+                if snap:
+                    self.conn.execute(
+                        "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
+                        "VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
+                        "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
+                        (data_file_id, nid, json.dumps(snap), now),
+                    )
+            self.conn.execute(
+                "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
+                (data_file_id, json.dumps(slim_tree), now),
+            )
+            self.conn.execute("COMMIT")
+        except Exception:
+            try:
+                self.conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
 
     def get_history_tree(self, data_file_id: int) -> dict | None:
         """Load history tree metadata (without snapshot data)."""
