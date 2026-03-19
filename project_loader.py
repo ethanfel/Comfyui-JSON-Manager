@@ -255,9 +255,15 @@ class ProjectKey:
     CATEGORY = "utils/json/project"
     OUTPUT_NODE = False
 
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("nan")  # Always re-fetch from API
+
     def fetch_key(self, source_label, key_name, key_type,
                   manager_url="http://localhost:8080", project_name="",
                   file_name="", sequence_number=1):
+        # source_label is used by JS to identify which ProjectSource to sync
+        # config from. The actual config arrives via the optional widgets below.
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
         if data.get("error") in ("http_error", "network_error", "parse_error"):
             msg = data.get("message", "Unknown error")
