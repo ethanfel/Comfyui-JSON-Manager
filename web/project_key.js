@@ -19,6 +19,32 @@ app.registerExtension({
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name !== "ProjectKey") return;
 
+        // Helper: properly hide a widget (works for all types including INT)
+        function hideWidget(widget) {
+            if (widget.origType === undefined) widget.origType = widget.type;
+            widget.type = "hidden";
+            widget.hidden = true;
+            widget.computeSize = () => [0, -4];
+        }
+
+        // Helper: replace a STRING widget with a proper combo widget
+        function replaceWithCombo(node, name, values, callback) {
+            const idx = node.widgets?.findIndex(w => w.name === name);
+            if (idx === -1 || idx === undefined) return null;
+            const oldWidget = node.widgets[idx];
+            const savedValue = oldWidget.value || "";
+            // Remove old STRING widget
+            node.widgets.splice(idx, 1);
+            // Insert a real combo widget at the same position
+            const combo = node.addWidget("combo", name, savedValue, callback, { values: values });
+            // Move it from the end to the original position
+            if (node.widgets.length > 1) {
+                node.widgets.splice(node.widgets.length - 1, 1);
+                node.widgets.splice(idx, 0, combo);
+            }
+            return combo;
+        }
+
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             origOnNodeCreated?.apply(this, arguments);
@@ -27,37 +53,20 @@ app.registerExtension({
             // Hide the connection-config widgets (synced from source by JS)
             for (const name of ["manager_url", "project_name", "file_name", "sequence_number", "key_type"]) {
                 const w = this.widgets?.find(w => w.name === name);
-                if (w) { w.type = "hidden"; w.computeSize = () => [0, -4]; }
+                if (w) hideWidget(w);
             }
 
-            // Convert source_label to a dynamic combo
-            const srcWidget = this.widgets?.find(w => w.name === "source_label");
-            if (srcWidget) {
-                srcWidget.type = "combo";
-                srcWidget.options = { values: [] };
-                srcWidget.value = srcWidget.value || "";
-                const node = this;
-                const origCb = srcWidget.callback;
-                srcWidget.callback = function (...args) {
-                    origCb?.apply(this, args);
-                    node._syncFromSource();
-                    node._refreshKeys();
-                };
-            }
+            // Replace source_label STRING with a proper combo widget
+            const node = this;
+            replaceWithCombo(this, "source_label", [], function (value) {
+                node._syncFromSource();
+                node._refreshKeys();
+            });
 
-            // Convert key_name to a dynamic combo
-            const keyWidget = this.widgets?.find(w => w.name === "key_name");
-            if (keyWidget) {
-                keyWidget.type = "combo";
-                keyWidget.options = { values: [] };
-                keyWidget.value = keyWidget.value || "";
-                const node = this;
-                const origCb = keyWidget.callback;
-                keyWidget.callback = function (...args) {
-                    origCb?.apply(this, args);
-                    node._applyKeySelection();
-                };
-            }
+            // Replace key_name STRING with a proper combo widget
+            replaceWithCombo(this, "key_name", [], function (value) {
+                node._applyKeySelection();
+            });
 
             queueMicrotask(() => {
                 if (!this._configured) {
@@ -193,31 +202,42 @@ app.registerExtension({
             // Hide config widgets
             for (const name of ["manager_url", "project_name", "file_name", "sequence_number", "key_type"]) {
                 const w = this.widgets?.find(w => w.name === name);
-                if (w) { w.type = "hidden"; w.computeSize = () => [0, -4]; }
+                if (w) hideWidget(w);
             }
 
-            // Restore combo types
+            // Ensure source_label is a proper combo (may still be STRING from serialization)
             const srcWidget = this.widgets?.find(w => w.name === "source_label");
-            if (srcWidget) {
-                srcWidget.type = "combo";
-                srcWidget.options = { values: this._getSourceLabels() };
+            if (srcWidget && srcWidget.type !== "combo") {
+                const node = this;
+                replaceWithCombo(this, "source_label", this._getSourceLabels(), function (value) {
+                    node._syncFromSource();
+                    node._refreshKeys();
+                });
+            } else if (srcWidget) {
+                srcWidget.options.values = this._getSourceLabels();
             }
 
+            // Ensure key_name is a proper combo
             const keyWidget = this.widgets?.find(w => w.name === "key_name");
-            if (keyWidget) {
-                keyWidget.type = "combo";
-                keyWidget.options = { values: [] };
+            if (keyWidget && keyWidget.type !== "combo") {
+                const node = this;
+                replaceWithCombo(this, "key_name", [], function (value) {
+                    node._applyKeySelection();
+                });
             }
+
+            // Re-find widgets after possible replacement
+            const finalKeyWidget = this.widgets?.find(w => w.name === "key_name");
 
             // Update title from saved key
-            if (keyWidget?.value) {
-                this.title = `Key: ${keyWidget.value}`;
+            if (finalKeyWidget?.value) {
+                this.title = `Key: ${finalKeyWidget.value}`;
             }
 
             // Restore output slot name from saved key_name
-            if (keyWidget?.value && this.outputs.length > 0) {
-                this.outputs[0].name = keyWidget.value;
-                this.outputs[0].label = keyWidget.value;
+            if (finalKeyWidget?.value && this.outputs.length > 0) {
+                this.outputs[0].name = finalKeyWidget.value;
+                this.outputs[0].label = finalKeyWidget.value;
                 const ktWidget = this.widgets?.find(w => w.name === "key_type");
                 if (ktWidget?.value) this.outputs[0].type = ktWidget.value;
             }
