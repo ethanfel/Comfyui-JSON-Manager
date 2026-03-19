@@ -297,6 +297,10 @@ def index():
                     if tree and isinstance(tree, dict):
                         for node in tree.get('nodes', {}).values():
                             node.pop('data', None)
+            for backup in data.get('history_tree_backup', []):
+                if isinstance(backup, dict):
+                    for node in backup.get('nodes', {}).values():
+                        node.pop('data', None)
             pane_state.data_cache = data
             pane_state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
             pane_state.loaded_file = str(fp)
@@ -337,6 +341,11 @@ def index():
                 if tree and isinstance(tree, dict):
                     for node in tree.get('nodes', {}).values():
                         node.pop('data', None)
+        # Strip snapshot data from history_tree_backup to prevent RAM/disk bloat
+        for backup in data.get('history_tree_backup', []):
+            if isinstance(backup, dict):
+                for node in backup.get('nodes', {}).values():
+                    node.pop('data', None)
         state.data_cache = data
         state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
         state.loaded_file = str(fp)

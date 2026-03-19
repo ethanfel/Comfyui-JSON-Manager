@@ -17,7 +17,11 @@ def _delete_nodes(htree, data, file_path, node_ids, state=None):
     """Delete nodes with backup, branch cleanup, re-parenting, and head fallback."""
     if 'history_tree_backup' not in data:
         data['history_tree_backup'] = []
-    data['history_tree_backup'].append(json.loads(json.dumps(htree.to_dict())))
+    # Back up tree metadata only (no snapshot data) to avoid bloating JSON
+    backup = json.loads(json.dumps(htree.to_dict()))
+    for node in backup.get('nodes', {}).values():
+        node.pop('data', None)
+    data['history_tree_backup'].append(backup)
     data['history_tree_backup'] = data['history_tree_backup'][-10:]
     # Save deleted node parents before removal (needed for branch re-pointing)
     deleted_parents = {}
