@@ -377,18 +377,28 @@ def render_batch_processor(state: AppState):
                 except ValueError as e:
                     ui.notify(f'Save failed: {e}', type='negative')
                     return
-                data[KEY_HISTORY_TREE] = htree.to_dict()
-                t1 = time.perf_counter()
-                save_snapshot = json.loads(json.dumps(data))
-                await asyncio.to_thread(save_json, file_path, save_snapshot)
-                logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 if state.db_enabled and state.current_project and state.db:
+                    # DB path: sync full tree (with snapshots) to DB, then
+                    # write slim tree (no snapshots) to JSON and memory
+                    full_tree = htree.to_dict()
+                    data[KEY_HISTORY_TREE] = full_tree
                     t1 = time.perf_counter()
-                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
+                    db_snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, db_snapshot)
                     logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
-                    # Free snapshot data from memory — it's persisted in DB now
                     htree.strip_snapshots()
                     data[KEY_HISTORY_TREE] = htree.to_dict()
+                    t1 = time.perf_counter()
+                    slim_snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(save_json, file_path, slim_snapshot)
+                    logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
+                else:
+                    # No DB: write full tree (with snapshots) to JSON
+                    data[KEY_HISTORY_TREE] = htree.to_dict()
+                    t1 = time.perf_counter()
+                    save_snapshot = json.loads(json.dumps(data))
+                    await asyncio.to_thread(save_json, file_path, save_snapshot)
+                    logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 state.restored_indicator = None
                 commit_input.set_value('')
                 logger.info("save_and_snap END (%.3fs)", time.perf_counter() - t_ss)
@@ -856,14 +866,19 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
             except ValueError as e:
                 ui.notify(f'Mass update failed: {e}', type='negative')
                 return
-            data[KEY_HISTORY_TREE] = htree.to_dict()
-            save_snapshot = json.loads(json.dumps(data))
-            await asyncio.to_thread(save_json, file_path, save_snapshot)
             if state.db_enabled and state.current_project and state.db:
-                await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
-                # Free snapshot data from memory after persisting
+                full_tree = htree.to_dict()
+                data[KEY_HISTORY_TREE] = full_tree
+                db_snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, db_snapshot)
                 htree.strip_snapshots()
                 data[KEY_HISTORY_TREE] = htree.to_dict()
+                slim_snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(save_json, file_path, slim_snapshot)
+            else:
+                data[KEY_HISTORY_TREE] = htree.to_dict()
+                save_snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(save_json, file_path, save_snapshot)
             ui.notify(f'Updated {len(targets)} sequences', type='positive')
             if refresh_list:
                 refresh_list.refresh()
