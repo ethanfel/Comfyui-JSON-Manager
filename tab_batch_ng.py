@@ -247,8 +247,8 @@ def render_batch_processor(state: AppState):
 
             src_seq_select = ui.select([], label='Source Sequence:').classes('w-64')
 
-            # Track loaded source data
-            _src_cache = {'data': None, 'batch': [], 'name': None}
+            # Track loaded source data (on state so it's cleared on file switch)
+            _src_cache = state._src_cache
 
             def _update_src():
                 name = src_file_select.value
@@ -359,11 +359,14 @@ def render_batch_processor(state: AppState):
                 data[KEY_BATCH_DATA] = batch_list
                 tree_data = data.get(KEY_HISTORY_TREE, {})
                 htree = HistoryTree(tree_data)
-                t1 = time.perf_counter()
-                snapshot_payload = {k: copy.deepcopy(v) for k, v in data.items()
-                                    if k != KEY_HISTORY_TREE}
-                logger.info("save_and_snap deepcopy %.3fs", time.perf_counter() - t1)
                 note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list)
+                # Single serialization: json roundtrip gives us an isolated snapshot
+                # without the expensive deepcopy
+                t1 = time.perf_counter()
+                snapshot_json = json.dumps({k: v for k, v in data.items()
+                                            if k != KEY_HISTORY_TREE})
+                snapshot_payload = json.loads(snapshot_json)
+                logger.info("save_and_snap snapshot %.3fs", time.perf_counter() - t1)
                 try:
                     htree.commit(snapshot_payload, note=note)
                 except ValueError as e:
@@ -371,13 +374,16 @@ def render_batch_processor(state: AppState):
                     return
                 data[KEY_HISTORY_TREE] = htree.to_dict()
                 t1 = time.perf_counter()
-                snapshot = json.loads(json.dumps(data))
-                await asyncio.to_thread(save_json, file_path, snapshot)
+                save_snapshot = json.loads(json.dumps(data))
+                await asyncio.to_thread(save_json, file_path, save_snapshot)
                 logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 if state.db_enabled and state.current_project and state.db:
                     t1 = time.perf_counter()
-                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
+                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, save_snapshot)
                     logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
+                # Free snapshot data from memory — it's persisted in DB now
+                htree.strip_snapshots()
+                data[KEY_HISTORY_TREE] = htree.to_dict()
                 state.restored_indicator = None
                 commit_input.set_value('')
                 logger.info("save_and_snap END (%.3fs)", time.perf_counter() - t_ss)

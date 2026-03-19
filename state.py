@@ -28,6 +28,7 @@ class AppState:
     _main_rendered: bool = False
     _live_checkboxes: dict = field(default_factory=dict)
     _live_refreshables: dict = field(default_factory=dict)
+    _src_cache: dict = field(default_factory=lambda: {'data': None, 'batch': [], 'name': None})
 
     def create_secondary(self) -> 'AppState':
         return AppState(

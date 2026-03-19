@@ -13,7 +13,7 @@ from utils import save_json, sync_to_db, KEY_BATCH_DATA, KEY_HISTORY_TREE
 logger = logging.getLogger(__name__)
 
 
-def _delete_nodes(htree, data, file_path, node_ids):
+def _delete_nodes(htree, data, file_path, node_ids, state=None):
     """Delete nodes with backup, branch cleanup, re-parenting, and head fallback."""
     if 'history_tree_backup' not in data:
         data['history_tree_backup'] = []
@@ -52,6 +52,11 @@ def _delete_nodes(htree, data, file_path, node_ids):
         else:
             htree.head_id = None
     data[KEY_HISTORY_TREE] = htree.to_dict()
+    # Clean up DB snapshots for deleted nodes
+    if state and state.db_enabled and state.db and state.current_project:
+        df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
+        if df:
+            state.db.delete_node_snapshots(df['id'], set(node_ids))
 
 
 def _render_selection_picker(all_nodes, htree, state, refresh_fn):
@@ -159,7 +164,7 @@ def _render_batch_delete(htree, data, file_path, state, refresh_fn):
 
     async def do_batch_delete():
         current_valid = state.timeline_selected_nodes & set(htree.nodes.keys())
-        _delete_nodes(htree, data, file_path, current_valid)
+        _delete_nodes(htree, data, file_path, current_valid, state=state)
         snapshot = json.loads(json.dumps(data))
         await asyncio.to_thread(save_json, file_path, snapshot)
         if state.db_enabled and state.current_project and state.db:
@@ -344,7 +349,7 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
 
             async def delete_selected():
                 if sel_id in htree.nodes:
-                    _delete_nodes(htree, data, file_path, {sel_id})
+                    _delete_nodes(htree, data, file_path, {sel_id}, state=state)
                     snapshot = json.loads(json.dumps(data))
                     await asyncio.to_thread(save_json, file_path, snapshot)
                     if state and state.db_enabled and state.current_project and state.db:
@@ -361,7 +366,7 @@ def _render_node_manager(all_nodes, htree, data, file_path, restore_fn, refresh_
 
         # Data preview
         with ui.expansion('Data Preview', icon='preview').classes('w-full q-mt-sm'):
-            _render_data_preview(sel_id, htree)
+            _render_data_preview(sel_id, htree, state=state, file_path=file_path)
 
     render_branch_nodes()
 
@@ -566,7 +571,20 @@ async def _restore_node(data, node, htree, file_path, state: AppState):
     """Restore a history node as the current version (full replace, not merge)."""
     t0 = time.perf_counter()
     logger.info("_restore_node START: %s", node.get('note', 'Step'))
-    node_data = json.loads(json.dumps(node.get('data', {})))
+    # Load snapshot from DB on demand (nodes no longer hold data in memory)
+    raw_snap = node.get('data')
+    if not raw_snap and state.db_enabled and state.db and state.current_project:
+        df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
+        if df:
+            raw_snap = await asyncio.to_thread(
+                state.db.get_node_snapshot, df['id'], node['id'])
+    if not raw_snap:
+        # Last resort: read from JSON file on disk
+        from utils import load_json as _load_json
+        raw_file, _ = await asyncio.to_thread(_load_json, file_path)
+        tree_on_disk = raw_file.get(KEY_HISTORY_TREE, {})
+        raw_snap = tree_on_disk.get('nodes', {}).get(node['id'], {}).get('data', {})
+    node_data = json.loads(json.dumps(raw_snap)) if raw_snap else {}
     # Preserve the history tree before clearing
     preserved_tree = data.get(KEY_HISTORY_TREE)
     preserved_backup = data.get('history_tree_backup')
@@ -589,13 +607,21 @@ async def _restore_node(data, node, htree, file_path, state: AppState):
     ui.notify('Restored!', type='positive')
 
 
-def _render_data_preview(nid, htree):
+def _render_data_preview(nid, htree, state: AppState = None, file_path=None):
     """Render a read-only preview of the selected node's data."""
     if not nid or nid not in htree.nodes:
         ui.label('No node selected.').classes('text-caption')
         return
 
-    node_data = htree.nodes[nid].get('data', {})
+    # Load snapshot from DB on demand (not stored in memory)
+    node_data = htree.nodes[nid].get('data')
+    if not node_data and state and state.db_enabled and state.db and state.current_project and file_path:
+        df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
+        if df:
+            node_data = state.db.get_node_snapshot(df['id'], nid)
+    if not node_data:
+        ui.label('Snapshot data not available.').classes('text-caption text-warning')
+        return
     batch_list = node_data.get(KEY_BATCH_DATA, [])
 
     if batch_list and isinstance(batch_list, list) and len(batch_list) > 0:

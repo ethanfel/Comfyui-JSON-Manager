@@ -210,6 +210,15 @@ def save_json(path: str | Path, data: dict[str, Any]) -> None:
     os.replace(tmp, path)
     logger.info("save_json %s: %.3fs", path.name, time.time() - t0)
 
+
+def snapshot_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Create a thread-safe deep copy via JSON roundtrip.
+
+    Must be called on the main thread before passing data to asyncio.to_thread,
+    to avoid 'dict changed size during iteration' when the UI mutates data.
+    """
+    return json.loads(json.dumps(data))
+
 def get_file_mtime(path: str | Path) -> float:
     """Returns the modification time of a file, or 0 if it doesn't exist."""
     path = Path(path)
@@ -279,14 +288,29 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                 else:
                     db.conn.execute("DELETE FROM sequences WHERE data_file_id = ?", (df_id,))
 
-            # Sync history tree
+            # Sync history tree (extract node snapshots into separate table)
             history_tree = data.get(KEY_HISTORY_TREE)
             if history_tree and isinstance(history_tree, dict):
+                nodes = history_tree.get("nodes", {})
+                slim_tree = dict(history_tree)
+                slim_nodes = {}
+                for nid, node in nodes.items():
+                    snap = node.get("data")
+                    if snap:
+                        db.conn.execute(
+                            "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
+                            "VALUES (?, ?, ?, ?) "
+                            "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
+                            "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
+                            (df_id, nid, json.dumps(snap), now),
+                        )
+                    slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
+                slim_tree["nodes"] = slim_nodes
                 db.conn.execute(
                     "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
                     "VALUES (?, ?, ?) "
                     "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
-                    (df_id, json.dumps(history_tree), now),
+                    (df_id, json.dumps(slim_tree), now),
                 )
 
             db.conn.execute("COMMIT")

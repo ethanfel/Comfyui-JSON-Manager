@@ -11,7 +11,7 @@ from utils import (
     load_config, save_config, load_snippets, save_snippets,
     load_json, save_json, generate_templates, DEFAULTS,
     KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER,
-    resolve_path_case_insensitive,
+    resolve_path_case_insensitive, sync_to_db,
 )
 from tab_batch_ng import render_batch_processor
 from tab_timeline_ng import render_timeline_tab
@@ -290,11 +290,19 @@ def index():
                     pane_state.db.load_full_data, pane_state.current_project, file_stem)
             if data is None:
                 data, _ = await asyncio.to_thread(load_json, fp)
+                if pane_state.db and pane_state.db_enabled and pane_state.current_project:
+                    await asyncio.to_thread(
+                        sync_to_db, pane_state.db, pane_state.current_project, fp, data)
+                    tree = data.get('history_tree')
+                    if tree and isinstance(tree, dict):
+                        for node in tree.get('nodes', {}).values():
+                            node.pop('data', None)
             pane_state.data_cache = data
             pane_state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
             pane_state.loaded_file = str(fp)
             pane_state.file_path = fp
             pane_state.restored_indicator = None
+            pane_state._src_cache = {'data': None, 'batch': [], 'name': None}
             _render_batch_tab_content.refresh()
             logger.info("on_select END (%.3fs)", _time.perf_counter() - _t0)
 
@@ -320,11 +328,21 @@ def index():
                 state.db.load_full_data, state.current_project, file_stem)
         if data is None:
             data, _ = await asyncio.to_thread(load_json, fp)
+            # When loading from JSON fallback and DB is enabled, sync to DB
+            # so snapshots are persisted, then strip from memory
+            if state.db and state.db_enabled and state.current_project:
+                await asyncio.to_thread(
+                    sync_to_db, state.db, state.current_project, fp, data)
+                tree = data.get('history_tree')
+                if tree and isinstance(tree, dict):
+                    for node in tree.get('nodes', {}).values():
+                        node.pop('data', None)
         state.data_cache = data
         state.last_mtime = fp.stat().st_mtime if fp.exists() else 0
         state.loaded_file = str(fp)
         state.file_path = fp
         state.restored_indicator = None
+        state._src_cache = {'data': None, 'batch': [], 'name': None}
         if state._main_rendered:
             render_main_content.refresh()
         logger.info("load_file END (%.3fs)", _time.perf_counter() - _t0)

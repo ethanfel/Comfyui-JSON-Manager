@@ -48,8 +48,18 @@ CREATE TABLE IF NOT EXISTS history_trees (
     updated_at    REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS history_snapshots (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    data_file_id  INTEGER NOT NULL REFERENCES data_files(id) ON DELETE CASCADE,
+    node_id       TEXT NOT NULL,
+    snapshot_data TEXT NOT NULL,
+    updated_at    REAL NOT NULL,
+    UNIQUE(data_file_id, node_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_data_files_project_id ON data_files(project_id);
 CREATE INDEX IF NOT EXISTS idx_sequences_data_file_id ON sequences(data_file_id);
+CREATE INDEX IF NOT EXISTS idx_history_snapshots_df ON history_snapshots(data_file_id);
 """
 
 
@@ -314,21 +324,63 @@ class ProjectDB:
     # ------------------------------------------------------------------
 
     def save_history_tree(self, data_file_id: int, tree_data: dict) -> None:
+        """Save history tree, extracting node snapshots into separate table."""
         now = time.time()
+        # Extract snapshot data from nodes into history_snapshots table
+        nodes = tree_data.get("nodes", {})
+        slim_tree = dict(tree_data)
+        slim_nodes = {}
+        for nid, node in nodes.items():
+            snap = node.get("data")
+            if snap:
+                self.conn.execute(
+                    "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
+                    "VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
+                    "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
+                    (data_file_id, nid, json.dumps(snap), now),
+                )
+            # Store node without data in tree
+            slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
+        slim_tree["nodes"] = slim_nodes
         self.conn.execute(
             "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
             "VALUES (?, ?, ?) "
             "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
-            (data_file_id, json.dumps(tree_data), now),
+            (data_file_id, json.dumps(slim_tree), now),
         )
         self.conn.commit()
 
     def get_history_tree(self, data_file_id: int) -> dict | None:
+        """Load history tree metadata (without snapshot data)."""
         row = self.conn.execute(
             "SELECT tree_data FROM history_trees WHERE data_file_id = ?",
             (data_file_id,),
         ).fetchone()
         return json.loads(row["tree_data"]) if row else None
+
+    # ------------------------------------------------------------------
+    # History snapshots (per-node data, loaded on demand)
+    # ------------------------------------------------------------------
+
+    def get_node_snapshot(self, data_file_id: int, node_id: str) -> dict | None:
+        """Load a single node's snapshot data on demand."""
+        row = self.conn.execute(
+            "SELECT snapshot_data FROM history_snapshots WHERE data_file_id = ? AND node_id = ?",
+            (data_file_id, node_id),
+        ).fetchone()
+        return json.loads(row["snapshot_data"]) if row else None
+
+    def delete_node_snapshots(self, data_file_id: int, node_ids: set) -> None:
+        """Delete snapshots for removed nodes."""
+        if not node_ids:
+            return
+        placeholders = ",".join("?" for _ in node_ids)
+        self.conn.execute(
+            f"DELETE FROM history_snapshots WHERE data_file_id = ? AND node_id IN ({placeholders})",
+            (data_file_id, *node_ids),
+        )
+        self.conn.commit()
 
     # ------------------------------------------------------------------
     # Import
@@ -385,15 +437,30 @@ class ProjectDB:
                         (df_id, seq_num, json.dumps(item), now),
                     )
 
-            # Import history tree
+            # Import history tree (extract snapshots into separate table)
             history_tree = data.get(KEY_HISTORY_TREE)
             if history_tree and isinstance(history_tree, dict):
                 now = time.time()
+                nodes = history_tree.get("nodes", {})
+                slim_tree = dict(history_tree)
+                slim_nodes = {}
+                for nid, node in nodes.items():
+                    snap = node.get("data")
+                    if snap:
+                        self.conn.execute(
+                            "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
+                            "VALUES (?, ?, ?, ?) "
+                            "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
+                            "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
+                            (df_id, nid, json.dumps(snap), now),
+                        )
+                    slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
+                slim_tree["nodes"] = slim_nodes
                 self.conn.execute(
                     "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
                     "VALUES (?, ?, ?) "
                     "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
-                    (df_id, json.dumps(history_tree), now),
+                    (df_id, json.dumps(slim_tree), now),
                 )
 
             self.conn.execute("COMMIT")
@@ -445,9 +512,12 @@ class ProjectDB:
         data["batch_data"] = batch_data
         t2 = time.time()
 
-        # Load history tree
+        # Load history tree (metadata only, no snapshot data)
         tree = self.get_history_tree(df["id"])
         if tree:
+            # Strip any residual snapshot data from nodes
+            for node in tree.get("nodes", {}).values():
+                node.pop("data", None)
             data["history_tree"] = tree
         t3 = time.time()
 

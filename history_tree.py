@@ -76,6 +76,11 @@ class HistoryTree:
             return self.nodes[node_id]["data"]
         return None
 
+    def strip_snapshots(self) -> None:
+        """Remove snapshot data from all nodes to free memory."""
+        for node in self.nodes.values():
+            node.pop("data", None)
+
     def to_dict(self) -> dict[str, Any]:
         return {"nodes": self.nodes, "branches": self.branches, "head_id": self.head_id}
 
