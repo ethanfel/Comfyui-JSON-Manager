@@ -121,11 +121,17 @@ app.registerExtension({
         nodeType.prototype._syncFromSource = function () {
             const srcWidget = this.widgets?.find(w => w.name === "source_label");
             const source = this._findSource(srcWidget?.value);
-            if (!source) return;
+            if (!source) {
+                console.log(`[ProjectKey] _syncFromSource id=${this.id}: no source found for label="${srcWidget?.value}"`);
+                return;
+            }
             for (const name of ["manager_url", "project_name", "file_name", "sequence_number"]) {
                 const dst = this.widgets?.find(w => w.name === name);
                 const src = source.widgets?.find(w => w.name === name);
-                if (dst && src) dst.value = src.value;
+                if (dst && src) {
+                    dst.value = src.value;
+                    console.log(`[ProjectKey] _syncFromSource id=${this.id}: ${name}="${src.value}"`);
+                }
             }
         };
 

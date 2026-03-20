@@ -264,10 +264,19 @@ class ProjectKey:
                   file_name="", sequence_number=1):
         # source_label is used by JS to identify which ProjectSource to sync
         # config from. The actual config arrives via the optional widgets below.
+        logger.info("ProjectKey.fetch_key: source=%s key=%s url=%s project=%s file=%s seq=%s",
+                     source_label, key_name, manager_url, project_name, file_name, sequence_number)
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
         if data.get("error") in ("http_error", "network_error", "parse_error"):
             msg = data.get("message", "Unknown error")
-            raise RuntimeError(f"Failed to fetch data: {msg}")
+            logger.warning("ProjectKey.fetch_key failed: %s", msg)
+            # Return empty/default instead of crashing the workflow
+            if key_type == "INT":
+                return (0,)
+            elif key_type == "FLOAT":
+                return (0.0,)
+            else:
+                return ("",)
 
         val = data.get(key_name, "")
 
