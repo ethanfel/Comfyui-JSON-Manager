@@ -161,14 +161,11 @@ app.registerExtension({
                 this._availableKeys = data.keys;
                 this._availableTypes = data.types;
 
-                // Update key_name combo values
+                // Update key_name combo options only — never change the selection
                 const keyWidget = this.widgets?.find(w => w.name === "key_name");
                 if (keyWidget) {
                     keyWidget.options.values = data.keys;
-                    // Keep current selection if still valid
-                    if (!data.keys.includes(keyWidget.value)) {
-                        keyWidget.value = data.keys[0] || "";
-                    }
+                    // Selection is sticky: user must change it manually
                     this._applyKeySelection();
                 }
             } catch (e) {
