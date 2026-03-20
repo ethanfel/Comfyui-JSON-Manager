@@ -35,7 +35,11 @@ app.registerExtension({
             const savedValue = oldWidget.value || "";
             // Ensure values list is never empty (combo shows undefined otherwise)
             const comboValues = values.length > 0 ? values : [""];
-            const defaultValue = comboValues.includes(savedValue) ? savedValue : comboValues[0];
+            // Always preserve saved value — it may not be in the list yet (load-order race)
+            if (savedValue && !comboValues.includes(savedValue)) {
+                comboValues.unshift(savedValue);
+            }
+            const defaultValue = savedValue || comboValues[0];
             // Remove old STRING widget
             node.widgets.splice(idx, 1);
             // Insert a real combo widget at the same position
