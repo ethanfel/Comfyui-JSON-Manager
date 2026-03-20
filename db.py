@@ -81,7 +81,7 @@ class ProjectDB:
         self._migrate_all_lora_data()
 
     def _migrate_all_lora_data(self) -> None:
-        """One-time bulk migration: merge separate lora strength keys in all stored sequences."""
+        """Bulk migration: split combined lora 'name:strength' into separate keys."""
         rows = self.conn.execute("SELECT id, data FROM sequences").fetchall()
         updated = 0
         self.conn.execute("BEGIN")
@@ -243,8 +243,9 @@ class ProjectDB:
         self.conn.commit()
 
     @staticmethod
+    @staticmethod
     def _migrate_lora_keys(data: dict) -> dict:
-        """Merge lora name + strength into single 'name:strength' key, remove separate strength keys."""
+        """Split combined lora 'name:strength' into separate name and strength keys."""
         for idx in range(1, 4):
             for tier in ('high', 'low'):
                 name_key = f'lora {idx} {tier}'
@@ -252,16 +253,31 @@ class ProjectDB:
                 raw = str(data.get(name_key, ''))
                 if raw.startswith('<lora:'):
                     inner = raw.replace('<lora:', '').replace('>', '')
-                    data[name_key] = inner
-                    if ':' not in inner:
-                        strength = data.pop(str_key, 1.0)
-                        data[name_key] = f'{inner}:{float(strength)}' if inner else ''
+                    if ':' in inner:
+                        parts = inner.rsplit(':', 1)
+                        data[name_key] = parts[0]
+                        try:
+                            data[str_key] = float(parts[1])
+                        except ValueError:
+                            data[str_key] = 1.0
                     else:
-                        data.pop(str_key, None)
-                elif str_key in data:
-                    strength = float(data.pop(str_key))
-                    if raw and ':' not in raw:
-                        data[name_key] = f'{raw}:{strength}'
+                        data[name_key] = inner
+                        if str_key not in data:
+                            data[str_key] = 1.0
+                elif ':' in raw and raw:
+                    parts = raw.rsplit(':', 1)
+                    try:
+                        strength = float(parts[1])
+                        data[name_key] = parts[0]
+                        data[str_key] = strength
+                    except ValueError:
+                        if str_key not in data:
+                            data[str_key] = 1.0
+                elif raw:
+                    # Name exists without colon, ensure strength key exists
+                    if str_key not in data:
+                        data[str_key] = 1.0
+                # If name is empty, don't add a strength key
         return data
 
     def get_sequence(self, data_file_id: int, sequence_number: int) -> dict | None:

@@ -667,9 +667,12 @@ def _render_preview_fields(item_data: dict):
         with ui.row().classes('w-full q-gutter-md'):
             for lora_idx in range(1, 4):
                 for tier, tier_label in [('high', 'High'), ('low', 'Low')]:
+                    lora_name = item_data.get(f'lora {lora_idx} {tier}', '')
+                    lora_str = item_data.get(f'lora {lora_idx} {tier} strength', 1.0)
                     ui.input(f'L{lora_idx} {tier_label}',
-                             value=item_data.get(f'lora {lora_idx} {tier}', '')).props(
-                        'readonly outlined dense')
+                             value=str(lora_name)).props('readonly outlined dense')
+                    ui.number(f'L{lora_idx} {tier_label} Str',
+                              value=float(lora_str)).props('readonly outlined dense').style('max-width: 80px')
 
     vace_keys = ['frame_to_skip', 'vace schedule', 'video file path']
     if any(k in item_data for k in vace_keys):

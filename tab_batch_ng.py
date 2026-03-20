@@ -306,9 +306,9 @@ def render_batch_processor(state: AppState):
                 ui.button('From Source', icon='file_download', on_click=add_from_source)
 
     # --- Standard / LoRA / VACE key sets ---
-    lora_keys = ['lora 1 high', 'lora 1 low',
-                 'lora 2 high', 'lora 2 low',
-                 'lora 3 high', 'lora 3 low']
+    lora_keys = ['lora 1 high', 'lora 1 high strength', 'lora 1 low', 'lora 1 low strength',
+                 'lora 2 high', 'lora 2 high strength', 'lora 2 low', 'lora 2 low strength',
+                 'lora 3 high', 'lora 3 high strength', 'lora 3 low', 'lora 3 low strength']
     standard_keys = {
         'name', 'mode', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
@@ -592,23 +592,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 for tier, tier_label in [('high', 'High'), ('low', 'Low')]:
                     lora_key = f'lora {lora_idx} {tier}'
 
-                    # Parse combined name:strength value
-                    raw = str(seq.get(lora_key, ''))
-                    # Handle legacy <lora:> wrapper
-                    if raw.startswith('<lora:'):
-                        raw = raw.replace('<lora:', '').replace('>', '')
-                    # Also remove stale separate strength key if present
-                    seq.pop(f'lora {lora_idx} {tier} strength', None)
-
-                    if ':' in raw and raw:
-                        parts = raw.rsplit(':', 1)
-                        lora_name = parts[0]
-                        try:
-                            lora_strength = float(parts[1])
-                        except ValueError:
-                            lora_strength = 1.0
-                    else:
-                        lora_name = raw
+                    lora_name = str(seq.get(lora_key, ''))
+                    strength_key = f'lora {lora_idx} {tier} strength'
+                    lora_strength = seq.get(strength_key, 1.0)
+                    try:
+                        lora_strength = float(lora_strength)
+                    except (ValueError, TypeError):
                         lora_strength = 1.0
 
                     with ui.row().classes('w-full items-center q-gutter-sm'):
@@ -625,10 +614,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                             format='%.1f',
                         ).props('outlined dense').style('max-width: 80px')
 
-                        def _lora_sync(k=lora_key, n_inp=name_input, s_inp=strength_input):
-                            name = n_inp.value or ''
-                            strength = s_inp.value if s_inp.value is not None else 1.0
-                            seq[k] = f'{name}:{strength}' if name else ''
+                        def _lora_sync(k=lora_key, sk=strength_key, n_inp=name_input, s_inp=strength_input):
+                            seq[k] = n_inp.value or ''
+                            seq[sk] = float(s_inp.value) if s_inp.value is not None else 1.0
 
                         name_input.on('blur', lambda _, s=_lora_sync: s())
                         name_input.on('update:model-value', lambda _, s=_lora_sync: s())
