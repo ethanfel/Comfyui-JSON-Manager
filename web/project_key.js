@@ -136,7 +136,11 @@ app.registerExtension({
             const fileW = this.widgets?.find(w => w.name === "file_name");
             const seqW = this.widgets?.find(w => w.name === "sequence_number");
 
-            if (!urlW?.value || !projW?.value || !fileW?.value) return;
+            console.log(`[ProjectKey] _refreshKeys id=${this.id}: url="${urlW?.value}" project="${projW?.value}" file="${fileW?.value}" seq=${seqW?.value}`);
+            if (!urlW?.value || !projW?.value || !fileW?.value) {
+                console.log(`[ProjectKey] _refreshKeys: skipped (missing config)`);
+                return;
+            }
 
             try {
                 const resp = await api.fetchApi(
@@ -190,7 +194,7 @@ app.registerExtension({
             app.graph?.setDirtyCanvas(true, true);
         };
 
-        // --- Populate source dropdown on click (lazy refresh) ---
+        // --- Sync + refresh on click (catches changes pushed from source) ---
         const origOnMouseDown = nodeType.prototype.onMouseDown;
         nodeType.prototype.onMouseDown = function (e, localPos, graphCanvas) {
             origOnMouseDown?.apply(this, arguments);
@@ -198,6 +202,9 @@ app.registerExtension({
             if (srcWidget) {
                 srcWidget.options.values = this._getSourceLabels();
             }
+            // Always re-sync config from source and refresh keys on interaction
+            this._syncFromSource();
+            this._refreshKeys();
         };
 
         // --- Restore state on workflow load ---

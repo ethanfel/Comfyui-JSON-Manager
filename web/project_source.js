@@ -11,15 +11,20 @@ app.registerExtension({
             if (!sourceNode.graph?._nodes) return;
             const labelW = sourceNode.widgets?.find(w => w.name === "label");
             if (!labelW?.value) return;
+            console.log(`[ProjectSource] notifyRelays: label="${labelW.value}", scanning ${sourceNode.graph._nodes.length} nodes`);
+            let matched = 0;
             for (const node of sourceNode.graph._nodes) {
                 if (node.type === "ProjectKey" && node._syncFromSource && node._refreshKeys) {
                     const srcW = node.widgets?.find(w => w.name === "source_label");
+                    console.log(`[ProjectSource]   ProjectKey id=${node.id} source_label="${srcW?.value}"`);
                     if (srcW?.value === labelW.value) {
+                        matched++;
                         node._syncFromSource();
                         node._refreshKeys();
                     }
                 }
             }
+            console.log(`[ProjectSource] notifyRelays: matched ${matched} relays`);
         }
 
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
