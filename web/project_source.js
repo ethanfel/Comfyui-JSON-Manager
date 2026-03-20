@@ -6,14 +6,43 @@ app.registerExtension({
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name !== "ProjectSource") return;
 
+        // Notify all ProjectKey nodes referencing this source to re-sync
+        function notifyRelays(sourceNode) {
+            if (!sourceNode.graph?._nodes) return;
+            const labelW = sourceNode.widgets?.find(w => w.name === "label");
+            if (!labelW?.value) return;
+            for (const node of sourceNode.graph._nodes) {
+                if (node.type === "ProjectKey" && node._syncFromSource && node._refreshKeys) {
+                    const srcW = node.widgets?.find(w => w.name === "source_label");
+                    if (srcW?.value === labelW.value) {
+                        node._syncFromSource();
+                        node._refreshKeys();
+                    }
+                }
+            }
+        }
+
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             origOnNodeCreated?.apply(this, arguments);
 
+            const node = this;
+
+            // Hook all config widgets to notify relays on change
+            for (const name of ["manager_url", "project_name", "file_name", "sequence_number"]) {
+                const w = this.widgets?.find(w => w.name === name);
+                if (w) {
+                    const origCb = w.callback;
+                    w.callback = function (...args) {
+                        origCb?.apply(this, args);
+                        notifyRelays(node);
+                    };
+                }
+            }
+
             // Update title when label changes
             const labelWidget = this.widgets?.find(w => w.name === "label");
             if (labelWidget) {
-                const node = this;
                 const origCallback = labelWidget.callback;
                 labelWidget.callback = function (...args) {
                     origCallback?.apply(this, args);
