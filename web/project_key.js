@@ -200,7 +200,7 @@ app.registerExtension({
             app.graph?.setDirtyCanvas(true, true);
         };
 
-        // --- Sync + refresh on click (catches changes pushed from source) ---
+        // --- Sync config on click (lazy, no key refresh to avoid race) ---
         const origOnMouseDown = nodeType.prototype.onMouseDown;
         nodeType.prototype.onMouseDown = function (e, localPos, graphCanvas) {
             origOnMouseDown?.apply(this, arguments);
@@ -208,9 +208,8 @@ app.registerExtension({
             if (srcWidget) {
                 srcWidget.options.values = this._getSourceLabels();
             }
-            // Always re-sync config from source and refresh keys on interaction
+            // Sync config values from source (synchronous, safe)
             this._syncFromSource();
-            this._refreshKeys();
         };
 
         // --- Restore state on workflow load ---
