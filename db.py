@@ -243,7 +243,6 @@ class ProjectDB:
         self.conn.commit()
 
     @staticmethod
-    @staticmethod
     def _migrate_lora_keys(data: dict) -> dict:
         """Split combined lora 'name:strength' into separate name and strength keys."""
         for idx in range(1, 4):
@@ -340,27 +339,34 @@ class ProjectDB:
     # ------------------------------------------------------------------
 
     def save_history_tree(self, data_file_id: int, tree_data: dict) -> None:
-        """Save history tree, extracting node snapshots into separate table."""
+        """Save history tree, extracting snapshot data into separate table.
+
+        Supports both new format (snapshots dict) and old format (nodes dict).
+        """
         now = time.time()
-        nodes = tree_data.get("nodes", {})
+        if "snapshots" in tree_data:
+            entries = tree_data.get("snapshots", {})
+            entry_key = "snapshots"
+        else:
+            entries = tree_data.get("nodes", {})
+            entry_key = "nodes"
         slim_tree = dict(tree_data)
-        slim_nodes = {}
-        for nid, node in nodes.items():
-            slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
-        slim_tree["nodes"] = slim_nodes
+        slim_entries = {}
+        for eid, entry in entries.items():
+            slim_entries[eid] = {k: v for k, v in entry.items() if k != "data"}
+        slim_tree[entry_key] = slim_entries
 
         self.conn.execute("BEGIN IMMEDIATE")
         try:
-            # Extract snapshot data from nodes into history_snapshots table
-            for nid, node in nodes.items():
-                snap = node.get("data")
+            for eid, entry in entries.items():
+                snap = entry.get("data")
                 if snap:
                     self.conn.execute(
                         "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
                         "VALUES (?, ?, ?, ?) "
                         "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
                         "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
-                        (data_file_id, nid, json.dumps(snap), now),
+                        (data_file_id, eid, json.dumps(snap), now),
                     )
             self.conn.execute(
                 "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
@@ -463,24 +469,30 @@ class ProjectDB:
                     )
 
             # Import history tree (extract snapshots into separate table)
+            # Supports both new format (snapshots dict) and old format (nodes dict)
             history_tree = data.get(KEY_HISTORY_TREE)
             if history_tree and isinstance(history_tree, dict):
                 now = time.time()
-                nodes = history_tree.get("nodes", {})
+                if "snapshots" in history_tree:
+                    entries = history_tree.get("snapshots", {})
+                    entry_key = "snapshots"
+                else:
+                    entries = history_tree.get("nodes", {})
+                    entry_key = "nodes"
                 slim_tree = dict(history_tree)
-                slim_nodes = {}
-                for nid, node in nodes.items():
-                    snap = node.get("data")
+                slim_entries = {}
+                for eid, entry in entries.items():
+                    snap = entry.get("data")
                     if snap:
                         self.conn.execute(
                             "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
                             "VALUES (?, ?, ?, ?) "
                             "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
                             "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
-                            (df_id, nid, json.dumps(snap), now),
+                            (df_id, eid, json.dumps(snap), now),
                         )
-                    slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
-                slim_tree["nodes"] = slim_nodes
+                    slim_entries[eid] = {k: v for k, v in entry.items() if k != "data"}
+                slim_tree[entry_key] = slim_entries
                 self.conn.execute(
                     "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
                     "VALUES (?, ?, ?) "
@@ -540,9 +552,9 @@ class ProjectDB:
         # Load history tree (metadata only, no snapshot data)
         tree = self.get_history_tree(df["id"])
         if tree:
-            # Strip any residual snapshot data from nodes
-            for node in tree.get("nodes", {}).values():
-                node.pop("data", None)
+            # Strip any residual snapshot data (supports both formats)
+            for entry in tree.get("snapshots", tree.get("nodes", {})).values():
+                entry.pop("data", None)
             data["history_tree"] = tree
         t3 = time.time()
 

@@ -13,7 +13,7 @@ class AppState:
     snippets: dict = field(default_factory=dict)
     file_path: Path | None = None
     restored_indicator: str | None = None
-    timeline_selected_nodes: set = field(default_factory=set)
+    timeline_selected_id: str | None = None
     live_toggles: dict = field(default_factory=dict)
     show_comfy_monitor: bool = True
 

@@ -305,38 +305,47 @@ def sync_to_db(db, project_name: str, file_path: Path, data: dict) -> None:
                 else:
                     db.conn.execute("DELETE FROM sequences WHERE data_file_id = ?", (df_id,))
 
-            # Sync history tree (extract node snapshots into separate table)
+            # Sync history tree (extract snapshot data into separate table)
+            # Supports both new format (snapshots dict) and old format (nodes dict)
             history_tree = data.get(KEY_HISTORY_TREE)
             if history_tree and isinstance(history_tree, dict):
-                nodes = history_tree.get("nodes", {})
+                # Detect format: new has "snapshots", old has "nodes"
+                if "snapshots" in history_tree:
+                    entries = history_tree.get("snapshots", {})
+                else:
+                    entries = history_tree.get("nodes", {})
                 slim_tree = dict(history_tree)
-                slim_nodes = {}
-                for nid, node in nodes.items():
-                    snap = node.get("data")
+                slim_entries = {}
+                for eid, entry in entries.items():
+                    snap = entry.get("data")
                     if snap:
                         db.conn.execute(
                             "INSERT INTO history_snapshots (data_file_id, node_id, snapshot_data, updated_at) "
                             "VALUES (?, ?, ?, ?) "
                             "ON CONFLICT(data_file_id, node_id) DO UPDATE SET "
                             "snapshot_data=excluded.snapshot_data, updated_at=excluded.updated_at",
-                            (df_id, nid, json.dumps(snap), now),
+                            (df_id, eid, json.dumps(snap), now),
                         )
-                    slim_nodes[nid] = {k: v for k, v in node.items() if k != "data"}
-                slim_tree["nodes"] = slim_nodes
+                    slim_entries[eid] = {k: v for k, v in entry.items() if k != "data"}
+                # Write back slim version using the correct key
+                if "snapshots" in history_tree:
+                    slim_tree["snapshots"] = slim_entries
+                else:
+                    slim_tree["nodes"] = slim_entries
                 db.conn.execute(
                     "INSERT INTO history_trees (data_file_id, tree_data, updated_at) "
                     "VALUES (?, ?, ?) "
                     "ON CONFLICT(data_file_id) DO UPDATE SET tree_data=excluded.tree_data, updated_at=excluded.updated_at",
                     (df_id, json.dumps(slim_tree), now),
                 )
-                # Clean up orphaned snapshots for nodes no longer in tree
-                current_node_ids = set(nodes.keys())
-                if current_node_ids:
-                    placeholders = ",".join("?" for _ in current_node_ids)
+                # Clean up orphaned snapshots
+                current_ids = set(entries.keys())
+                if current_ids:
+                    placeholders = ",".join("?" for _ in current_ids)
                     db.conn.execute(
                         f"DELETE FROM history_snapshots WHERE data_file_id = ? "
                         f"AND node_id NOT IN ({placeholders})",
-                        (df_id, *current_node_ids),
+                        (df_id, *current_ids),
                     )
                 else:
                     db.conn.execute(
