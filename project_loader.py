@@ -264,6 +264,7 @@ class ProjectKey:
                   file_name="", sequence_number=1):
         # source_label is used by JS to identify which ProjectSource to sync
         # config from. The actual config arrives via the optional widgets below.
+        sequence_number = int(sequence_number)
         logger.info("ProjectKey.fetch_key: source=%s key=%s url=%s project=%s file=%s seq=%s",
                      source_label, key_name, manager_url, project_name, file_name, sequence_number)
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
