@@ -213,22 +213,22 @@ class TestProjectSource:
         assert "sequence_number" in inputs["required"]
         assert "label" in inputs["required"]
 
-    def test_no_outputs(self):
+    def test_outputs_sequence_number(self):
         from project_loader import ProjectSource
-        assert ProjectSource.RETURN_TYPES == ()
-        assert ProjectSource.RETURN_NAMES == ()
+        assert ProjectSource.RETURN_TYPES == ("INT",)
+        assert ProjectSource.RETURN_NAMES == ("sequence_number",)
 
-    def test_hold_config_returns_empty(self):
+    def test_hold_config_returns_sequence_number(self):
         from project_loader import ProjectSource
         node = ProjectSource()
         result = node.hold_config(
             manager_url="http://localhost:8080",
             project_name="proj1",
             file_name="batch_i2v",
-            sequence_number=1,
+            sequence_number=42,
             label="my_source"
         )
-        assert result == ()
+        assert result == (42,)
 
     def test_category(self):
         from project_loader import ProjectSource
@@ -311,21 +311,33 @@ class TestProjectKey:
             )
         assert result == ("",)
 
-    def test_fetch_key_network_error(self):
+    def test_fetch_key_network_error_returns_default(self):
         from project_loader import ProjectKey
         node = ProjectKey()
         error_resp = {"error": "network_error", "message": "Connection refused"}
         with patch("project_loader._fetch_data", return_value=error_resp):
-            with pytest.raises(RuntimeError, match="Failed to fetch"):
-                node.fetch_key(
-                    source_label="my_source",
-                    key_name="prompt",
-                    key_type="STRING",
-                    manager_url="http://localhost:8080",
-                    project_name="proj1",
-                    file_name="batch_i2v",
-                    sequence_number=1,
-                )
+            result = node.fetch_key(
+                source_label="my_source",
+                key_name="prompt",
+                key_type="STRING",
+                manager_url="http://localhost:8080",
+                project_name="proj1",
+                file_name="batch_i2v",
+                sequence_number=1,
+            )
+        assert result == ("",)
+
+    def test_fetch_key_error_returns_int_default(self):
+        from project_loader import ProjectKey
+        node = ProjectKey()
+        error_resp = {"error": "http_error", "status": 404, "message": "Not found"}
+        with patch("project_loader._fetch_data", return_value=error_resp):
+            result = node.fetch_key(
+                source_label="s", key_name="seed", key_type="INT",
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (0,)
 
     def test_category(self):
         from project_loader import ProjectKey

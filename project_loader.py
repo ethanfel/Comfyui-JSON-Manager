@@ -208,7 +208,7 @@ class ProjectLoaderDynamic:
 
 
 class ProjectSource:
-    """Config-only node — holds project connection settings, no outputs."""
+    """Config node — holds project connection settings, outputs sequence_number."""
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -221,14 +221,14 @@ class ProjectSource:
             },
         }
 
-    RETURN_TYPES = ()
-    RETURN_NAMES = ()
+    RETURN_TYPES = ("INT",)
+    RETURN_NAMES = ("sequence_number",)
     FUNCTION = "hold_config"
     CATEGORY = "utils/json/project"
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
-        return ()
+        return (sequence_number,)
 
 
 class ProjectKey:
