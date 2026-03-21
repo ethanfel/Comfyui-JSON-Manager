@@ -40,17 +40,17 @@ app.registerExtension({
                 );
                 if (!resp.ok) return;
                 const data = await resp.json();
-                if (!Array.isArray(data)) return;
+                const fileList = (data.files || []).map(f => f.name || f);
+                console.log(`[ProjectSource] refreshFiles: got ${fileList.length} files:`, fileList);
 
                 const fileW = node.widgets?.find(w => w.name === "file_name");
                 if (fileW) {
                     const currentValue = fileW.value;
-                    fileW.options.values = data.length > 0 ? data : [""];
+                    fileW.options.values = fileList.length > 0 ? fileList : [""];
                     // Keep current selection if still valid
-                    if (currentValue && data.includes(currentValue)) {
+                    if (currentValue && fileList.includes(currentValue)) {
                         fileW.value = currentValue;
                     }
-                    console.log(`[ProjectSource] refreshFiles: ${data.length} files loaded`);
                 }
             } catch (e) {
                 console.error("[ProjectSource] Failed to refresh files:", e);
