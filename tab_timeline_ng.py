@@ -53,13 +53,13 @@ def render_timeline_tab(state: AppState):
     # ======================================================================
     # Splitter layout: 35% left (list) / 65% right (detail)
     # ======================================================================
-    with ui.splitter(value=35).classes('w-full').style('min-height: 600px') as splitter:
+    with ui.splitter(value=35).classes('w-full').style('height: calc(100vh - 200px); min-height: 600px') as splitter:
 
         # ==============================================================
         # LEFT PANEL — Snapshot list
         # ==============================================================
         with splitter.before:
-            with ui.column().classes('w-full q-pa-sm'):
+            with ui.column().classes('w-full q-pa-sm').style('height: 100%'):
                 # Search + filter
                 search_input = ui.input(
                     placeholder='Search notes...',
@@ -131,7 +131,7 @@ def _render_snapshot_list(timeline, ui_state, data, file_path, state,
         ui.label('No snapshots match your filter.').classes('text-caption q-pa-md')
         return
 
-    with ui.scroll_area().classes('w-full').style('max-height: 520px'):
+    with ui.scroll_area().classes('w-full').style('flex: 1; min-height: 0'):
         for snap in snapshots:
             sid = snap['id']
             is_current = sid == timeline.current_id
