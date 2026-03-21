@@ -221,14 +221,14 @@ class ProjectSource:
             },
         }
 
-    RETURN_TYPES = ("INT",)
-    RETURN_NAMES = ("sequence_number",)
+    RETURN_TYPES = ("INT", "STRING",)
+    RETURN_NAMES = ("sequence_number", "file_name",)
     FUNCTION = "hold_config"
     CATEGORY = "utils/json/project"
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
-        return (sequence_number,)
+        return (sequence_number, file_name,)
 
 
 class ProjectKey:
