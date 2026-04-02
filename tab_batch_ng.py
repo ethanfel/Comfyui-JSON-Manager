@@ -16,9 +16,11 @@ from utils import (
     DEFAULTS, save_json, load_json, sync_to_db,
     KEY_BATCH_DATA, KEY_HISTORY_TREE, KEY_PROMPT_HISTORY, KEY_SEQUENCE_NUMBER,
 )
-from history_tree import HistoryTree
+from snapshot_timeline import SnapshotTimeline
 
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
+_AUTO_SNAP_DEBOUNCE = 30  # seconds between auto-snapshots
+_last_auto_snap: dict[str, float] = {}  # file_path -> timestamp
 SUB_SEGMENT_MULTIPLIER = 1000
 SUB_SEGMENT_NUM_COLORS = 6
 FRAME_TO_SKIP_DEFAULT = DEFAULTS['frame_to_skip']
@@ -86,18 +88,18 @@ def find_insert_position(batch_list, parent_index, parent_seq_num):
 
 # --- Auto change note ---
 
-def _auto_change_note(htree, batch_list, state=None, file_path=None):
+def _auto_change_note(timeline, batch_list, state=None, file_path=None):
     """Compare current batch_list against last snapshot and describe changes."""
-    # Get previous batch data from the current head
-    if not htree.head_id or htree.head_id not in htree.nodes:
+    # Get previous batch data from the current snapshot
+    if not timeline.current_id or timeline.current_id not in timeline.snapshots:
         return f'Initial save ({len(batch_list)} sequences)'
 
-    # Load previous snapshot from DB (nodes no longer hold data in memory)
-    prev_data = htree.nodes[htree.head_id].get('data')
+    # Load previous snapshot from inline data or DB
+    prev_data = timeline.get_snapshot_data(timeline.current_id)
     if not prev_data and state and state.db_enabled and state.db and state.current_project and file_path:
         df = state.db.get_data_file_by_names(state.current_project, file_path.stem)
         if df:
-            prev_data = state.db.get_node_snapshot(df['id'], htree.head_id)
+            prev_data = state.db.get_node_snapshot(df['id'], timeline.current_id)
     prev_batch = (prev_data or {}).get(KEY_BATCH_DATA, [])
 
     prev_by_seq = {int(s.get(KEY_SEQUENCE_NUMBER, 0)): s for s in prev_batch}
@@ -363,38 +365,34 @@ def render_batch_processor(state: AppState):
                 logger.info("save_and_snap START")
                 data[KEY_BATCH_DATA] = batch_list
                 tree_data = data.get(KEY_HISTORY_TREE, {})
-                htree = HistoryTree(tree_data)
-                note = commit_input.value if commit_input.value else _auto_change_note(htree, batch_list, state=state, file_path=file_path)
+                timeline = SnapshotTimeline(tree_data)
+                note = commit_input.value if commit_input.value else _auto_change_note(timeline, batch_list, state=state, file_path=file_path)
                 # Single serialization: json roundtrip gives us an isolated snapshot
-                # without the expensive deepcopy
                 t1 = time.perf_counter()
                 snapshot_json = json.dumps({k: v for k, v in data.items()
                                             if k != KEY_HISTORY_TREE})
                 snapshot_payload = json.loads(snapshot_json)
                 logger.info("save_and_snap snapshot %.3fs", time.perf_counter() - t1)
                 try:
-                    htree.commit(snapshot_payload, note=note)
+                    timeline.record(snapshot_payload, note=note)
                 except ValueError as e:
                     ui.notify(f'Save failed: {e}', type='negative')
                     return
                 if state.db_enabled and state.current_project and state.db:
-                    # DB path: sync full tree (with snapshots) to DB, then
-                    # write slim tree (no snapshots) to JSON and memory
-                    full_tree = htree.to_dict()
+                    full_tree = timeline.to_dict()
                     data[KEY_HISTORY_TREE] = full_tree
                     t1 = time.perf_counter()
                     db_snapshot = json.loads(json.dumps(data))
                     await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, db_snapshot)
                     logger.info("save_and_snap sync_to_db %.3fs", time.perf_counter() - t1)
-                    htree.strip_snapshots()
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
+                    timeline.strip_snapshots()
+                    data[KEY_HISTORY_TREE] = timeline.to_dict()
                     t1 = time.perf_counter()
                     slim_snapshot = json.loads(json.dumps(data))
                     await asyncio.to_thread(save_json, file_path, slim_snapshot)
                     logger.info("save_and_snap save_json %.3fs", time.perf_counter() - t1)
                 else:
-                    # No DB: write full tree (with snapshots) to JSON
-                    data[KEY_HISTORY_TREE] = htree.to_dict()
+                    data[KEY_HISTORY_TREE] = timeline.to_dict()
                     t1 = time.perf_counter()
                     save_snapshot = json.loads(json.dumps(data))
                     await asyncio.to_thread(save_json, file_path, save_snapshot)
@@ -416,9 +414,30 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                           refresh_list):
     async def commit(message=None):
         data[KEY_BATCH_DATA] = batch_list
+        # Auto-snapshot with debounce
+        fp_key = str(file_path)
+        now = time.time()
+        did_snap = False
+        if now - _last_auto_snap.get(fp_key, 0) >= _AUTO_SNAP_DEBOUNCE:
+            timeline = SnapshotTimeline(data.get(KEY_HISTORY_TREE, {}))
+            snap_json = json.dumps({k: v for k, v in data.items()
+                                    if k != KEY_HISTORY_TREE})
+            snap_payload = json.loads(snap_json)
+            try:
+                timeline.record(snap_payload, note=message or "Auto-save", auto=True)
+                if state.db_enabled and state.current_project and state.db:
+                    data[KEY_HISTORY_TREE] = timeline.to_dict()
+                    db_snap = json.loads(json.dumps(data))
+                    await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, db_snap)
+                    timeline.strip_snapshots()
+                    did_snap = True
+                data[KEY_HISTORY_TREE] = timeline.to_dict()
+                _last_auto_snap[fp_key] = now
+            except ValueError:
+                pass  # Non-critical: skip auto-snapshot on ID collision
         snapshot = json.loads(json.dumps(data))
         await asyncio.to_thread(save_json, file_path, snapshot)
-        if state.db_enabled and state.current_project and state.db:
+        if state.db_enabled and state.current_project and state.db and not did_snap:
             await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, snapshot)
         if message:
             ui.notify(message, type='positive')
@@ -845,26 +864,26 @@ def _render_mass_update(batch_list, data, file_path, state: AppState, refresh_li
                     batch_list[idx][key] = copy.deepcopy(source_seq.get(key))
 
             data[KEY_BATCH_DATA] = batch_list
-            htree = HistoryTree(data.get(KEY_HISTORY_TREE, {}))
+            timeline = SnapshotTimeline(data.get(KEY_HISTORY_TREE, {}))
             snapshot_json = json.dumps({k: v for k, v in data.items()
                                         if k != KEY_HISTORY_TREE})
             snapshot = json.loads(snapshot_json)
             try:
-                htree.commit(snapshot, f"Mass update: {', '.join(selected_keys)}")
+                timeline.record(snapshot, f"Mass update: {', '.join(selected_keys)}")
             except ValueError as e:
                 ui.notify(f'Mass update failed: {e}', type='negative')
                 return
             if state.db_enabled and state.current_project and state.db:
-                full_tree = htree.to_dict()
+                full_tree = timeline.to_dict()
                 data[KEY_HISTORY_TREE] = full_tree
                 db_snapshot = json.loads(json.dumps(data))
                 await asyncio.to_thread(sync_to_db, state.db, state.current_project, file_path, db_snapshot)
-                htree.strip_snapshots()
-                data[KEY_HISTORY_TREE] = htree.to_dict()
+                timeline.strip_snapshots()
+                data[KEY_HISTORY_TREE] = timeline.to_dict()
                 slim_snapshot = json.loads(json.dumps(data))
                 await asyncio.to_thread(save_json, file_path, slim_snapshot)
             else:
-                data[KEY_HISTORY_TREE] = htree.to_dict()
+                data[KEY_HISTORY_TREE] = timeline.to_dict()
                 save_snapshot = json.loads(json.dumps(data))
                 await asyncio.to_thread(save_json, file_path, save_snapshot)
             ui.notify(f'Updated {len(targets)} sequences', type='positive')

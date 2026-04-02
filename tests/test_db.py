@@ -208,10 +208,10 @@ class TestHistoryTrees:
     def test_upsert_updates(self, db):
         pid = db.create_project("p1", "/p1")
         df_id = db.create_data_file(pid, "batch", "generic")
-        db.save_history_tree(df_id, {"v": 1})
-        db.save_history_tree(df_id, {"v": 2})
+        db.save_history_tree(df_id, {"snapshots": {}, "v": 1})
+        db.save_history_tree(df_id, {"snapshots": {}, "v": 2})
         result = db.get_history_tree(df_id)
-        assert result == {"v": 2}
+        assert result == {"snapshots": {}, "v": 2}
 
     def test_get_nonexistent(self, db):
         pid = db.create_project("p1", "/p1")
