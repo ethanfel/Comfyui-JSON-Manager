@@ -1,16 +1,18 @@
-"""REST API endpoints for ComfyUI to query project data from SQLite.
+"""REST API endpoints for ComfyUI to query project data from JSON files.
 
 All endpoints are read-only. Mounted on the NiceGUI/FastAPI server.
 """
 
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, Query
 from nicegui import app
 
 from db import ProjectDB
+from utils import load_json, KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER
 
 logger = logging.getLogger(__name__)
 
@@ -54,34 +56,49 @@ def _list_sequences(name: str, file_name: str) -> dict[str, Any]:
     return {"sequences": seqs}
 
 
-def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
-    t0 = time.perf_counter()
+def _load_sequences(name: str, file_name: str) -> list[dict]:
+    """Load the batch_data list directly from the JSON file."""
     db = _get_db()
     proj = db.get_project(name)
     if not proj:
         raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
-    df = db.get_data_file_by_names(name, file_name)
-    if not df:
+    json_path = Path(proj["folder_path"]) / f"{file_name}.json"
+    if not json_path.exists():
         raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in project '{name}'")
-    data = db.get_sequence(df["id"], seq)
-    if data is None:
+    data, _ = load_json(json_path)
+    return data.get(KEY_BATCH_DATA, [])
+
+
+def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    sequences = _load_sequences(name, file_name)
+    match = next((s for s in sequences if int(s.get(KEY_SEQUENCE_NUMBER, 0)) == seq), None)
+    if match is None:
         raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
     logger.info("API _get_data %s/%s seq=%d (%d keys): %.3fs",
-                 name, file_name, seq, len(data), time.perf_counter() - t0)
-    return data
+                 name, file_name, seq, len(match), time.perf_counter() - t0)
+    return match
 
 
 def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
     t0 = time.perf_counter()
-    db = _get_db()
-    proj = db.get_project(name)
-    if not proj:
-        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
-    df = db.get_data_file_by_names(name, file_name)
-    if not df:
-        raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in project '{name}'")
-    keys, types = db.get_sequence_keys(df["id"], seq)
-    total = db.count_sequences(df["id"])
+    sequences = _load_sequences(name, file_name)
+    match = next((s for s in sequences if int(s.get(KEY_SEQUENCE_NUMBER, 0)) == seq), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
+    keys = [k for k in match.keys() if k != KEY_SEQUENCE_NUMBER]
+    types = []
+    for k in keys:
+        v = match[k]
+        if isinstance(v, bool):
+            types.append("BOOLEAN")
+        elif isinstance(v, int):
+            types.append("INT")
+        elif isinstance(v, float):
+            types.append("FLOAT")
+        else:
+            types.append("STRING")
+    total = len(sequences)
     logger.info("API _get_keys %s/%s seq=%d (%d keys): %.3fs",
                  name, file_name, seq, len(keys), time.perf_counter() - t0)
     return {"keys": keys, "types": types, "total_sequences": total}
