@@ -215,8 +215,8 @@ class TestProjectSource:
 
     def test_outputs_sequence_number(self):
         from project_loader import ProjectSource
-        assert ProjectSource.RETURN_TYPES == ("INT",)
-        assert ProjectSource.RETURN_NAMES == ("sequence_number",)
+        assert ProjectSource.RETURN_TYPES == ("INT", "STRING",)
+        assert ProjectSource.RETURN_NAMES == ("sequence_number", "file_name",)
 
     def test_hold_config_returns_sequence_number(self):
         from project_loader import ProjectSource
@@ -228,7 +228,7 @@ class TestProjectSource:
             sequence_number=42,
             label="my_source"
         )
-        assert result == (42,)
+        assert result == (42, "batch_i2v")
 
     def test_category(self):
         from project_loader import ProjectSource
