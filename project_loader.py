@@ -293,15 +293,72 @@ class ProjectKey:
             return (str(val),)
 
 
+class ProjectResolution:
+    """Fetches a (width, height) pair from a resolution series by loop index."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "source_label": ("STRING", {"default": "", "multiline": False}),
+                "key_name": ("STRING", {"default": "resolutions", "multiline": False}),
+                "index": ("INT", {"default": 0, "min": 0, "max": 9999}),
+            },
+            "optional": {
+                "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
+                "project_name": ("STRING", {"default": "", "multiline": False}),
+                "file_name": ("STRING", {"default": "", "multiline": False}),
+                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
+            },
+        }
+
+    RETURN_TYPES = ("INT", "INT")
+    RETURN_NAMES = ("width", "height")
+    FUNCTION = "fetch_resolution"
+    CATEGORY = "utils/json/project"
+    OUTPUT_NODE = False
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("nan")
+
+    def fetch_resolution(self, source_label, key_name, index,
+                         manager_url="http://localhost:8080", project_name="",
+                         file_name="", sequence_number=1):
+        sequence_number = int(sequence_number)
+        logger.info("ProjectResolution.fetch_resolution: source=%s key=%s url=%s project=%s file=%s seq=%s index=%s",
+                     source_label, key_name, manager_url, project_name, file_name, sequence_number, index)
+        # source_label is used by JS to identify which ProjectSource to sync
+        # config from. The actual config arrives via the optional widgets below.
+        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
+        if data.get("error") in ("http_error", "network_error", "parse_error"):
+            logger.warning("ProjectResolution.fetch_resolution failed: %s", data.get("message"))
+            return (512, 512)
+
+        series = data.get(key_name)
+        if not isinstance(series, list) or len(series) == 0:
+            logger.warning("ProjectResolution: key '%s' is not a resolution series", key_name)
+            return (512, 512)
+
+        clamped = max(0, min(index, len(series) - 1))
+        entry = series[clamped]
+        if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+            logger.warning("ProjectResolution: entry at index %d is malformed: %r", clamped, entry)
+            return (512, 512)
+
+        return (to_int(entry[0]), to_int(entry[1]))
+
+
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
     "ProjectSource": ProjectSource,
     "ProjectKey": ProjectKey,
+    "ProjectResolution": ProjectResolution,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectLoaderDynamic": "Project Loader (Dynamic)",
     "ProjectSource": "Project Source",
     "ProjectKey": "Project Key",
+    "ProjectResolution": "Project Resolution",
 }

@@ -344,11 +344,102 @@ class TestProjectKey:
         assert ProjectKey.CATEGORY == "utils/json/project"
 
 
+class TestProjectResolution:
+    def test_input_types(self):
+        from project_loader import ProjectResolution
+        inputs = ProjectResolution.INPUT_TYPES()
+        assert "source_label" in inputs["required"]
+        assert "key_name" in inputs["required"]
+        assert "index" in inputs["required"]
+        assert inputs["required"]["index"][0] == "INT"
+
+    def test_two_outputs(self):
+        from project_loader import ProjectResolution
+        assert ProjectResolution.RETURN_TYPES == ("INT", "INT")
+        assert ProjectResolution.RETURN_NAMES == ("width", "height")
+
+    def test_fetch_resolution_basic(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512], [768, 1344], [1344, 768]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=1,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (768, 1344)
+
+    def test_fetch_resolution_index_zero(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512], [1024, 1024]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512)
+
+    def test_fetch_resolution_clamps_on_out_of_bounds(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512], [1024, 1024]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=99,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (1024, 1024)  # last entry
+
+    def test_fetch_resolution_missing_key_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        with patch("project_loader._fetch_data", return_value={}):
+            result = node.fetch_resolution(
+                source_label="src", key_name="nonexistent", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512)
+
+    def test_fetch_resolution_network_error_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        error_resp = {"error": "network_error", "message": "Connection refused"}
+        with patch("project_loader._fetch_data", return_value=error_resp):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512)
+
+    def test_fetch_resolution_malformed_entry_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512]]}  # single-element, not a valid pair
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512)
+
+    def test_category(self):
+        from project_loader import ProjectResolution
+        assert ProjectResolution.CATEGORY == "utils/json/project"
+
+
 class TestNodeMappings:
     def test_mappings_exist(self):
         from project_loader import PROJECT_NODE_CLASS_MAPPINGS, PROJECT_NODE_DISPLAY_NAME_MAPPINGS
         assert "ProjectLoaderDynamic" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectSource" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectKey" in PROJECT_NODE_CLASS_MAPPINGS
-        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 3
-        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 3
+        assert "ProjectResolution" in PROJECT_NODE_CLASS_MAPPINGS
+        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 4
+        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 4
