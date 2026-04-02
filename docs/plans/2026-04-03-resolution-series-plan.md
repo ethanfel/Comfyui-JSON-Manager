@@ -8,6 +8,56 @@
 
 **Tech Stack:** Python (ComfyUI node), NiceGUI (UI), JavaScript (ComfyUI frontend extension), pytest
 
+**Branch:** Create and work on `feat/resolution-series` branched from `main`:
+```bash
+git checkout main && git checkout -b feat/resolution-series
+```
+
+---
+
+### Task 0: Fix pre-existing test failures on `main`
+
+When `file_name` was added as a second output to `ProjectSource`, two tests were not updated.
+They fail on `main` before any new code is written.
+
+**Files:**
+- Modify: `tests/test_project_loader.py` (`TestProjectSource` class, lines ~216-231)
+
+**Step 1: Update the two broken tests**
+
+```python
+def test_outputs_sequence_number(self):
+    from project_loader import ProjectSource
+    assert ProjectSource.RETURN_TYPES == ("INT", "STRING",)
+    assert ProjectSource.RETURN_NAMES == ("sequence_number", "file_name",)
+
+def test_hold_config_returns_sequence_number(self):
+    from project_loader import ProjectSource
+    node = ProjectSource()
+    result = node.hold_config(
+        manager_url="http://localhost:8080",
+        project_name="proj1",
+        file_name="batch_i2v",
+        sequence_number=42,
+        label="my_source"
+    )
+    assert result == (42, "batch_i2v")
+```
+
+**Step 2: Verify they now pass**
+
+```bash
+pytest tests/test_project_loader.py::TestProjectSource -v
+```
+Expected: all 4 PASS
+
+**Step 3: Commit**
+
+```bash
+git add tests/test_project_loader.py
+git commit -m "fix: update ProjectSource tests for file_name output"
+```
+
 ---
 
 ### Task 1: Python node — `ProjectResolution`
@@ -248,7 +298,7 @@ The resolution series editor goes inside `splitter.before`, directly after the "
 Add this function near the other helper functions at the top of the render section (before `_render_sequence_card`):
 
 ```python
-def _is_resolution_series(val: Any) -> bool:
+def _is_resolution_series(val) -> bool:
     """Return True if val is a list of [width, height] int pairs."""
     if not isinstance(val, list) or len(val) == 0:
         return False
@@ -258,6 +308,8 @@ def _is_resolution_series(val: Any) -> bool:
         for entry in val
     )
 ```
+
+Note: `Any` is intentionally omitted — `tab_batch_ng.py` does not import `typing.Any`.
 
 **Step 2: Add the resolution series render section**
 
@@ -328,7 +380,17 @@ After the "Specific Negative" textarea in `splitter.before` (after line ~553), a
 ```bash
 pytest tests/ -q
 ```
-Expected: all 104 tests PASS (no Python tests cover the NiceGUI render path, but no regressions)
+Expected: all tests PASS (no Python tests cover the NiceGUI render path, but no regressions)
+
+**Important:** Also update the `custom_keys` filter in `_render_sequence_card` (line ~648) to exclude
+resolution series keys — otherwise they'd render in both the resolution editor AND "Custom Parameters":
+
+```python
+# Find this line:
+custom_keys = [k for k in seq.keys() if k not in standard_keys]
+# Replace with:
+custom_keys = [k for k in seq.keys() if k not in standard_keys and not _is_resolution_series(seq.get(k))]
+```
 
 **Step 4: Commit**
 
