@@ -555,9 +555,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                 # --- Resolutions (6 fixed slots) ---
                 ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
-                resolutions = seq.setdefault('resolutions', [])
-                while len(resolutions) < 6:
-                    resolutions.append([512, 512])
+                if 'resolutions' not in seq or len(seq.get('resolutions', [])) < 6:
+                    resolutions = seq.setdefault('resolutions', [])
+                    while len(resolutions) < 6:
+                        resolutions.append([512, 512])
+                    commit()
+                resolutions = seq['resolutions']
                 for idx in range(6):
                     entry = resolutions[idx]
                     with ui.row().classes('items-center w-full q-mt-xs'):
@@ -575,7 +578,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                             commit()
 
                         w_inp.on('blur', lambda _, s=_sync_wh: s())
+                        w_inp.on('update:model-value', lambda _, s=_sync_wh: s())
                         h_inp.on('blur', lambda _, s=_sync_wh: s())
+                        h_inp.on('update:model-value', lambda _, s=_sync_wh: s())
 
             with splitter.after:
                 # Mode
