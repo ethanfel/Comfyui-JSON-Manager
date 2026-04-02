@@ -150,7 +150,7 @@ class ProjectLoaderDynamic:
     RETURN_TYPES = ("INT",) + tuple(any_type for _ in range(MAX_DYNAMIC_OUTPUTS))
     RETURN_NAMES = ("total_sequences",) + tuple(f"output_{i}" for i in range(MAX_DYNAMIC_OUTPUTS))
     FUNCTION = "load_dynamic"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
 
     def load_dynamic(self, manager_url, project_name, file_name, sequence_number,
@@ -224,7 +224,7 @@ class ProjectSource:
     RETURN_TYPES = ("INT", "STRING",)
     RETURN_NAMES = ("sequence_number", "file_name",)
     FUNCTION = "hold_config"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
@@ -252,7 +252,7 @@ class ProjectKey:
     RETURN_TYPES = (any_type,)
     RETURN_NAMES = ("value",)
     FUNCTION = "fetch_key"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
 
     @classmethod
@@ -314,7 +314,7 @@ class ProjectResolution:
     RETURN_TYPES = ("INT", "INT")
     RETURN_NAMES = ("width", "height")
     FUNCTION = "fetch_resolution"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
 
     @classmethod

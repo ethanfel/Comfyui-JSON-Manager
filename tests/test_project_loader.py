@@ -200,7 +200,7 @@ class TestProjectLoaderDynamic:
         assert "sequence_number" in inputs["required"]
 
     def test_category(self):
-        assert ProjectLoaderDynamic.CATEGORY == "utils/json/project"
+        assert ProjectLoaderDynamic.CATEGORY == "JSON Manager/project"
 
 
 class TestProjectSource:
@@ -232,7 +232,7 @@ class TestProjectSource:
 
     def test_category(self):
         from project_loader import ProjectSource
-        assert ProjectSource.CATEGORY == "utils/json/project"
+        assert ProjectSource.CATEGORY == "JSON Manager/project"
 
 
 class TestProjectKey:
@@ -341,7 +341,7 @@ class TestProjectKey:
 
     def test_category(self):
         from project_loader import ProjectKey
-        assert ProjectKey.CATEGORY == "utils/json/project"
+        assert ProjectKey.CATEGORY == "JSON Manager/project"
 
 
 class TestProjectResolution:
@@ -431,7 +431,7 @@ class TestProjectResolution:
 
     def test_category(self):
         from project_loader import ProjectResolution
-        assert ProjectResolution.CATEGORY == "utils/json/project"
+        assert ProjectResolution.CATEGORY == "JSON Manager/project"
 
 
 class TestNodeMappings:
