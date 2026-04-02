@@ -553,10 +553,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
 
-                # --- Resolutions ---
+                # --- Resolutions (6 fixed slots) ---
                 ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
-                series: list = seq.setdefault('resolutions', [])
-                for idx, entry in enumerate(series):
+                resolutions = seq.setdefault('resolutions', [])
+                while len(resolutions) < 6:
+                    resolutions.append([512, 512])
+                for idx in range(6):
+                    entry = resolutions[idx]
                     with ui.row().classes('items-center w-full q-mt-xs'):
                         ui.label(str(idx)).classes('text-caption').style('min-width:20px')
                         w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').classes(
@@ -573,18 +576,6 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                         w_inp.on('blur', lambda _, s=_sync_wh: s())
                         h_inp.on('blur', lambda _, s=_sync_wh: s())
-
-                        def del_row(i=idx):
-                            if i < len(seq.get('resolutions', [])):
-                                seq['resolutions'].pop(i)
-                                commit()
-                        ui.button(icon='remove', on_click=del_row).props('flat dense round size=xs')
-
-                def add_resolution():
-                    seq.setdefault('resolutions', []).append([512, 512])
-                    commit()
-                ui.button(f'+ Add Resolution {len(series)}', icon='add', on_click=add_resolution).props(
-                    'flat dense size=sm').classes('q-mt-xs')
 
             with splitter.after:
                 # Mode
