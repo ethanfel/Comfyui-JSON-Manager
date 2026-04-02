@@ -65,7 +65,7 @@ app.registerExtension({
                 node.title = value ? `Resolution: ${value}` : "Project Resolution";
                 app.graph?.setDirtyCanvas(true, true);
             });
-            if (keyCombo) keyCombo.value = "";
+            if (keyCombo && !keyCombo.value) keyCombo.value = "resolutions";
 
             queueMicrotask(() => {
                 if (!this._configured) {
