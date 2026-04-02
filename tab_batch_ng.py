@@ -409,16 +409,6 @@ def render_batch_processor(state: AppState):
 # Single sequence card
 # ======================================================================
 
-def _is_resolution_series(val) -> bool:
-    """Return True if val is a non-empty list of [width, height] numeric pairs."""
-    if not isinstance(val, list) or len(val) == 0:
-        return False
-    return all(
-        isinstance(entry, (list, tuple)) and len(entry) == 2
-        and all(isinstance(v, (int, float)) for v in entry)
-        for entry in val
-    )
-
 
 def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                           src_cache, src_seq_select, standard_keys,
@@ -563,65 +553,38 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
 
-                # --- Resolution Series ---
-                res_keys = [k for k, v in seq.items() if _is_resolution_series(v)]
-                if res_keys:
-                    ui.label('Resolution Series').classes('text-caption text-weight-bold q-mt-md')
-                    for res_key in res_keys:
-                        series: list = seq[res_key]
-                        with ui.card().classes('w-full q-pa-sm q-mt-xs').props('flat bordered'):
-                            with ui.row().classes('items-center q-mb-xs'):
-                                ui.label(res_key).classes('text-caption col')
-                                def del_series(k=res_key):
-                                    del seq[k]
-                                    commit()
-                                ui.button(icon='delete', on_click=del_series).props(
-                                    'flat dense round size=xs color=negative')
-                            with ui.row().classes('text-caption text-grey q-mb-xs'):
-                                ui.label('#').style('width:24px')
-                                ui.label('Width').classes('col')
-                                ui.label('Height').classes('col')
-                                ui.label('').style('width:28px')
-                            for idx, entry in enumerate(series):
-                                with ui.row().classes('items-center w-full'):
-                                    ui.label(str(idx + 1)).classes('text-caption').style('width:24px')
-                                    w_inp = ui.number(value=int(entry[0]), min=1, step=1).classes(
-                                        'col').props('outlined dense hide-bottom-space')
-                                    h_inp = ui.number(value=int(entry[1]), min=1, step=1).classes(
-                                        'col').props('outlined dense hide-bottom-space')
+                # --- Resolutions ---
+                ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
+                series: list = seq.setdefault('resolutions', [])
+                for idx, entry in enumerate(series):
+                    with ui.row().classes('items-center w-full q-mt-xs'):
+                        ui.label(str(idx)).classes('text-caption').style('min-width:20px')
+                        w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').classes(
+                            'col').props('outlined dense hide-bottom-space')
+                        h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').classes(
+                            'col').props('outlined dense hide-bottom-space')
 
-                                    def _sync_wh(i=idx, k=res_key, wi=w_inp, hi=h_inp):
-                                        seq[k][i] = [
-                                            int(wi.value) if wi.value else 512,
-                                            int(hi.value) if hi.value else 512,
-                                        ]
-                                        commit()
-
-                                    w_inp.on('blur', lambda _, s=_sync_wh: s())
-                                    h_inp.on('blur', lambda _, s=_sync_wh: s())
-
-                                    def del_row(i=idx, k=res_key):
-                                        if i < len(seq.get(k, [])):
-                                            seq[k].pop(i)
-                                            commit()
-                                    ui.button(icon='remove', on_click=del_row).props(
-                                        'flat dense round size=xs')
-
-                            def add_row(k=res_key):
-                                seq[k].append([512, 512])
-                                commit()
-                            ui.button('+ Add row', icon='add', on_click=add_row).props(
-                                'flat dense size=sm').classes('q-mt-xs')
-
-                with ui.expansion('Add Resolution Series', icon='straighten').classes('w-full q-mt-sm'):
-                    new_res_key = ui.input('Key name', value='resolutions').props('outlined dense')
-                    def add_res_series():
-                        k = new_res_key.value.strip()
-                        if k and k not in seq:
-                            seq[k] = [[512, 512], [1024, 1024]]
-                            new_res_key.set_value('')
+                        def _sync_wh(i=idx, wi=w_inp, hi=h_inp):
+                            seq['resolutions'][i] = [
+                                int(wi.value) if wi.value else 512,
+                                int(hi.value) if hi.value else 512,
+                            ]
                             commit()
-                    ui.button('Add', icon='add', on_click=add_res_series).props('outlined dense')
+
+                        w_inp.on('blur', lambda _, s=_sync_wh: s())
+                        h_inp.on('blur', lambda _, s=_sync_wh: s())
+
+                        def del_row(i=idx):
+                            if i < len(seq.get('resolutions', [])):
+                                seq['resolutions'].pop(i)
+                                commit()
+                        ui.button(icon='remove', on_click=del_row).props('flat dense round size=xs')
+
+                def add_resolution():
+                    seq.setdefault('resolutions', []).append([512, 512])
+                    commit()
+                ui.button(f'+ Add Resolution {len(series)}', icon='add', on_click=add_resolution).props(
+                    'flat dense size=sm').classes('q-mt-xs')
 
             with splitter.after:
                 # Mode
@@ -716,7 +679,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         # --- Custom Parameters ---
         ui.label('Custom Parameters').classes('section-header q-mt-md')
 
-        custom_keys = [k for k in seq.keys() if k not in standard_keys and not _is_resolution_series(seq.get(k))]
+        custom_keys = [k for k in seq.keys() if k not in standard_keys and k != 'resolutions']
         if custom_keys:
             for k in custom_keys:
                 with ui.row().classes('w-full items-center'):
