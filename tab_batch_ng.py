@@ -316,7 +316,7 @@ def render_batch_processor(state: AppState):
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
         'frame_to_skip', 'end_frame', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
-        'reference path', 'video file path', 'reference image path', 'flf image path',
+        'middle frame path', 'video file path', 'reference image path', 'flf image path',
     }
     standard_keys.update(lora_keys)
 
@@ -632,7 +632,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 # Image paths with preview
                 for img_label, img_key in [
                     ('Reference Image Path', 'reference image path'),
-                    ('Reference Path', 'reference path'),
+                    ('Middle Frame Path', 'middle frame path'),
                     ('FLF Image Path', 'flf image path'),
                 ]:
                     with ui.row().classes('w-full items-center'):

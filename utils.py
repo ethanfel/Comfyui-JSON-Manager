@@ -46,7 +46,7 @@ DEFAULTS = {
     "reference switch": 1,
     "video file path": "",
     "reference image path": "",
-    "reference path": "",
+    "middle frame path": "",
     "flf image path": "",
 
     # --- LoRAs (name as STRING, strength as FLOAT) ---
@@ -150,6 +150,15 @@ def save_snippets(snippets):
         json.dump(snippets, f, indent=4)
     os.replace(tmp, SNIPPETS_FILE)
 
+def _migrate_key_renames(data: dict) -> None:
+    """Rename legacy keys to their current names."""
+    for item in data.get(KEY_BATCH_DATA, []):
+        if not isinstance(item, dict):
+            continue
+        if 'reference path' in item and 'middle frame path' not in item:
+            item['middle frame path'] = item.pop('reference path')
+
+
 def _migrate_lora_keys(data: dict) -> None:
     """Split combined lora 'name:strength' into separate name and strength keys.
 
@@ -208,6 +217,7 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
         with open(path, 'r') as f:
             data = json.load(f)
         t1 = time.time()
+        _migrate_key_renames(data)
         _migrate_lora_keys(data)
         t2 = time.time()
         mtime = path.stat().st_mtime
