@@ -639,7 +639,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 ef_input.on('blur', lambda _, m=_mirror_to_logic_index: m())
                 ef_input.on('update:model-value', lambda _, m=_mirror_to_logic_index: m())
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
-                    'outlined input-style="direction: rtl"').classes('w-full')
+                    'outlined input-style="text-align: right"').classes('w-full')
 
                 # Image paths with preview
                 for img_label, img_key in [
@@ -649,7 +649,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 ]:
                     with ui.row().classes('w-full items-center'):
                         inp = dict_input(ui.input, img_label, seq, img_key).classes(
-                            'col').props('outlined input-style="direction: rtl"')
+                            'col').props('outlined input-style="text-align: right"')
                         img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
