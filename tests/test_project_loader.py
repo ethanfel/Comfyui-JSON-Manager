@@ -353,46 +353,59 @@ class TestProjectResolution:
         assert "index" in inputs["required"]
         assert inputs["required"]["index"][0] == "INT"
 
-    def test_two_outputs(self):
+    def test_three_outputs(self):
         from project_loader import ProjectResolution
-        assert ProjectResolution.RETURN_TYPES == ("INT", "INT")
-        assert ProjectResolution.RETURN_NAMES == ("width", "height")
+        assert ProjectResolution.RETURN_TYPES == ("INT", "INT", "INT")
+        assert ProjectResolution.RETURN_NAMES == ("width", "height", "seed")
 
     def test_fetch_resolution_basic(self):
         from project_loader import ProjectResolution
         node = ProjectResolution()
-        data = {"resolutions": [[512, 512], [768, 1344], [1344, 768]]}
+        data = {"resolutions": [[512, 512, 0], [768, 1344, 12345], [1344, 768, 99]]}
         with patch("project_loader._fetch_data", return_value=data):
             result = node.fetch_resolution(
                 source_label="src", key_name="resolutions", index=1,
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (768, 1344)
+        assert result == (768, 1344, 12345)
 
     def test_fetch_resolution_index_zero(self):
         from project_loader import ProjectResolution
         node = ProjectResolution()
-        data = {"resolutions": [[512, 512], [1024, 1024]]}
+        data = {"resolutions": [[512, 512, 42], [1024, 1024, 0]]}
         with patch("project_loader._fetch_data", return_value=data):
             result = node.fetch_resolution(
                 source_label="src", key_name="resolutions", index=0,
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (512, 512)
+        assert result == (512, 512, 42)
 
     def test_fetch_resolution_clamps_on_out_of_bounds(self):
         from project_loader import ProjectResolution
         node = ProjectResolution()
-        data = {"resolutions": [[512, 512], [1024, 1024]]}
+        data = {"resolutions": [[512, 512, 0], [1024, 1024, 7]]}
         with patch("project_loader._fetch_data", return_value=data):
             result = node.fetch_resolution(
                 source_label="src", key_name="resolutions", index=99,
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (1024, 1024)  # last entry
+        assert result == (1024, 1024, 7)  # last entry
+
+    def test_fetch_resolution_old_format_no_seed(self):
+        """Old [w, h] entries without seed should return seed=0."""
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[576, 384], [960, 640]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (576, 384, 0)
 
     def test_fetch_resolution_missing_key_returns_defaults(self):
         from project_loader import ProjectResolution
@@ -403,7 +416,7 @@ class TestProjectResolution:
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (512, 512)
+        assert result == (512, 512, 0)
 
     def test_fetch_resolution_network_error_returns_defaults(self):
         from project_loader import ProjectResolution
@@ -415,7 +428,7 @@ class TestProjectResolution:
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (512, 512)
+        assert result == (512, 512, 0)
 
     def test_fetch_resolution_malformed_entry_returns_defaults(self):
         from project_loader import ProjectResolution
@@ -427,7 +440,7 @@ class TestProjectResolution:
                 manager_url="http://localhost:8080", project_name="p",
                 file_name="f", sequence_number=1,
             )
-        assert result == (512, 512)
+        assert result == (512, 512, 0)
 
     def test_category(self):
         from project_loader import ProjectResolution

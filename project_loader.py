@@ -311,8 +311,8 @@ class ProjectResolution:
             },
         }
 
-    RETURN_TYPES = ("INT", "INT")
-    RETURN_NAMES = ("width", "height")
+    RETURN_TYPES = ("INT", "INT", "INT")
+    RETURN_NAMES = ("width", "height", "seed")
     FUNCTION = "fetch_resolution"
     CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
@@ -332,20 +332,21 @@ class ProjectResolution:
         data = _fetch_data(manager_url, project_name, file_name, sequence_number)
         if data.get("error") in ("http_error", "network_error", "parse_error"):
             logger.warning("ProjectResolution.fetch_resolution failed: %s", data.get("message"))
-            return (512, 512)
+            return (512, 512, 0)
 
         series = data.get(key_name)
         if not isinstance(series, list) or len(series) == 0:
             logger.warning("ProjectResolution: key '%s' is not a resolution series", key_name)
-            return (512, 512)
+            return (512, 512, 0)
 
         clamped = max(0, min(index, len(series) - 1))
         entry = series[clamped]
         if not isinstance(entry, (list, tuple)) or len(entry) < 2:
             logger.warning("ProjectResolution: entry at index %d is malformed: %r", clamped, entry)
-            return (512, 512)
+            return (512, 512, 0)
 
-        return (to_int(entry[0]), to_int(entry[1]))
+        seed = to_int(entry[2]) if len(entry) >= 3 else 0
+        return (to_int(entry[0]), to_int(entry[1]), seed)
 
 
 # --- Mappings ---

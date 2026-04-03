@@ -553,34 +553,54 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
 
-                # --- Resolutions (6 fixed slots) ---
+                # --- Resolutions (8 fixed slots) ---
                 ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
-                if 'resolutions' not in seq or len(seq.get('resolutions', [])) < 6:
-                    resolutions = seq.setdefault('resolutions', [])
-                    while len(resolutions) < 6:
-                        resolutions.append([512, 512])
+                resolutions = seq.setdefault('resolutions', [])
+                changed = False
+                while len(resolutions) < 8:
+                    resolutions.append([512, 512, 0])
+                    changed = True
+                # Migrate old [w, h] entries to [w, h, seed]
+                for i, entry in enumerate(resolutions):
+                    if len(entry) < 3:
+                        resolutions[i] = list(entry) + [0]
+                        changed = True
+                if changed:
                     commit()
-                resolutions = seq['resolutions']
-                for idx in range(6):
+                for idx in range(8):
                     entry = resolutions[idx]
-                    with ui.row().classes('items-center w-full q-mt-xs'):
-                        ui.label(str(idx)).classes('text-caption').style('min-width:20px')
-                        w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').classes(
-                            'col').props('outlined dense hide-bottom-space')
-                        h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').classes(
-                            'col').props('outlined dense hide-bottom-space')
+                    with ui.row().classes('items-center w-full q-mt-xs no-wrap'):
+                        ui.label(str(idx)).classes('text-caption').style('min-width:16px')
+                        w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').style(
+                            'width:70px').props('outlined dense hide-bottom-space')
+                        h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').style(
+                            'width:70px').props('outlined dense hide-bottom-space')
+                        seed_inp = ui.number(value=int(entry[2]), min=0, step=1, label='Seed').style(
+                            'flex:1; min-width:60px').props('outlined dense hide-bottom-space')
 
-                        def _sync_wh(i=idx, wi=w_inp, hi=h_inp):
+                        def _sync_entry(i=idx, wi=w_inp, hi=h_inp, si=seed_inp):
                             seq['resolutions'][i] = [
                                 int(wi.value) if wi.value else 512,
                                 int(hi.value) if hi.value else 512,
+                                int(si.value) if si.value else 0,
                             ]
                             commit()
 
-                        w_inp.on('blur', lambda _, s=_sync_wh: s())
-                        w_inp.on('update:model-value', lambda _, s=_sync_wh: s())
-                        h_inp.on('blur', lambda _, s=_sync_wh: s())
-                        h_inp.on('update:model-value', lambda _, s=_sync_wh: s())
+                        def _randomize(si=seed_inp, i=idx):
+                            import random
+                            si.value = random.randint(0, 2**32 - 1)
+                            seq['resolutions'][i][2] = int(si.value)
+                            commit()
+
+                        ui.button(icon='casino', on_click=_randomize).props(
+                            'flat dense round').classes('q-ml-xs')
+
+                        w_inp.on('blur', lambda _, s=_sync_entry: s())
+                        w_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                        h_inp.on('blur', lambda _, s=_sync_entry: s())
+                        h_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                        seed_inp.on('blur', lambda _, s=_sync_entry: s())
+                        seed_inp.on('update:model-value', lambda _, s=_sync_entry: s())
 
             with splitter.after:
                 # Mode
