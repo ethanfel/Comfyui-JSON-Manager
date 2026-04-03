@@ -314,7 +314,7 @@ def render_batch_processor(state: AppState):
     standard_keys = {
         'name', 'mode', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
-        'frame_to_skip', 'end_frame', 'transition', 'vace_length',
+        'frame_to_skip', 'end_frame', 'logic index', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
         'middle frame path', 'video file path', 'start frame path', 'end frame path',
     }
@@ -625,7 +625,19 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                 dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
                 dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
-                dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
+                ef_input = dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
+                # Initialize logic index to end_frame if not yet set
+                if 'logic index' not in seq:
+                    seq['logic index'] = seq.get('end_frame', 0)
+                li_input = dict_number('Logic Index', seq, 'logic index').props('outlined').classes('w-full')
+
+                def _mirror_to_logic_index(ef=ef_input, li=li_input, s=seq):
+                    v = s.get('end_frame', 0)
+                    s['logic index'] = v
+                    li.set_value(v)
+
+                ef_input.on('blur', lambda _, m=_mirror_to_logic_index: m())
+                ef_input.on('update:model-value', lambda _, m=_mirror_to_logic_index: m())
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
                     'outlined input-style="direction: rtl"').classes('w-full')
 

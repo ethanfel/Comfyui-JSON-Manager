@@ -619,6 +619,7 @@ def _render_preview_fields(item_data: dict):
         'sequence_number', 'general_prompt', 'general_negative', 'current_prompt', 'prompt',
         'negative', 'camera', 'flf', 'seed', 'resolutions',
                 'frame_to_skip', 'vace schedule', 'video file path', 'middle frame path', 'end frame path', 'start frame path',
+        'logic index',
     }
     # also skip lora keys
     custom_keys = [
