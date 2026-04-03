@@ -47,7 +47,7 @@ DEFAULTS = {
     "video file path": "",
     "reference image path": "",
     "middle frame path": "",
-    "flf image path": "",
+    "end frame path": "",
 
     # --- LoRAs (name as STRING, strength as FLOAT) ---
     "lora 1 high": "",
@@ -157,6 +157,8 @@ def _migrate_key_renames(data: dict) -> None:
             continue
         if 'reference path' in item and 'middle frame path' not in item:
             item['middle frame path'] = item.pop('reference path')
+        if 'flf image path' in item and 'end frame path' not in item:
+            item['end frame path'] = item.pop('flf image path')
 
 
 def _migrate_lora_keys(data: dict) -> None:
