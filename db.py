@@ -9,7 +9,7 @@ from utils import load_json, KEY_BATCH_DATA, KEY_HISTORY_TREE
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = Path.home() / ".comfyui_json_manager" / "projects.db"
+DEFAULT_DB_PATH = Path(__file__).parent / "projects.db"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
