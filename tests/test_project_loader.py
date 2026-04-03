@@ -483,6 +483,14 @@ class TestBinaryIndexDecoder:
         from project_loader import BinaryIndexDecoder
         assert BinaryIndexDecoder().decode(4) == (False, False, True)
 
+    def test_index_5(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(5) == (True, False, True)
+
+    def test_index_6(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(6) == (False, True, True)
+
     def test_index_7(self):
         from project_loader import BinaryIndexDecoder
         assert BinaryIndexDecoder().decode(7) == (True, True, True)
