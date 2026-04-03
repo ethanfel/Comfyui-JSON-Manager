@@ -349,12 +349,47 @@ class ProjectResolution:
         return (to_int(entry[0]), to_int(entry[1]), seed)
 
 
+class BinaryIndexDecoder:
+    """Decodes an integer index into 3 boolean flags using binary (bit-field) encoding.
+
+    index 0 → (False, False, False)
+    index 1 → (True,  False, False)  # bit 0
+    index 2 → (False, True,  False)  # bit 1
+    index 3 → (True,  True,  False)  # bits 0+1
+    index 4 → (False, False, True)   # bit 2
+    ...
+    index 7 → (True,  True,  True)
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "index": ("INT", {"default": 0, "min": 0, "max": 7}),
+            }
+        }
+
+    RETURN_TYPES = ("BOOLEAN", "BOOLEAN", "BOOLEAN")
+    RETURN_NAMES = ("flag_0", "flag_1", "flag_2")
+    FUNCTION = "decode"
+    CATEGORY = "JSON Manager/utils"
+    OUTPUT_NODE = False
+
+    def decode(self, index: int):
+        return (
+            bool((index >> 0) & 1),
+            bool((index >> 1) & 1),
+            bool((index >> 2) & 1),
+        )
+
+
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
     "ProjectSource": ProjectSource,
     "ProjectKey": ProjectKey,
     "ProjectResolution": ProjectResolution,
+    "BinaryIndexDecoder": BinaryIndexDecoder,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
@@ -362,4 +397,5 @@ PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectSource": "Project Source",
     "ProjectKey": "Project Key",
     "ProjectResolution": "Project Resolution",
+    "BinaryIndexDecoder": "Binary Index Decoder",
 }
