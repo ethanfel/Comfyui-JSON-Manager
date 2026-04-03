@@ -45,7 +45,7 @@ DEFAULTS = {
     "input_b_frames": 16,
     "reference switch": 1,
     "video file path": "",
-    "reference image path": "",
+    "start frame path": "",
     "middle frame path": "",
     "end frame path": "",
 
@@ -159,6 +159,8 @@ def _migrate_key_renames(data: dict) -> None:
             item['middle frame path'] = item.pop('reference path')
         if 'flf image path' in item and 'end frame path' not in item:
             item['end frame path'] = item.pop('flf image path')
+        if 'reference image path' in item and 'start frame path' not in item:
+            item['start frame path'] = item.pop('reference image path')
 
 
 def _migrate_lora_keys(data: dict) -> None:
