@@ -447,6 +447,47 @@ class TestProjectResolution:
         assert ProjectResolution.CATEGORY == "JSON Manager/project"
 
 
+class TestBinaryIndexDecoder:
+    def test_input_types(self):
+        from project_loader import BinaryIndexDecoder
+        inputs = BinaryIndexDecoder.INPUT_TYPES()
+        assert "index" in inputs["required"]
+        assert inputs["required"]["index"][0] == "INT"
+
+    def test_three_boolean_outputs(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder.RETURN_TYPES == ("BOOLEAN", "BOOLEAN", "BOOLEAN")
+        assert BinaryIndexDecoder.RETURN_NAMES == ("flag_0", "flag_1", "flag_2")
+
+    def test_category(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder.CATEGORY == "JSON Manager/utils"
+
+    def test_index_0(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(0) == (False, False, False)
+
+    def test_index_1(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(1) == (True, False, False)
+
+    def test_index_2(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(2) == (False, True, False)
+
+    def test_index_3(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(3) == (True, True, False)
+
+    def test_index_4(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(4) == (False, False, True)
+
+    def test_index_7(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(7) == (True, True, True)
+
+
 class TestNodeMappings:
     def test_mappings_exist(self):
         from project_loader import PROJECT_NODE_CLASS_MAPPINGS, PROJECT_NODE_DISPLAY_NAME_MAPPINGS
@@ -454,5 +495,6 @@ class TestNodeMappings:
         assert "ProjectSource" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectKey" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectResolution" in PROJECT_NODE_CLASS_MAPPINGS
-        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 4
-        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 4
+        assert "BinaryIndexDecoder" in PROJECT_NODE_CLASS_MAPPINGS
+        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 5
+        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 5
