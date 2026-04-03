@@ -470,11 +470,11 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 )
                 if result is not None:
                     s['name'] = result
-                    commit('Renamed!')
+                    await commit('Renamed!')
 
             ui.button('Rename', icon='edit', on_click=rename).props('outline')
             # Copy from source
-            def copy_source(idx=i, sn=seq_num):
+            async def copy_source(idx=i, sn=seq_num):
                 item = copy.deepcopy(DEFAULTS)
                 src_batch = src_cache['batch']
                 sel_idx = src_seq_select.value
@@ -486,12 +486,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 item.pop(KEY_PROMPT_HISTORY, None)
                 item.pop(KEY_HISTORY_TREE, None)
                 batch_list[idx] = item
-                commit('Copied!')
+                await commit('Copied!')
 
             ui.button('Copy Src', icon='file_download', on_click=copy_source).props('outline')
 
             # Clone Next
-            def clone_next(idx=i, sn=seq_num, s=seq):
+            async def clone_next(idx=i, sn=seq_num, s=seq):
                 new_seq = copy.deepcopy(s)
                 new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 if not is_subsegment(sn):
@@ -499,21 +499,21 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 else:
                     pos = idx + 1
                 batch_list.insert(pos, new_seq)
-                commit('Cloned to Next!')
+                await commit('Cloned to Next!')
 
             ui.button('Clone Next', icon='content_copy', on_click=clone_next).props('outline')
 
             # Clone End
-            def clone_end(s=seq):
+            async def clone_end(s=seq):
                 new_seq = copy.deepcopy(s)
                 new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 batch_list.append(new_seq)
-                commit('Cloned to End!')
+                await commit('Cloned to End!')
 
             ui.button('Clone End', icon='vertical_align_bottom', on_click=clone_end).props('outline')
 
             # Clone Sub
-            def clone_sub(idx=i, sn=seq_num, s=seq):
+            async def clone_sub(idx=i, sn=seq_num, s=seq):
                 new_seq = copy.deepcopy(s)
                 p_seq = parent_of(sn)
                 p_idx = idx
@@ -525,17 +525,17 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 new_seq[KEY_SEQUENCE_NUMBER] = next_sub_segment_number(batch_list, p_seq)
                 pos = find_insert_position(batch_list, p_idx, p_seq)
                 batch_list.insert(pos, new_seq)
-                commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
+                await commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
 
             ui.button('Clone Sub', icon='link', on_click=clone_sub).props('outline')
 
             ui.element('div').classes('col')
 
             # Delete
-            def delete(idx=i):
+            async def delete(idx=i):
                 if idx < len(batch_list):
                     batch_list.pop(idx)
-                    commit()
+                    await commit()
 
             ui.button(icon='delete', on_click=delete).props('color=negative')
 
@@ -556,17 +556,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 # --- Resolutions (8 fixed slots) ---
                 ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
                 resolutions = seq.setdefault('resolutions', [])
-                changed = False
                 while len(resolutions) < 8:
                     resolutions.append([512, 512, 0])
-                    changed = True
-                # Migrate old [w, h] entries to [w, h, seed]
-                for i, entry in enumerate(resolutions):
-                    if len(entry) < 3:
-                        resolutions[i] = list(entry) + [0]
-                        changed = True
-                if changed:
-                    commit()
+                # Migrate old [w, h] entries to [w, h, seed] (persisted on next real save)
+                for r_i in range(len(resolutions)):
+                    if len(resolutions[r_i]) < 3:
+                        resolutions[r_i] = list(resolutions[r_i]) + [0]
                 for idx in range(8):
                     entry = resolutions[idx]
                     with ui.row().classes('items-center w-full q-mt-xs no-wrap'):
@@ -578,19 +573,18 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         seed_inp = ui.number(value=int(entry[2]), min=0, step=1, label='Seed').style(
                             'flex:1; min-width:60px').props('outlined dense hide-bottom-space')
 
-                        def _sync_entry(i=idx, wi=w_inp, hi=h_inp, si=seed_inp):
-                            seq['resolutions'][i] = [
+                        async def _sync_entry(r=idx, wi=w_inp, hi=h_inp, si=seed_inp):
+                            seq['resolutions'][r] = [
                                 int(wi.value) if wi.value else 512,
                                 int(hi.value) if hi.value else 512,
                                 int(si.value) if si.value else 0,
                             ]
-                            commit()
+                            await commit()
 
-                        def _randomize(si=seed_inp, i=idx):
-                            import random
+                        async def _randomize(si=seed_inp, r=idx):
                             si.value = random.randint(0, 2**32 - 1)
-                            seq['resolutions'][i][2] = int(si.value)
-                            commit()
+                            seq['resolutions'][r][2] = int(si.value)
+                            await commit()
 
                         ui.button(icon='casino', on_click=_randomize).props(
                             'flat dense round').classes('q-ml-xs')
@@ -702,9 +696,9 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                     ui.input('Key', value=k).props('readonly outlined dense').classes('w-32')
                     dict_input(ui.input, 'Value', seq, k).props('outlined dense').classes('col')
 
-                    def del_custom(key=k):
+                    async def del_custom(key=k):
                         del seq[key]
-                        commit()
+                        await commit()
 
                     ui.button(icon='delete', on_click=del_custom).props('flat dense color=negative')
 
@@ -712,14 +706,14 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
             new_k_input = ui.input('Key').props('outlined dense')
             new_v_input = ui.input('Value').props('outlined dense')
 
-            def add_param():
+            async def add_param():
                 k = new_k_input.value
                 v = new_v_input.value
                 if k and k not in seq:
                     seq[k] = v
                     new_k_input.set_value('')
                     new_v_input.set_value('')
-                    commit()
+                    await commit()
 
             ui.button('Add', on_click=add_param).props('flat')
 
