@@ -630,6 +630,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 if 'logic index' not in seq:
                     seq['logic index'] = seq.get('end_frame', 0)
                 li_input = dict_number('Logic Index', seq, 'logic index').props('outlined').classes('w-full')
+                with li_input:
+                    ui.tooltip(
+                        'Binary flags — bit 0: start frame | bit 1: middle frame | bit 2: end frame\n'
+                        '0: none  1: start  2: middle  3: start+middle\n'
+                        '4: end   5: start+end   6: middle+end   7: all'
+                    )
 
                 def _mirror_to_logic_index(ef=ef_input, li=li_input, s=seq):
                     v = s.get('end_frame', 0)
