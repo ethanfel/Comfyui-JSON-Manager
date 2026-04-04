@@ -317,9 +317,9 @@ def render_batch_processor(state: AppState):
         'seed', 'camera', KEY_SEQUENCE_NUMBER,
         'frame_to_skip', 'logic index', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
-        'start frame path', 'start frame strength',
-        'middle frame path', 'middle frame strength',
-        'end frame path', 'end frame strength',
+        'start frame path', 'start frame high strength', 'start frame low strength',
+        'middle frame path', 'middle frame high strength', 'middle frame low strength',
+        'end frame path', 'end frame high strength', 'end frame low strength',
         'video file path',
     }
     standard_keys.update(lora_keys)
@@ -560,10 +560,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                 # --- Frame paths (start / middle / end) ---
                 logic_val = int(seq.get('logic index', 0))
-                for bit, img_label, img_key, str_key in [
-                    (0, 'Start Frame', 'start frame path', 'start frame strength'),
-                    (1, 'Middle Frame', 'middle frame path', 'middle frame strength'),
-                    (2, 'End Frame', 'end frame path', 'end frame strength'),
+                for bit, img_label, img_key, hi_key, lo_key in [
+                    (0, 'Start Frame', 'start frame path', 'start frame high strength', 'start frame low strength'),
+                    (1, 'Middle Frame', 'middle frame path', 'middle frame high strength', 'middle frame low strength'),
+                    (2, 'End Frame', 'end frame path', 'end frame high strength', 'end frame low strength'),
                 ]:
                     ui.label(img_label).classes('text-caption text-weight-bold q-mt-sm')
                     with ui.row().classes('w-full items-center no-wrap q-mt-xs'):
@@ -581,11 +581,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                                 f'style="width:36px;height:36px;object-fit:cover;'
                                 f'border-radius:4px;cursor:pointer;flex-shrink:0">'
                             ).on('click', img_dlg.open)
-                        str_inp = dict_number('Strength', seq, str_key, default=1.0,
-                                              step=0.05, format='%.2f').style(
-                            'width:80px').props('outlined dense')
                         sw = ui.switch(value=bool((logic_val >> bit) & 1))
                         frame_switches.append(sw)
+                    with ui.row().classes('w-full no-wrap q-mt-xs q-gutter-xs'):
+                        dict_number('High', seq, hi_key, default=1.0,
+                                    step=0.05, format='%.2f').classes('col').props('outlined dense')
+                        dict_number('Low', seq, lo_key, default=1.0,
+                                    step=0.05, format='%.2f').classes('col').props('outlined dense')
 
             with splitter.after:
                 # Mode

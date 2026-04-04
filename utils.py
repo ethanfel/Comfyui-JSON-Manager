@@ -44,11 +44,14 @@ DEFAULTS = {
     "reference switch": 1,
     "video file path": "",
     "start frame path": "",
-    "start frame strength": 1.0,
+    "start frame high strength": 1.0,
+    "start frame low strength": 1.0,
     "middle frame path": "",
-    "middle frame strength": 1.0,
+    "middle frame high strength": 1.0,
+    "middle frame low strength": 1.0,
     "end frame path": "",
-    "end frame strength": 1.0,
+    "end frame high strength": 1.0,
+    "end frame low strength": 1.0,
 
     # --- LoRAs (name as STRING, strength as FLOAT) ---
     "lora 1 high": "",
@@ -173,6 +176,13 @@ def _migrate_key_renames(data: dict) -> None:
             item['end frame path'] = item.pop('flf image path')
         if 'reference image path' in item and 'start frame path' not in item:
             item['start frame path'] = item.pop('reference image path')
+        # Split old single strength into high+low
+        for prefix in ('start frame', 'middle frame', 'end frame'):
+            old_key = f'{prefix} strength'
+            if old_key in item:
+                val = item.pop(old_key)
+                item.setdefault(f'{prefix} high strength', val)
+                item.setdefault(f'{prefix} low strength', val)
 
 
 def _migrate_lora_keys(data: dict) -> None:

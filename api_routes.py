@@ -96,9 +96,12 @@ def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
     result = dict(match)
     # Inject strength defaults if not yet saved to JSON
     for key, default in (
-        ("start frame strength", 1.0),
-        ("middle frame strength", 1.0),
-        ("end frame strength", 1.0),
+        ("start frame high strength", 1.0),
+        ("start frame low strength", 1.0),
+        ("middle frame high strength", 1.0),
+        ("middle frame low strength", 1.0),
+        ("end frame high strength", 1.0),
+        ("end frame low strength", 1.0),
     ):
         result.setdefault(key, default)
     # Computed stem names from frame paths
@@ -133,7 +136,11 @@ def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
         else:
             types.append("STRING")
     # Injected defaults — always present even if not yet saved to JSON
-    for key in ("start frame strength", "middle frame strength", "end frame strength"):
+    for key in (
+        "start frame high strength", "start frame low strength",
+        "middle frame high strength", "middle frame low strength",
+        "end frame high strength", "end frame low strength",
+    ):
         if key not in match:
             keys.append(key)
             types.append("FLOAT")
