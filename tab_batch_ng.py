@@ -588,7 +588,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         frame_switches.append(sw)
                         if thumb is not None:
                             sw.on('update:model-value',
-                                  lambda e, t=thumb: t.style(f'opacity: {"1.0" if e.args else "0.25"}'))
+                                  lambda e, t=thumb, s=sw: t.style(f'opacity: {"1.0" if s.value else "0.25"}'))
                     with ui.row().classes('w-full no-wrap q-mt-xs q-gutter-xs'):
                         dict_number('High', seq, hi_key, default=1.0,
                                     step=0.05, format='%.2f').classes('col').props('outlined dense')
