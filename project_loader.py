@@ -393,11 +393,11 @@ class BinaryIndexDecoder:
     OUTPUT_NODE = False
 
     def decode(self, index: int):
-        return (
-            bool((index >> 0) & 1),
-            bool((index >> 1) & 1),
-            bool((index >> 2) & 1),
-        )
+        f0 = bool((index >> 0) & 1)
+        f1 = bool((index >> 1) & 1)
+        f2 = bool((index >> 2) & 1)
+        return {"ui": {"values": [str(f0).lower(), str(f1).lower(), str(f2).lower()]},
+                "result": (f0, f1, f2)}
 
 
 # --- Mappings ---
