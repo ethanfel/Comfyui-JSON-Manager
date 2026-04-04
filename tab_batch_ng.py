@@ -613,10 +613,8 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
                 dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
                 ef_input = dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
-                # Initialize logic index to end_frame if not yet set
-                if 'logic index' not in seq:
-                    seq['logic index'] = seq.get('end_frame', 0)
-                li_input = dict_number('Logic Index', seq, 'logic index').props('outlined').classes('w-full')
+                seq.setdefault('logic index', 0)
+                li_input = dict_number('Logic Index', seq, 'logic index').props('outlined readonly').classes('w-full')
                 with li_input:
                     ui.tooltip(
                         'Binary flags — bit 0: start frame | bit 1: middle frame | bit 2: end frame\n'
@@ -626,21 +624,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
                     'outlined input-style="text-align: right"').classes('w-full')
 
-        # Bidirectional sync: end_frame → logic index → switches, and switches → logic index
-        def _mirror_end_to_logic(li=li_input, switches=frame_switches, s=seq):
-            v = int(s.get('end_frame', 0))
-            s['logic index'] = v
-            li.set_value(v)
-            for b, sw in enumerate(switches):
-                sw.set_value(bool((v >> b) & 1))
-
+        # Switches → logic index (sole writer)
         def _sync_switches_to_logic(li=li_input, switches=frame_switches, s=seq):
             v = sum(int(sw.value) << b for b, sw in enumerate(switches))
             s['logic index'] = v
             li.set_value(v)
 
-        ef_input.on('blur', lambda _, m=_mirror_end_to_logic: m())
-        ef_input.on('update:model-value', lambda _, m=_mirror_end_to_logic: m())
         for frame_sw in frame_switches:
             frame_sw.on('update:model-value', lambda _, s=_sync_switches_to_logic: s())
 
