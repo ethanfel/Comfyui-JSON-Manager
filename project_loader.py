@@ -383,63 +383,12 @@ class BinaryIndexDecoder:
         )
 
 
-class ProjectFrameNames:
-    """Outputs the filename stem of each frame path field (no directory, no extension).
-
-    Fetches start frame path, middle frame path, and end frame path from the
-    sequence data and returns Path(value).stem for each, so you get e.g.
-    'keyframe8' instead of '/some/dir/keyframe8.png'.
-    """
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "source_label": ("STRING", {"default": "", "multiline": False}),
-            },
-            "optional": {
-                "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
-                "project_name": ("STRING", {"default": "", "multiline": False}),
-                "file_name": ("STRING", {"default": "", "multiline": False}),
-                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
-            },
-        }
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING")
-    RETURN_NAMES = ("start_name", "middle_name", "end_name")
-    FUNCTION = "fetch_frame_names"
-    CATEGORY = "JSON Manager/project"
-    OUTPUT_NODE = False
-
-    @classmethod
-    def IS_CHANGED(cls, **kwargs):
-        return float("nan")
-
-    def fetch_frame_names(self, source_label, manager_url="http://localhost:8080",
-                          project_name="", file_name="", sequence_number=1):
-        sequence_number = int(sequence_number)
-        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
-        if data.get("error") in ("http_error", "network_error", "parse_error"):
-            logger.warning("ProjectFrameNames.fetch_frame_names failed: %s", data.get("message"))
-            return ("", "", "")
-
-        def stem(path_str):
-            return Path(path_str).stem if path_str else ""
-
-        return (
-            stem(data.get("start frame path", "")),
-            stem(data.get("middle frame path", "")),
-            stem(data.get("end frame path", "")),
-        )
-
-
 # --- Mappings ---
 PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
     "ProjectSource": ProjectSource,
     "ProjectKey": ProjectKey,
     "ProjectResolution": ProjectResolution,
-    "ProjectFrameNames": ProjectFrameNames,
     "BinaryIndexDecoder": BinaryIndexDecoder,
 }
 
@@ -448,6 +397,5 @@ PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectSource": "Project Source",
     "ProjectKey": "Project Key",
     "ProjectResolution": "Project Resolution",
-    "ProjectFrameNames": "Project Frame Names",
     "BinaryIndexDecoder": "Binary Index Decoder",
 }

@@ -83,9 +83,17 @@ def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
     match = next((s for s in sequences if int(s.get(KEY_SEQUENCE_NUMBER, 0)) == seq), None)
     if match is None:
         raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
+    result = dict(match)
+    for out_key, src_key in (
+        ("start_name", "start frame path"),
+        ("middle_name", "middle frame path"),
+        ("end_name", "end frame path"),
+    ):
+        path_val = result.get(src_key, "")
+        result[out_key] = Path(path_val).stem if path_val else ""
     logger.info("API _get_data %s/%s seq=%d (%d keys): %.3fs",
-                 name, file_name, seq, len(match), time.perf_counter() - t0)
-    return match
+                 name, file_name, seq, len(result), time.perf_counter() - t0)
+    return result
 
 
 def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[str, Any]:
