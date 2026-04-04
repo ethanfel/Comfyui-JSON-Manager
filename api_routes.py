@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, Query
+from fastapi.responses import FileResponse
 from nicegui import app
 
 from db import ProjectDB
@@ -30,6 +31,7 @@ def register_api_routes(db: ProjectDB) -> None:
     app.add_api_route("/api/projects/{name}/files/{file_name}/sequences", _list_sequences, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/data", _get_data, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/keys", _get_keys, methods=["GET"])
+    app.add_api_route("/api/image-preview", _serve_image, methods=["GET"])
 
 
 def _get_db() -> ProjectDB:
@@ -102,3 +104,10 @@ def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
     logger.info("API _get_keys %s/%s seq=%d (%d keys): %.3fs",
                  name, file_name, seq, len(keys), time.perf_counter() - t0)
     return {"keys": keys, "types": types, "total_sequences": total}
+
+
+def _serve_image(path: str = Query(...)) -> FileResponse:
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(str(p))

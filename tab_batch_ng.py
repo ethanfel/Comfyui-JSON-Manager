@@ -6,6 +6,7 @@ import math
 import random
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from nicegui import ui
 
@@ -571,9 +572,10 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
+                            img_url = f'/api/image-preview?path={quote(str(img_path))}'
                             with ui.dialog() as img_dlg, ui.card().style('max-width:90vw'):
-                                ui.image(str(img_path)).style('max-width:80vw; max-height:80vh')
-                            ui.image(str(img_path)).style(
+                                ui.image(img_url).style('max-width:80vw; max-height:80vh')
+                            ui.image(img_url).style(
                                 'width:36px; height:36px; object-fit:cover;'
                                 ' border-radius:4px; cursor:pointer; flex-shrink:0'
                             ).on('click', img_dlg.open)
