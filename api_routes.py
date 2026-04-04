@@ -124,6 +124,15 @@ def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
             types.append("FLOAT")
         else:
             types.append("STRING")
+    # Computed keys derived from frame paths
+    for out_key, src_key in (
+        ("start_name", "start frame path"),
+        ("middle_name", "middle frame path"),
+        ("end_name", "end frame path"),
+    ):
+        if src_key in match:
+            keys.append(out_key)
+            types.append("STRING")
     total = len(sequences)
     logger.info("API _get_keys %s/%s seq=%d (%d keys): %.3fs",
                  name, file_name, seq, len(keys), time.perf_counter() - t0)
