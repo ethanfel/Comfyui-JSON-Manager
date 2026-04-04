@@ -67,6 +67,13 @@ def _fetch_json(url: str) -> dict:
         return {"error": "parse_error", "message": str(e)}
 
 
+def _fetch_project(manager_url: str, project: str) -> dict:
+    """Fetch project details (including folder_path) from the NiceGUI REST API."""
+    p = urllib.parse.quote(project, safe='')
+    url = f"{manager_url.rstrip('/')}/api/projects/{p}"
+    return _fetch_json(url)
+
+
 def _fetch_data(manager_url: str, project: str, file: str, seq: int) -> dict:
     """Fetch sequence data from the NiceGUI REST API."""
     p = urllib.parse.quote(project, safe='')
@@ -150,7 +157,7 @@ class ProjectLoaderDynamic:
     RETURN_TYPES = ("INT",) + tuple(any_type for _ in range(MAX_DYNAMIC_OUTPUTS))
     RETURN_NAMES = ("total_sequences",) + tuple(f"output_{i}" for i in range(MAX_DYNAMIC_OUTPUTS))
     FUNCTION = "load_dynamic"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
 
     def load_dynamic(self, manager_url, project_name, file_name, sequence_number,
@@ -221,14 +228,24 @@ class ProjectSource:
             },
         }
 
-    RETURN_TYPES = ("INT", "STRING",)
-    RETURN_NAMES = ("sequence_number", "file_name",)
+    RETURN_TYPES = ("INT", "STRING", "STRING")
+    RETURN_NAMES = ("sequence_number", "file_name", "project_path")
     FUNCTION = "hold_config"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
-        return (sequence_number, file_name,)
+        name = project_name.strip()
+        if not name:
+            active = _fetch_json(f"{manager_url.rstrip('/')}/api/active-project")
+            name = active.get("project", "") if "error" not in active else ""
+        folder_path = ""
+        if name:
+            proj = _fetch_project(manager_url, name)
+            folder_path = proj.get("folder_path", "") if "error" not in proj else ""
+            if folder_path and not folder_path.endswith("/"):
+                folder_path += "/"
+        return (sequence_number, file_name, folder_path)
 
 
 class ProjectKey:
@@ -252,7 +269,7 @@ class ProjectKey:
     RETURN_TYPES = (any_type,)
     RETURN_NAMES = ("value",)
     FUNCTION = "fetch_key"
-    CATEGORY = "utils/json/project"
+    CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = False
 
     @classmethod
@@ -282,15 +299,107 @@ class ProjectKey:
         val = data.get(key_name, "")
 
         if key_type == "INT":
-            return (to_int(val),)
+            result = to_int(val)
+            return {"ui": {"value": [str(result)]}, "result": (result,)}
         elif key_type == "FLOAT":
-            return (to_float(val),)
+            result = to_float(val)
+            return {"ui": {"value": [f"{result:.4g}"]}, "result": (result,)}
         elif isinstance(val, bool):
-            return (str(val).lower(),)
+            return {"ui": {"value": [str(val).lower()]}, "result": (str(val).lower(),)}
         elif isinstance(val, (int, float)):
-            return (val,)
+            return {"ui": {"value": [str(val)]}, "result": (val,)}
         else:
             return (str(val),)
+
+
+class ProjectResolution:
+    """Fetches a (width, height) pair from a resolution series by loop index."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "source_label": ("STRING", {"default": "", "multiline": False}),
+                "key_name": ("STRING", {"default": "resolutions", "multiline": False}),
+                "index": ("INT", {"default": 0, "min": 0, "max": 9999}),
+            },
+            "optional": {
+                "manager_url": ("STRING", {"default": "http://localhost:8080", "multiline": False}),
+                "project_name": ("STRING", {"default": "", "multiline": False}),
+                "file_name": ("STRING", {"default": "", "multiline": False}),
+                "sequence_number": ("INT", {"default": 1, "min": 1, "max": 9999}),
+            },
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT")
+    RETURN_NAMES = ("width", "height", "seed")
+    FUNCTION = "fetch_resolution"
+    CATEGORY = "JSON Manager/project"
+    OUTPUT_NODE = False
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("nan")
+
+    def fetch_resolution(self, source_label, key_name, index,
+                         manager_url="http://localhost:8080", project_name="",
+                         file_name="", sequence_number=1):
+        sequence_number = int(sequence_number)
+        logger.info("ProjectResolution.fetch_resolution: source=%s key=%s url=%s project=%s file=%s seq=%s index=%s",
+                     source_label, key_name, manager_url, project_name, file_name, sequence_number, index)
+        # source_label is used by JS to identify which ProjectSource to sync
+        # config from. The actual config arrives via the optional widgets below.
+        data = _fetch_data(manager_url, project_name, file_name, sequence_number)
+        if data.get("error") in ("http_error", "network_error", "parse_error"):
+            logger.warning("ProjectResolution.fetch_resolution failed: %s", data.get("message"))
+            return (512, 512, 0)
+
+        series = data.get(key_name)
+        if not isinstance(series, list) or len(series) == 0:
+            logger.warning("ProjectResolution: key '%s' is not a resolution series", key_name)
+            return (512, 512, 0)
+
+        clamped = max(0, min(index, len(series) - 1))
+        entry = series[clamped]
+        if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+            logger.warning("ProjectResolution: entry at index %d is malformed: %r", clamped, entry)
+            return (512, 512, 0)
+
+        seed = to_int(entry[2]) if len(entry) >= 3 else 0
+        return (to_int(entry[0]), to_int(entry[1]), seed)
+
+
+class BinaryIndexDecoder:
+    """Decodes an integer index into 3 boolean flags using binary (bit-field) encoding.
+
+    index 0 → (False, False, False)
+    index 1 → (True,  False, False)  # bit 0
+    index 2 → (False, True,  False)  # bit 1
+    index 3 → (True,  True,  False)  # bits 0+1
+    index 4 → (False, False, True)   # bit 2
+    ...
+    index 7 → (True,  True,  True)
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "index": ("INT", {"default": 0, "min": 0, "max": 7}),
+            }
+        }
+
+    RETURN_TYPES = ("BOOLEAN", "BOOLEAN", "BOOLEAN")
+    RETURN_NAMES = ("flag_0", "flag_1", "flag_2")
+    FUNCTION = "decode"
+    CATEGORY = "JSON Manager/utils"
+    OUTPUT_NODE = False
+
+    def decode(self, index: int):
+        f0 = bool((index >> 0) & 1)
+        f1 = bool((index >> 1) & 1)
+        f2 = bool((index >> 2) & 1)
+        return {"ui": {"values": [str(f0).lower(), str(f1).lower(), str(f2).lower()]},
+                "result": (f0, f1, f2)}
 
 
 # --- Mappings ---
@@ -298,10 +407,14 @@ PROJECT_NODE_CLASS_MAPPINGS = {
     "ProjectLoaderDynamic": ProjectLoaderDynamic,
     "ProjectSource": ProjectSource,
     "ProjectKey": ProjectKey,
+    "ProjectResolution": ProjectResolution,
+    "BinaryIndexDecoder": BinaryIndexDecoder,
 }
 
 PROJECT_NODE_DISPLAY_NAME_MAPPINGS = {
     "ProjectLoaderDynamic": "Project Loader (Dynamic)",
     "ProjectSource": "Project Source",
     "ProjectKey": "Project Key",
+    "ProjectResolution": "Project Resolution",
+    "BinaryIndexDecoder": "Binary Index Decoder",
 }

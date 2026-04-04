@@ -216,8 +216,10 @@ def render_projects_tab(state: AppState):
 
 
 async def _import_folder(state: AppState, project_id: int, project_name: str, refresh_fn):
-    """Bulk import all .json files from current directory into a project."""
-    json_files = sorted(state.current_dir.glob('*.json'))
+    """Bulk import all .json files from the project's folder_path into a project."""
+    proj = state.db.get_project(project_name)
+    scan_dir = Path(proj['folder_path']) if proj else state.current_dir
+    json_files = sorted(scan_dir.glob('*.json'))
     json_files = [f for f in json_files if f.name not in (
         '.editor_config.json', '.editor_snippets.json')]
 

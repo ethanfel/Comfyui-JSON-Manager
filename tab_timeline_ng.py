@@ -602,6 +602,36 @@ def _render_preview_fields(item_data: dict):
                 ui.input('Video Path',
                          value=str(item_data.get('video file path', ''))).props('readonly outlined')
 
+    resolutions = item_data.get('resolutions')
+    if isinstance(resolutions, list) and resolutions:
+        with ui.expansion('Resolutions'):
+            with ui.grid(columns=4).classes('w-full'):
+                for i, entry in enumerate(resolutions):
+                    if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                        w, h = entry[0], entry[1]
+                        seed = entry[2] if len(entry) >= 3 else 0
+                        ui.input(f'#{i} W', value=str(w)).props('readonly outlined dense')
+                        ui.input(f'#{i} H', value=str(h)).props('readonly outlined dense')
+                        ui.input(f'#{i} Seed', value=str(seed)).props('readonly outlined dense')
+                        ui.label('')  # grid spacer for 4th column
+
+    known_keys = {
+        'sequence_number', 'general_prompt', 'general_negative', 'current_prompt', 'prompt',
+        'negative', 'camera', 'flf', 'seed', 'resolutions',
+                'frame_to_skip', 'vace schedule', 'video file path', 'middle frame path', 'end frame path', 'start frame path',
+        'logic index',
+    }
+    # also skip lora keys
+    custom_keys = [
+        k for k in item_data
+        if k not in known_keys and not k.startswith('lora ')
+    ]
+    if custom_keys:
+        with ui.expansion('Custom Fields'):
+            with ui.grid(columns=2).classes('w-full'):
+                for k in custom_keys:
+                    ui.input(k, value=str(item_data[k])).props('readonly outlined dense')
+
 
 def _truncate(val, max_len=60):
     """Truncate a value for display."""

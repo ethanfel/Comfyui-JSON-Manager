@@ -28,6 +28,35 @@ app.registerExtension({
             return combo;
         }
 
+        // Fetch active project from Manager and update project_name + title
+        async function refreshActiveProject(node) {
+            const urlW = node.widgets?.find(w => w.name === "manager_url");
+            if (!urlW?.value) return;
+            try {
+                const resp = await fetch(`${urlW.value}/api/active-project`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const project = data.project || "";
+                const projW = node.widgets?.find(w => w.name === "project_name");
+                if (projW && projW.value !== project) {
+                    projW.value = project;
+                    await refreshFiles(node);
+                }
+                _updateTitle(node);
+            } catch (e) {
+                console.warn("[ProjectSource] Failed to fetch active project:", e);
+            }
+        }
+
+        function _updateTitle(node) {
+            const labelW = node.widgets?.find(w => w.name === "label");
+            const projW = node.widgets?.find(w => w.name === "project_name");
+            const label = labelW?.value || "";
+            const project = projW?.value || "?";
+            node.title = label ? `Source: ${label} [${project}]` : `Project Source [${project}]`;
+            app.graph?.setDirtyCanvas(true, true);
+        }
+
         // Fetch file list from API and update file_name combo
         async function refreshFiles(node) {
             const urlW = node.widgets?.find(w => w.name === "manager_url");
@@ -84,22 +113,28 @@ app.registerExtension({
 
             const node = this;
 
+            // Hide project_name — it is auto-filled from the Manager's active project
+            const projW = this.widgets?.find(w => w.name === "project_name");
+            if (projW) {
+                if (projW.origType === undefined) projW.origType = projW.type;
+                projW.type = "hidden";
+                projW.hidden = true;
+                projW.computeSize = () => [0, -4];
+            }
+
             // Replace file_name STRING with a combo
             replaceWithCombo(this, "file_name", [], function (value) {
                 notifyRelays(node);
             });
 
-            // Hook manager_url and project_name to refresh file list + notify relays
-            for (const name of ["manager_url", "project_name"]) {
-                const w = this.widgets?.find(w => w.name === name);
-                if (w) {
-                    const origCb = w.callback;
-                    w.callback = function (...args) {
-                        origCb?.apply(this, args);
-                        refreshFiles(node);
-                        notifyRelays(node);
-                    };
-                }
+            // Hook manager_url to refresh active project + files + notify relays
+            const urlW = this.widgets?.find(w => w.name === "manager_url");
+            if (urlW) {
+                const origCb = urlW.callback;
+                urlW.callback = function (...args) {
+                    origCb?.apply(this, args);
+                    refreshActiveProject(node).then(() => notifyRelays(node));
+                };
             }
 
             // Hook sequence_number to notify relays
@@ -118,21 +153,26 @@ app.registerExtension({
                 const origCallback = labelWidget.callback;
                 labelWidget.callback = function (...args) {
                     origCallback?.apply(this, args);
-                    node.title = labelWidget.value
-                        ? `Source: ${labelWidget.value}`
-                        : "Project Source";
-                    app.graph?.setDirtyCanvas(true, true);
+                    _updateTitle(node);
                 };
-                // Set initial title
-                if (labelWidget.value) {
-                    this.title = `Source: ${labelWidget.value}`;
-                }
             }
+
+            // Auto-fetch active project on creation
+            queueMicrotask(() => refreshActiveProject(node));
         };
 
         const origOnConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function (info) {
             origOnConfigure?.apply(this, arguments);
+
+            // Hide project_name (may have been serialized as visible)
+            const projW = this.widgets?.find(w => w.name === "project_name");
+            if (projW) {
+                if (projW.origType === undefined) projW.origType = projW.type;
+                projW.type = "hidden";
+                projW.hidden = true;
+                projW.computeSize = () => [0, -4];
+            }
 
             // Ensure file_name is a combo (may be STRING from serialization)
             const fileW = this.widgets?.find(w => w.name === "file_name");
@@ -143,16 +183,18 @@ app.registerExtension({
                 });
             }
 
-            const labelWidget = this.widgets?.find(w => w.name === "label");
-            if (labelWidget?.value) {
-                this.title = `Source: ${labelWidget.value}`;
-            }
+            _updateTitle(this);
 
-            // Deferred: refresh file list once graph is ready
+            // Deferred: fetch active project (and files) once graph is ready
             const node = this;
-            queueMicrotask(() => {
-                refreshFiles(node);
-            });
+            queueMicrotask(() => refreshActiveProject(node));
+        };
+
+        // Re-check active project on click (picks up changes made in the Manager)
+        const origOnMouseDown = nodeType.prototype.onMouseDown;
+        nodeType.prototype.onMouseDown = function (e, localPos, graphCanvas) {
+            origOnMouseDown?.apply(this, arguments);
+            refreshActiveProject(this);
         };
     },
 });

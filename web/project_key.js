@@ -201,6 +201,60 @@ app.registerExtension({
             app.graph?.setDirtyCanvas(true, true);
         };
 
+        // --- Show live value on output slot after execution (INT/FLOAT/BOOL only) ---
+        nodeType.prototype.onExecuted = function (output) {
+            if (!this.outputs.length) return;
+            const val = output?.value?.[0];
+            if (val === undefined) return;
+            const keyWidget = this.widgets?.find(w => w.name === "key_name");
+            const name = keyWidget?.value || this.outputs[0].name;
+            this.outputs[0].label = `${val}  ${name}`;
+            const slotType = this.outputs[0].type;
+            const TYPE_COLORS = { "INT": "#3d7eb5", "FLOAT": "#68a468", "BOOLEAN": null };
+            let color;
+            if (slotType === "BOOLEAN") {
+                color = (val === "true") ? "#4caf50" : "#888888";
+            } else {
+                color = TYPE_COLORS[slotType]
+                     ?? LGraphCanvas?.link_type_colors?.[slotType]
+                     ?? app.canvas?.default_connection_color_byType?.[slotType];
+            }
+            if (color) {
+                this.outputs[0].color_on = color;
+                this.outputs[0].color_off = color;
+            }
+            app.graph?.setDirtyCanvas(true, true);
+        };
+
+        // --- Highlight all ProjectKey nodes sharing the same key_name on select ---
+        nodeType.prototype.onSelected = function () {
+            const keyWidget = this.widgets?.find(w => w.name === "key_name");
+            const myKey = keyWidget?.value;
+            if (!myKey || !this.graph) return;
+            for (const node of this.graph._nodes) {
+                if (node === this || node.type !== "ProjectKey") continue;
+                const kw = node.widgets?.find(w => w.name === "key_name");
+                if (kw?.value !== myKey) continue;
+                node._savedColor = node.color;
+                node._savedBgColor = node.bgcolor;
+                node.color = "#c8a000";
+                node.bgcolor = "#4a3800";
+            }
+            app.graph?.setDirtyCanvas(true, true);
+        };
+
+        nodeType.prototype.onDeselected = function () {
+            if (!this.graph) return;
+            for (const node of this.graph._nodes) {
+                if (node.type !== "ProjectKey" || !("_savedColor" in node)) continue;
+                node.color = node._savedColor;
+                node.bgcolor = node._savedBgColor;
+                delete node._savedColor;
+                delete node._savedBgColor;
+            }
+            app.graph?.setDirtyCanvas(true, true);
+        };
+
         // --- Sync config on click (lazy, no key refresh to avoid race) ---
         const origOnMouseDown = nodeType.prototype.onMouseDown;
         nodeType.prototype.onMouseDown = function (e, localPos, graphCanvas) {

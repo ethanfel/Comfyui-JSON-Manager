@@ -38,6 +38,7 @@ DEFAULTS = {
     # --- I2V / VACE Specifics ---
     "frame_to_skip": 81,
     "end_frame": 0,
+    "logic index": 0,
     "transition": "1-2",
     "vace_length": 49,
     "vace schedule": 1,
@@ -45,9 +46,12 @@ DEFAULTS = {
     "input_b_frames": 16,
     "reference switch": 1,
     "video file path": "",
-    "reference image path": "",
-    "reference path": "",
-    "flf image path": "",
+    "start frame path": "",
+    "start frame strength": 1.0,
+    "middle frame path": "",
+    "middle frame strength": 1.0,
+    "end frame path": "",
+    "end frame strength": 1.0,
 
     # --- LoRAs (name as STRING, strength as FLOAT) ---
     "lora 1 high": "",
@@ -150,6 +154,19 @@ def save_snippets(snippets):
         json.dump(snippets, f, indent=4)
     os.replace(tmp, SNIPPETS_FILE)
 
+def _migrate_key_renames(data: dict) -> None:
+    """Rename legacy keys to their current names."""
+    for item in data.get(KEY_BATCH_DATA, []):
+        if not isinstance(item, dict):
+            continue
+        if 'reference path' in item and 'middle frame path' not in item:
+            item['middle frame path'] = item.pop('reference path')
+        if 'flf image path' in item and 'end frame path' not in item:
+            item['end frame path'] = item.pop('flf image path')
+        if 'reference image path' in item and 'start frame path' not in item:
+            item['start frame path'] = item.pop('reference image path')
+
+
 def _migrate_lora_keys(data: dict) -> None:
     """Split combined lora 'name:strength' into separate name and strength keys.
 
@@ -208,6 +225,7 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
         with open(path, 'r') as f:
             data = json.load(f)
         t1 = time.time()
+        _migrate_key_renames(data)
         _migrate_lora_keys(data)
         t2 = time.time()
         mtime = path.stat().st_mtime

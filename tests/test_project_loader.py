@@ -200,7 +200,7 @@ class TestProjectLoaderDynamic:
         assert "sequence_number" in inputs["required"]
 
     def test_category(self):
-        assert ProjectLoaderDynamic.CATEGORY == "utils/json/project"
+        assert ProjectLoaderDynamic.CATEGORY == "JSON Manager/project"
 
 
 class TestProjectSource:
@@ -232,7 +232,7 @@ class TestProjectSource:
 
     def test_category(self):
         from project_loader import ProjectSource
-        assert ProjectSource.CATEGORY == "utils/json/project"
+        assert ProjectSource.CATEGORY == "JSON Manager/project"
 
 
 class TestProjectKey:
@@ -341,7 +341,159 @@ class TestProjectKey:
 
     def test_category(self):
         from project_loader import ProjectKey
-        assert ProjectKey.CATEGORY == "utils/json/project"
+        assert ProjectKey.CATEGORY == "JSON Manager/project"
+
+
+class TestProjectResolution:
+    def test_input_types(self):
+        from project_loader import ProjectResolution
+        inputs = ProjectResolution.INPUT_TYPES()
+        assert "source_label" in inputs["required"]
+        assert "key_name" in inputs["required"]
+        assert "index" in inputs["required"]
+        assert inputs["required"]["index"][0] == "INT"
+
+    def test_three_outputs(self):
+        from project_loader import ProjectResolution
+        assert ProjectResolution.RETURN_TYPES == ("INT", "INT", "INT")
+        assert ProjectResolution.RETURN_NAMES == ("width", "height", "seed")
+
+    def test_fetch_resolution_basic(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512, 0], [768, 1344, 12345], [1344, 768, 99]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=1,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (768, 1344, 12345)
+
+    def test_fetch_resolution_index_zero(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512, 42], [1024, 1024, 0]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512, 42)
+
+    def test_fetch_resolution_clamps_on_out_of_bounds(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512, 512, 0], [1024, 1024, 7]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=99,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (1024, 1024, 7)  # last entry
+
+    def test_fetch_resolution_old_format_no_seed(self):
+        """Old [w, h] entries without seed should return seed=0."""
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[576, 384], [960, 640]]}
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (576, 384, 0)
+
+    def test_fetch_resolution_missing_key_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        with patch("project_loader._fetch_data", return_value={}):
+            result = node.fetch_resolution(
+                source_label="src", key_name="nonexistent", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512, 0)
+
+    def test_fetch_resolution_network_error_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        error_resp = {"error": "network_error", "message": "Connection refused"}
+        with patch("project_loader._fetch_data", return_value=error_resp):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512, 0)
+
+    def test_fetch_resolution_malformed_entry_returns_defaults(self):
+        from project_loader import ProjectResolution
+        node = ProjectResolution()
+        data = {"resolutions": [[512]]}  # single-element, not a valid pair
+        with patch("project_loader._fetch_data", return_value=data):
+            result = node.fetch_resolution(
+                source_label="src", key_name="resolutions", index=0,
+                manager_url="http://localhost:8080", project_name="p",
+                file_name="f", sequence_number=1,
+            )
+        assert result == (512, 512, 0)
+
+    def test_category(self):
+        from project_loader import ProjectResolution
+        assert ProjectResolution.CATEGORY == "JSON Manager/project"
+
+
+class TestBinaryIndexDecoder:
+    def test_input_types(self):
+        from project_loader import BinaryIndexDecoder
+        inputs = BinaryIndexDecoder.INPUT_TYPES()
+        assert "index" in inputs["required"]
+        assert inputs["required"]["index"][0] == "INT"
+
+    def test_three_boolean_outputs(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder.RETURN_TYPES == ("BOOLEAN", "BOOLEAN", "BOOLEAN")
+        assert BinaryIndexDecoder.RETURN_NAMES == ("flag_0", "flag_1", "flag_2")
+
+    def test_category(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder.CATEGORY == "JSON Manager/utils"
+
+    def test_index_0(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(0) == (False, False, False)
+
+    def test_index_1(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(1) == (True, False, False)
+
+    def test_index_2(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(2) == (False, True, False)
+
+    def test_index_3(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(3) == (True, True, False)
+
+    def test_index_4(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(4) == (False, False, True)
+
+    def test_index_5(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(5) == (True, False, True)
+
+    def test_index_6(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(6) == (False, True, True)
+
+    def test_index_7(self):
+        from project_loader import BinaryIndexDecoder
+        assert BinaryIndexDecoder().decode(7) == (True, True, True)
 
 
 class TestNodeMappings:
@@ -350,5 +502,7 @@ class TestNodeMappings:
         assert "ProjectLoaderDynamic" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectSource" in PROJECT_NODE_CLASS_MAPPINGS
         assert "ProjectKey" in PROJECT_NODE_CLASS_MAPPINGS
-        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 3
-        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 3
+        assert "ProjectResolution" in PROJECT_NODE_CLASS_MAPPINGS
+        assert "BinaryIndexDecoder" in PROJECT_NODE_CLASS_MAPPINGS
+        assert len(PROJECT_NODE_CLASS_MAPPINGS) == 5
+        assert len(PROJECT_NODE_DISPLAY_NAME_MAPPINGS) == 5

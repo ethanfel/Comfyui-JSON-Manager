@@ -6,6 +6,7 @@ import math
 import random
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from nicegui import ui
 
@@ -314,9 +315,12 @@ def render_batch_processor(state: AppState):
     standard_keys = {
         'name', 'mode', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
-        'frame_to_skip', 'end_frame', 'transition', 'vace_length',
+        'frame_to_skip', 'end_frame', 'logic index', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
-        'reference path', 'video file path', 'reference image path', 'flf image path',
+        'start frame path', 'start frame strength',
+        'middle frame path', 'middle frame strength',
+        'end frame path', 'end frame strength',
+        'video file path',
     }
     standard_keys.update(lora_keys)
 
@@ -409,6 +413,7 @@ def render_batch_processor(state: AppState):
 # Single sequence card
 # ======================================================================
 
+
 def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                           src_cache, src_seq_select, standard_keys,
                           refresh_list):
@@ -469,11 +474,11 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 )
                 if result is not None:
                     s['name'] = result
-                    commit('Renamed!')
+                    await commit('Renamed!')
 
             ui.button('Rename', icon='edit', on_click=rename).props('outline')
             # Copy from source
-            def copy_source(idx=i, sn=seq_num):
+            async def copy_source(idx=i, sn=seq_num):
                 item = copy.deepcopy(DEFAULTS)
                 src_batch = src_cache['batch']
                 sel_idx = src_seq_select.value
@@ -485,12 +490,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 item.pop(KEY_PROMPT_HISTORY, None)
                 item.pop(KEY_HISTORY_TREE, None)
                 batch_list[idx] = item
-                commit('Copied!')
+                await commit('Copied!')
 
             ui.button('Copy Src', icon='file_download', on_click=copy_source).props('outline')
 
             # Clone Next
-            def clone_next(idx=i, sn=seq_num, s=seq):
+            async def clone_next(idx=i, sn=seq_num, s=seq):
                 new_seq = copy.deepcopy(s)
                 new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 if not is_subsegment(sn):
@@ -498,21 +503,21 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 else:
                     pos = idx + 1
                 batch_list.insert(pos, new_seq)
-                commit('Cloned to Next!')
+                await commit('Cloned to Next!')
 
             ui.button('Clone Next', icon='content_copy', on_click=clone_next).props('outline')
 
             # Clone End
-            def clone_end(s=seq):
+            async def clone_end(s=seq):
                 new_seq = copy.deepcopy(s)
                 new_seq[KEY_SEQUENCE_NUMBER] = max_main_seq_number(batch_list) + 1
                 batch_list.append(new_seq)
-                commit('Cloned to End!')
+                await commit('Cloned to End!')
 
             ui.button('Clone End', icon='vertical_align_bottom', on_click=clone_end).props('outline')
 
             # Clone Sub
-            def clone_sub(idx=i, sn=seq_num, s=seq):
+            async def clone_sub(idx=i, sn=seq_num, s=seq):
                 new_seq = copy.deepcopy(s)
                 p_seq = parent_of(sn)
                 p_idx = idx
@@ -524,23 +529,24 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 new_seq[KEY_SEQUENCE_NUMBER] = next_sub_segment_number(batch_list, p_seq)
                 pos = find_insert_position(batch_list, p_idx, p_seq)
                 batch_list.insert(pos, new_seq)
-                commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
+                await commit(f'Created {format_seq_label(new_seq[KEY_SEQUENCE_NUMBER])}!')
 
             ui.button('Clone Sub', icon='link', on_click=clone_sub).props('outline')
 
             ui.element('div').classes('col')
 
             # Delete
-            def delete(idx=i):
+            async def delete(idx=i):
                 if idx < len(batch_list):
                     batch_list.pop(idx)
-                    commit()
+                    await commit()
 
             ui.button(icon='delete', on_click=delete).props('color=negative')
 
         ui.separator()
 
         # --- Prompts + Settings (2-column) ---
+        frame_switches = []  # populated below, used for bidirectional sync with logic index
         with ui.splitter(value=66).classes('w-full') as splitter:
             with splitter.before:
                 dict_textarea('General Prompt', seq, 'general_prompt').classes(
@@ -551,6 +557,35 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                     'w-full q-mt-sm').props('outlined rows=10')
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
+
+                # --- Frame paths (start / middle / end) ---
+                logic_val = int(seq.get('logic index', 0))
+                for bit, img_label, img_key, str_key in [
+                    (0, 'Start Frame', 'start frame path', 'start frame strength'),
+                    (1, 'Middle Frame', 'middle frame path', 'middle frame strength'),
+                    (2, 'End Frame', 'end frame path', 'end frame strength'),
+                ]:
+                    ui.label(img_label).classes('text-caption text-weight-bold q-mt-sm')
+                    with ui.row().classes('w-full items-center no-wrap q-mt-xs'):
+                        inp = dict_input(ui.input, 'Path', seq, img_key).classes(
+                            'col').props('outlined dense input-style="text-align: right"')
+                        img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
+                        if (img_path and img_path.exists() and
+                                img_path.suffix.lower() in IMAGE_EXTENSIONS):
+                            img_url = f'/api/image-preview?path={quote(str(img_path))}'
+                            with ui.dialog() as img_dlg, ui.card().style('max-width:90vw; padding:0'):
+                                ui.html(f'<img src="{img_url}" '
+                                        f'style="max-width:80vw;max-height:80vh;display:block">')
+                            ui.html(
+                                f'<img src="{img_url}" '
+                                f'style="width:36px;height:36px;object-fit:cover;'
+                                f'border-radius:4px;cursor:pointer;flex-shrink:0">'
+                            ).on('click', img_dlg.open)
+                        str_inp = dict_number('Strength', seq, str_key, default=1.0,
+                                              step=0.05, format='%.2f').style(
+                            'width:80px').props('outlined dense')
+                        sw = ui.switch(value=bool((logic_val >> bit) & 1))
+                        frame_switches.append(sw)
 
             with splitter.after:
                 # Mode
@@ -581,25 +616,68 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                 dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
                 dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
-                dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
+                ef_input = dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
+                seq.setdefault('logic index', 0)
+                li_input = dict_number('Logic Index', seq, 'logic index').props('outlined readonly').classes('w-full')
+                with li_input:
+                    ui.tooltip(
+                        'Binary flags — bit 0: start frame | bit 1: middle frame | bit 2: end frame\n'
+                        '0: none  1: start  2: middle  3: start+middle\n'
+                        '4: end   5: start+end   6: middle+end   7: all'
+                    )
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
-                    'outlined input-style="direction: rtl"').classes('w-full')
+                    'outlined input-style="text-align: right"').classes('w-full')
 
-                # Image paths with preview
-                for img_label, img_key in [
-                    ('Reference Image Path', 'reference image path'),
-                    ('Reference Path', 'reference path'),
-                    ('FLF Image Path', 'flf image path'),
-                ]:
-                    with ui.row().classes('w-full items-center'):
-                        inp = dict_input(ui.input, img_label, seq, img_key).classes(
-                            'col').props('outlined input-style="direction: rtl"')
-                        img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
-                        if (img_path and img_path.exists() and
-                                img_path.suffix.lower() in IMAGE_EXTENSIONS):
-                            with ui.dialog() as dlg, ui.card():
-                                ui.image(str(img_path)).classes('w-full')
-                            ui.button(icon='visibility', on_click=dlg.open).props('flat dense')
+        # Switches → logic index (sole writer)
+        def _sync_switches_to_logic(li=li_input, switches=frame_switches, s=seq):
+            v = sum(int(sw.value) << b for b, sw in enumerate(switches))
+            s['logic index'] = v
+            li.set_value(v)
+
+        for frame_sw in frame_switches:
+            frame_sw.on('update:model-value', lambda _, s=_sync_switches_to_logic: s())
+
+        # --- Resolutions (8 fixed slots) ---
+        resolutions = seq.setdefault('resolutions', [])
+        while len(resolutions) < 8:
+            resolutions.append([512, 512, 0])
+        for r_i in range(len(resolutions)):
+            if len(resolutions[r_i]) < 3:
+                resolutions[r_i] = list(resolutions[r_i]) + [0]
+        with ui.expansion('Resolutions', icon='aspect_ratio').classes('w-full'):
+            for idx in range(8):
+                entry = resolutions[idx]
+                with ui.row().classes('items-center w-full q-mt-xs no-wrap'):
+                    ui.label(str(idx)).classes('text-caption').style('min-width:16px')
+                    w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').style(
+                        'width:70px').props('outlined dense hide-bottom-space')
+                    h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').style(
+                        'width:70px').props('outlined dense hide-bottom-space')
+                    seed_inp = ui.number(value=int(entry[2]), min=0, step=1, label='Seed').style(
+                        'flex:1; min-width:60px').props('outlined dense hide-bottom-space')
+
+                    async def _sync_entry(r=idx, wi=w_inp, hi=h_inp, si=seed_inp):
+                        seq['resolutions'][r] = [
+                            int(wi.value) if wi.value else 512,
+                            int(hi.value) if hi.value else 512,
+                            int(si.value) if si.value else 0,
+                        ]
+                        await commit()
+
+                    async def _randomize(si=seed_inp, r=idx):
+                        si.value = random.randint(0, 2**32 - 1)
+                        seq['resolutions'][r][2] = int(si.value)
+                        await commit()
+
+                    ui.button(icon='casino', on_click=_randomize).props(
+                        'flat dense round').classes('q-ml-xs')
+
+                    w_inp.on('blur', lambda _, s=_sync_entry: s())
+                    w_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                    h_inp.on('blur', lambda _, s=_sync_entry: s())
+                    h_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                    seed_inp.on('blur', lambda _, s=_sync_entry: s())
+                    seed_inp.on('update:model-value', lambda _, s=_sync_entry: s())
 
         # --- VACE Settings (full width) ---
         with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
@@ -645,16 +723,16 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         # --- Custom Parameters ---
         ui.label('Custom Parameters').classes('section-header q-mt-md')
 
-        custom_keys = [k for k in seq.keys() if k not in standard_keys]
+        custom_keys = [k for k in seq.keys() if k not in standard_keys and k != 'resolutions']
         if custom_keys:
             for k in custom_keys:
                 with ui.row().classes('w-full items-center'):
                     ui.input('Key', value=k).props('readonly outlined dense').classes('w-32')
                     dict_input(ui.input, 'Value', seq, k).props('outlined dense').classes('col')
 
-                    def del_custom(key=k):
+                    async def del_custom(key=k):
                         del seq[key]
-                        commit()
+                        await commit()
 
                     ui.button(icon='delete', on_click=del_custom).props('flat dense color=negative')
 
@@ -662,14 +740,14 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
             new_k_input = ui.input('Key').props('outlined dense')
             new_v_input = ui.input('Value').props('outlined dense')
 
-            def add_param():
+            async def add_param():
                 k = new_k_input.value
                 v = new_v_input.value
                 if k and k not in seq:
                     seq[k] = v
                     new_k_input.set_value('')
                     new_v_input.set_value('')
-                    commit()
+                    await commit()
 
             ui.button('Add', on_click=add_param).props('flat')
 
