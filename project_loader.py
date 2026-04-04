@@ -235,10 +235,16 @@ class ProjectSource:
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
-        proj = _fetch_project(manager_url, project_name)
-        folder_path = proj.get("folder_path", "") if "error" not in proj else ""
-        if folder_path and not folder_path.endswith("/"):
-            folder_path += "/"
+        name = project_name.strip()
+        if not name:
+            active = _fetch_json(f"{manager_url.rstrip('/')}/api/active-project")
+            name = active.get("project", "") if "error" not in active else ""
+        folder_path = ""
+        if name:
+            proj = _fetch_project(manager_url, name)
+            folder_path = proj.get("folder_path", "") if "error" not in proj else ""
+            if folder_path and not folder_path.endswith("/"):
+                folder_path += "/"
         return (sequence_number, file_name, folder_path)
 
 
