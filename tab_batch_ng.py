@@ -573,11 +573,13 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
                             img_url = f'/api/image-preview?path={quote(str(img_path))}'
-                            with ui.dialog() as img_dlg, ui.card().style('max-width:90vw'):
-                                ui.image(img_url).style('max-width:80vw; max-height:80vh')
-                            ui.image(img_url).style(
-                                'width:36px; height:36px; object-fit:cover;'
-                                ' border-radius:4px; cursor:pointer; flex-shrink:0'
+                            with ui.dialog() as img_dlg, ui.card().style('max-width:90vw; padding:0'):
+                                ui.html(f'<img src="{img_url}" '
+                                        f'style="max-width:80vw;max-height:80vh;display:block">')
+                            ui.html(
+                                f'<img src="{img_url}" '
+                                f'style="width:36px;height:36px;object-fit:cover;'
+                                f'border-radius:4px;cursor:pointer;flex-shrink:0">'
                             ).on('click', img_dlg.open)
                         str_inp = dict_number('Strength', seq, str_key, default=1.0,
                                               step=0.05, format='%.2f').style(
