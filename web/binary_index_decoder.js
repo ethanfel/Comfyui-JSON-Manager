@@ -9,7 +9,7 @@ app.registerExtension({
         nodeType.prototype.onExecuted = function (output) {
             if (!output?.values) return;
             for (let i = 0; i < Math.min(output.values.length, this.outputs.length); i++) {
-                this.outputs[i].label = `${this.outputs[i].name}  ${output.values[i]}`;
+                this.outputs[i].label = `${output.values[i]}  ${this.outputs[i].name}`;
             }
             app.graph?.setDirtyCanvas(true, true);
         };
