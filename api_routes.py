@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from nicegui import app
 
 from db import ProjectDB
-from utils import load_json, load_config, KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER
+from utils import load_json, load_config, resolve_path_case_insensitive, KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,11 @@ def _get_project(name: str) -> dict[str, Any]:
     proj = db.get_project(name)
     if not proj:
         raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
-    return {"name": proj["name"], "folder_path": proj["folder_path"],
+    folder_path = proj["folder_path"]
+    resolved = resolve_path_case_insensitive(folder_path)
+    if resolved:
+        folder_path = str(resolved)
+    return {"name": proj["name"], "folder_path": folder_path,
             "description": proj.get("description", "")}
 
 
