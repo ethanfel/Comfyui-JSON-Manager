@@ -316,7 +316,10 @@ def render_batch_processor(state: AppState):
         'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
         'frame_to_skip', 'end_frame', 'logic index', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
-        'middle frame path', 'video file path', 'start frame path', 'end frame path',
+        'start frame path', 'start frame strength',
+        'middle frame path', 'middle frame strength',
+        'end frame path', 'end frame strength',
+        'video file path',
     }
     standard_keys.update(lora_keys)
 
@@ -542,6 +545,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
         ui.separator()
 
         # --- Prompts + Settings (2-column) ---
+        frame_switches = []  # populated below, used for bidirectional sync with logic index
         with ui.splitter(value=66).classes('w-full') as splitter:
             with splitter.before:
                 dict_textarea('General Prompt', seq, 'general_prompt').classes(
@@ -553,6 +557,28 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
 
+                # --- Frame paths (start / middle / end) ---
+                logic_val = int(seq.get('logic index', 0))
+                for bit, img_label, img_key, str_key in [
+                    (0, 'Start Frame', 'start frame path', 'start frame strength'),
+                    (1, 'Middle Frame', 'middle frame path', 'middle frame strength'),
+                    (2, 'End Frame', 'end frame path', 'end frame strength'),
+                ]:
+                    ui.label(img_label).classes('text-caption text-weight-bold q-mt-sm')
+                    with ui.row().classes('w-full items-center no-wrap q-mt-xs'):
+                        inp = dict_input(ui.input, 'Path', seq, img_key).classes(
+                            'col').props('outlined dense input-style="text-align: right"')
+                        img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
+                        if (img_path and img_path.exists() and
+                                img_path.suffix.lower() in IMAGE_EXTENSIONS):
+                            with ui.dialog() as dlg, ui.card():
+                                ui.image(str(img_path)).classes('w-full')
+                            ui.button(icon='visibility', on_click=dlg.open).props('flat dense')
+                        str_inp = dict_number('Strength', seq, str_key, default=1.0,
+                                              step=0.05, format='%.2f').style(
+                            'width:80px').props('outlined dense')
+                        sw = ui.switch(value=bool((logic_val >> bit) & 1))
+                        frame_switches.append(sw)
 
             with splitter.after:
                 # Mode
@@ -594,32 +620,26 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         '0: none  1: start  2: middle  3: start+middle\n'
                         '4: end   5: start+end   6: middle+end   7: all'
                     )
-
-                def _mirror_to_logic_index(ef=ef_input, li=li_input, s=seq):
-                    v = s.get('end_frame', 0)
-                    s['logic index'] = v
-                    li.set_value(v)
-
-                ef_input.on('blur', lambda _, m=_mirror_to_logic_index: m())
-                ef_input.on('update:model-value', lambda _, m=_mirror_to_logic_index: m())
                 dict_input(ui.input, 'Video File Path', seq, 'video file path').props(
                     'outlined input-style="text-align: right"').classes('w-full')
 
-                # Image paths with preview
-                for img_label, img_key in [
-                    ('Start Frame Path', 'start frame path'),
-                    ('Middle Frame Path', 'middle frame path'),
-                    ('End Frame Path', 'end frame path'),
-                ]:
-                    with ui.row().classes('w-full items-center'):
-                        inp = dict_input(ui.input, img_label, seq, img_key).classes(
-                            'col').props('outlined input-style="text-align: right"')
-                        img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
-                        if (img_path and img_path.exists() and
-                                img_path.suffix.lower() in IMAGE_EXTENSIONS):
-                            with ui.dialog() as dlg, ui.card():
-                                ui.image(str(img_path)).classes('w-full')
-                            ui.button(icon='visibility', on_click=dlg.open).props('flat dense')
+        # Bidirectional sync: end_frame → logic index → switches, and switches → logic index
+        def _mirror_end_to_logic(li=li_input, switches=frame_switches, s=seq):
+            v = int(s.get('end_frame', 0))
+            s['logic index'] = v
+            li.set_value(v)
+            for b, sw in enumerate(switches):
+                sw.set_value(bool((v >> b) & 1))
+
+        def _sync_switches_to_logic(li=li_input, switches=frame_switches, s=seq):
+            v = sum(int(sw.value) << b for b, sw in enumerate(switches))
+            s['logic index'] = v
+            li.set_value(v)
+
+        ef_input.on('blur', lambda _, m=_mirror_end_to_logic: m())
+        ef_input.on('update:model-value', lambda _, m=_mirror_end_to_logic: m())
+        for frame_sw in frame_switches:
+            frame_sw.on('update:model-value', lambda _, s=_sync_switches_to_logic: s())
 
         # --- Resolutions (8 fixed slots) ---
         resolutions = seq.setdefault('resolutions', [])

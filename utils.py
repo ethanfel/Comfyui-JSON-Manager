@@ -47,8 +47,11 @@ DEFAULTS = {
     "reference switch": 1,
     "video file path": "",
     "start frame path": "",
+    "start frame strength": 1.0,
     "middle frame path": "",
+    "middle frame strength": 1.0,
     "end frame path": "",
+    "end frame strength": 1.0,
 
     # --- LoRAs (name as STRING, strength as FLOAT) ---
     "lora 1 high": "",
