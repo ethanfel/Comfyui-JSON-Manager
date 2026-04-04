@@ -210,12 +210,14 @@ app.registerExtension({
             const name = keyWidget?.value || this.outputs[0].name;
             this.outputs[0].label = `${val}  ${name}`;
             const slotType = this.outputs[0].type;
+            const TYPE_COLORS = { "INT": "#3d7eb5", "FLOAT": "#68a468", "BOOLEAN": null };
             let color;
             if (slotType === "BOOLEAN") {
                 color = (val === "true") ? "#4caf50" : "#888888";
             } else {
-                color = LGraphCanvas?.link_type_colors?.[slotType]
-                     || app.canvas?.default_connection_color_byType?.[slotType];
+                color = TYPE_COLORS[slotType]
+                     ?? LGraphCanvas?.link_type_colors?.[slotType]
+                     ?? app.canvas?.default_connection_color_byType?.[slotType];
             }
             if (color) {
                 this.outputs[0].color_on = color;
