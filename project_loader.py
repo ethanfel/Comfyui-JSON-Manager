@@ -299,13 +299,15 @@ class ProjectKey:
         val = data.get(key_name, "")
 
         if key_type == "INT":
-            return (to_int(val),)
+            result = to_int(val)
+            return {"ui": {"value": [str(result)]}, "result": (result,)}
         elif key_type == "FLOAT":
-            return (to_float(val),)
+            result = to_float(val)
+            return {"ui": {"value": [f"{result:.4g}"]}, "result": (result,)}
         elif isinstance(val, bool):
-            return (str(val).lower(),)
+            return {"ui": {"value": [str(val).lower()]}, "result": (str(val).lower(),)}
         elif isinstance(val, (int, float)):
-            return (val,)
+            return {"ui": {"value": [str(val)]}, "result": (val,)}
         else:
             return (str(val),)
 

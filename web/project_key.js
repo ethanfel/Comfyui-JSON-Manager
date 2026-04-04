@@ -201,6 +201,17 @@ app.registerExtension({
             app.graph?.setDirtyCanvas(true, true);
         };
 
+        // --- Show live value on output slot after execution (INT/FLOAT/BOOL only) ---
+        nodeType.prototype.onExecuted = function (output) {
+            if (!output?.value?.[0] === undefined || !this.outputs.length) return;
+            const val = output.value?.[0];
+            if (val === undefined) return;
+            const keyWidget = this.widgets?.find(w => w.name === "key_name");
+            const name = keyWidget?.value || this.outputs[0].name;
+            this.outputs[0].label = `${val}  ${name}`;
+            app.graph?.setDirtyCanvas(true, true);
+        };
+
         // --- Highlight all ProjectKey nodes sharing the same key_name on select ---
         nodeType.prototype.onSelected = function () {
             const keyWidget = this.widgets?.find(w => w.name === "key_name");
