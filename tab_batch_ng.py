@@ -566,9 +566,11 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                     (2, 'End Frame', 'end frame path', 'end frame high strength', 'end frame low strength'),
                 ]:
                     ui.label(img_label).classes('text-caption text-weight-bold q-mt-sm')
+                    is_on = bool((logic_val >> bit) & 1)
                     with ui.row().classes('w-full items-center no-wrap q-mt-xs'):
                         inp = dict_input(ui.input, 'Path', seq, img_key).classes(
                             'col').props('outlined dense input-style="text-align: right"')
+                        thumb = None
                         img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
@@ -576,13 +578,17 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                             with ui.dialog() as img_dlg, ui.card().style('max-width:90vw; padding:0'):
                                 ui.html(f'<img src="{img_url}" '
                                         f'style="max-width:80vw;max-height:80vh;display:block">')
-                            ui.html(
+                            thumb = ui.html(
                                 f'<img src="{img_url}" '
                                 f'style="width:36px;height:36px;object-fit:cover;'
-                                f'border-radius:4px;cursor:pointer;flex-shrink:0">'
+                                f'border-radius:4px;cursor:pointer;flex-shrink:0;'
+                                f'opacity:{"1.0" if is_on else "0.25"}">'
                             ).on('click', img_dlg.open)
-                        sw = ui.switch(value=bool((logic_val >> bit) & 1))
+                        sw = ui.switch(value=is_on)
                         frame_switches.append(sw)
+                        if thumb is not None:
+                            sw.on('update:model-value',
+                                  lambda e, t=thumb: t.style(f'opacity: {"1.0" if e.args else "0.25"}'))
                     with ui.row().classes('w-full no-wrap q-mt-xs q-gutter-xs'):
                         dict_number('High', seq, hi_key, default=1.0,
                                     step=0.05, format='%.2f').classes('col').props('outlined dense')
