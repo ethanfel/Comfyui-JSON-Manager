@@ -94,6 +94,14 @@ def _get_data(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
     if match is None:
         raise HTTPException(status_code=404, detail=f"Sequence {seq} not found")
     result = dict(match)
+    # Inject strength defaults if not yet saved to JSON
+    for key, default in (
+        ("start frame strength", 1.0),
+        ("middle frame strength", 1.0),
+        ("end frame strength", 1.0),
+    ):
+        result.setdefault(key, default)
+    # Computed stem names from frame paths
     for out_key, src_key in (
         ("start_name", "start frame path"),
         ("middle_name", "middle frame path"),
@@ -124,6 +132,11 @@ def _get_keys(name: str, file_name: str, seq: int = Query(default=1)) -> dict[st
             types.append("FLOAT")
         else:
             types.append("STRING")
+    # Injected defaults — always present even if not yet saved to JSON
+    for key in ("start frame strength", "middle frame strength", "end frame strength"):
+        if key not in match:
+            keys.append(key)
+            types.append("FLOAT")
     # Computed keys derived from frame paths
     for out_key, src_key in (
         ("start_name", "start frame path"),
