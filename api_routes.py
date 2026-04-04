@@ -62,6 +62,12 @@ def _get_project(name: str) -> dict[str, Any]:
     resolved = resolve_path_case_insensitive(folder_path)
     if resolved:
         folder_path = str(resolved)
+    # Apply configured path replacements (e.g. Docker mount casing differences)
+    config = load_config()
+    for rep in config.get("path_replacements", []):
+        src, dst = rep.get("from", ""), rep.get("to", "")
+        if src:
+            folder_path = folder_path.replace(src, dst)
     return {"name": proj["name"], "folder_path": folder_path,
             "description": proj.get("description", "")}
 

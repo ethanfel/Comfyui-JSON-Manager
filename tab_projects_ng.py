@@ -59,6 +59,48 @@ def render_projects_tab(state: AppState):
 
             ui.button('Create Project', icon='add', on_click=create_project).classes('w-full')
 
+        # --- Path replacements (for ComfyUI Docker path differences) ---
+        with ui.card().classes('w-full q-pa-md q-mb-md'):
+            ui.label('ComfyUI Path Replacements').classes('section-header')
+            ui.label('Applied to project_path output — use to fix Docker mount casing differences.'
+                     ).classes('text-caption q-mb-sm')
+
+            replacements: list[dict] = state.config.get('path_replacements', [])
+
+            @ui.refreshable
+            def render_replacements():
+                for idx, rep in enumerate(replacements):
+                    with ui.row().classes('w-full items-center no-wrap q-gutter-xs'):
+                        ui.input('From', value=rep.get('from', '')).classes('col').props(
+                            'outlined dense').on('update:model-value',
+                            lambda e, i=idx: _update_replacement(i, 'from', e.args))
+                        ui.label('→').classes('text-caption')
+                        ui.input('To', value=rep.get('to', '')).classes('col').props(
+                            'outlined dense').on('update:model-value',
+                            lambda e, i=idx: _update_replacement(i, 'to', e.args))
+                        ui.button(icon='delete', on_click=lambda i=idx: _remove_replacement(i)
+                                  ).props('flat dense color=negative')
+
+            def _update_replacement(idx, field, value):
+                replacements[idx][field] = value
+                state.config['path_replacements'] = replacements
+                save_config(state.current_dir, state.config.get('favorites', []), state.config)
+
+            def _remove_replacement(idx):
+                replacements.pop(idx)
+                state.config['path_replacements'] = replacements
+                save_config(state.current_dir, state.config.get('favorites', []), state.config)
+                render_replacements.refresh()
+
+            def _add_replacement():
+                replacements.append({'from': '', 'to': ''})
+                state.config['path_replacements'] = replacements
+                save_config(state.current_dir, state.config.get('favorites', []), state.config)
+                render_replacements.refresh()
+
+            render_replacements()
+            ui.button('Add Replacement', icon='add', on_click=_add_replacement).props('flat dense')
+
         # --- Active project indicator ---
         # Fetch once with file counts and reuse in render_project_list
         _cached_projects = state.db.list_projects_with_file_counts()
