@@ -571,14 +571,12 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                         img_path = Path(seq.get(img_key, '')) if seq.get(img_key) else None
                         if (img_path and img_path.exists() and
                                 img_path.suffix.lower() in IMAGE_EXTENSIONS):
-                            thumb = ui.image(str(img_path)).style(
+                            with ui.dialog() as img_dlg, ui.card().style('max-width:90vw'):
+                                ui.image(str(img_path)).style('max-width:80vw; max-height:80vh')
+                            ui.image(str(img_path)).style(
                                 'width:36px; height:36px; object-fit:cover;'
-                                ' border-radius:4px; cursor:default; flex-shrink:0')
-                            with thumb:
-                                with ui.tooltip().props('max-width=none').style(
-                                        'background:transparent; padding:4px; box-shadow:none'):
-                                    ui.image(str(img_path)).style(
-                                        'max-width:400px; max-height:400px; border-radius:6px')
+                                ' border-radius:4px; cursor:pointer; flex-shrink:0'
+                            ).on('click', img_dlg.open)
                         str_inp = dict_number('Strength', seq, str_key, default=1.0,
                                               step=0.05, format='%.2f').style(
                             'width:80px').props('outlined dense')
