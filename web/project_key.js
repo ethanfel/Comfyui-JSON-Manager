@@ -203,12 +203,24 @@ app.registerExtension({
 
         // --- Show live value on output slot after execution (INT/FLOAT/BOOL only) ---
         nodeType.prototype.onExecuted = function (output) {
-            if (!output?.value?.[0] === undefined || !this.outputs.length) return;
-            const val = output.value?.[0];
+            if (!this.outputs.length) return;
+            const val = output?.value?.[0];
             if (val === undefined) return;
             const keyWidget = this.widgets?.find(w => w.name === "key_name");
             const name = keyWidget?.value || this.outputs[0].name;
             this.outputs[0].label = `${val}  ${name}`;
+            const slotType = this.outputs[0].type;
+            let color;
+            if (slotType === "BOOLEAN") {
+                color = (val === "true") ? "#4caf50" : "#888888";
+            } else {
+                color = LGraphCanvas?.link_type_colors?.[slotType]
+                     || app.canvas?.default_connection_color_byType?.[slotType];
+            }
+            if (color) {
+                this.outputs[0].color_on = color;
+                this.outputs[0].color_off = color;
+            }
             app.graph?.setDirtyCanvas(true, true);
         };
 

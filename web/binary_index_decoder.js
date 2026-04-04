@@ -9,7 +9,10 @@ app.registerExtension({
         nodeType.prototype.onExecuted = function (output) {
             if (!output?.values) return;
             for (let i = 0; i < Math.min(output.values.length, this.outputs.length); i++) {
-                this.outputs[i].label = `${output.values[i]}  ${this.outputs[i].name}`;
+                const val = output.values[i];
+                this.outputs[i].label = `${val}  ${this.outputs[i].name}`;
+                this.outputs[i].color_on = (val === "true") ? "#4caf50" : "#888888";
+                this.outputs[i].color_off = (val === "true") ? "#4caf50" : "#888888";
             }
             app.graph?.setDirtyCanvas(true, true);
         };
