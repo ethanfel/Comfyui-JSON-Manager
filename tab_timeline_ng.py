@@ -577,7 +577,6 @@ def _render_preview_fields(item_data: dict):
 
     with ui.row().classes('w-full q-gutter-md'):
         ui.input('Camera', value=str(item_data.get('camera', 'static'))).props('readonly outlined')
-        ui.input('FLF', value=str(item_data.get('flf', '0.0'))).props('readonly outlined')
         ui.input('Seed', value=str(item_data.get('seed', '-1'))).props('readonly outlined')
 
     with ui.expansion('LoRA Configuration'):
@@ -617,7 +616,7 @@ def _render_preview_fields(item_data: dict):
 
     known_keys = {
         'sequence_number', 'general_prompt', 'general_negative', 'current_prompt', 'prompt',
-        'negative', 'camera', 'flf', 'seed', 'resolutions',
+        'negative', 'camera', 'seed', 'resolutions',
                 'frame_to_skip', 'vace schedule', 'video file path', 'middle frame path', 'end frame path', 'start frame path',
         'logic index',
     }

@@ -314,8 +314,8 @@ def render_batch_processor(state: AppState):
                  'lora 3 high', 'lora 3 high strength', 'lora 3 low', 'lora 3 low strength']
     standard_keys = {
         'name', 'mode', 'general_prompt', 'general_negative', 'current_prompt', 'negative', 'prompt',
-        'seed', 'cfg', 'camera', 'flf', KEY_SEQUENCE_NUMBER,
-        'frame_to_skip', 'end_frame', 'logic index', 'transition', 'vace_length',
+        'seed', 'camera', KEY_SEQUENCE_NUMBER,
+        'frame_to_skip', 'logic index', 'transition', 'vace_length',
         'input_a_frames', 'input_b_frames', 'reference switch', 'vace schedule',
         'start frame path', 'start frame strength',
         'middle frame path', 'middle frame strength',
@@ -610,13 +610,7 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
 
                     ui.button(icon='casino', on_click=randomize_seed).props('flat')
 
-                # CFG
-                dict_number('CFG', seq, 'cfg', default=DEFAULTS['cfg'],
-                            step=0.5, format='%.1f').props('outlined').classes('w-full')
-
                 dict_input(ui.input, 'Camera', seq, 'camera').props('outlined').classes('w-full')
-                dict_input(ui.input, 'FLF', seq, 'flf').props('outlined').classes('w-full')
-                ef_input = dict_number('End Frame', seq, 'end_frame').props('outlined').classes('w-full')
                 seq.setdefault('logic index', 0)
                 li_input = dict_number('Logic Index', seq, 'logic index').props('outlined readonly').classes('w-full')
                 with li_input:

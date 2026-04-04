@@ -28,16 +28,13 @@ DEFAULTS = {
     "current_prompt": "",
     "negative": "",
     "seed": -1,
-    "cfg": 1.5,
 
     # --- Settings ---
     "mode": 0,
     "camera": "static",
-    "flf": 0.0,
 
     # --- I2V / VACE Specifics ---
     "frame_to_skip": 81,
-    "end_frame": 0,
     "logic index": 0,
     "transition": "1-2",
     "vace_length": 49,
@@ -154,6 +151,17 @@ def save_snippets(snippets):
         json.dump(snippets, f, indent=4)
     os.replace(tmp, SNIPPETS_FILE)
 
+_REMOVED_KEYS = {"cfg", "flf", "end_frame"}
+
+def _migrate_remove_keys(data: dict) -> None:
+    """Drop keys that have been removed from the schema."""
+    for item in data.get(KEY_BATCH_DATA, []):
+        if not isinstance(item, dict):
+            continue
+        for k in _REMOVED_KEYS:
+            item.pop(k, None)
+
+
 def _migrate_key_renames(data: dict) -> None:
     """Rename legacy keys to their current names."""
     for item in data.get(KEY_BATCH_DATA, []):
@@ -225,6 +233,7 @@ def load_json(path: str | Path) -> tuple[dict[str, Any], float]:
         with open(path, 'r') as f:
             data = json.load(f)
         t1 = time.time()
+        _migrate_remove_keys(data)
         _migrate_key_renames(data)
         _migrate_lora_keys(data)
         t2 = time.time()
