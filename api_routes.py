@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from nicegui import app
 
 from db import ProjectDB
-from utils import load_json, KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER
+from utils import load_json, load_config, KEY_BATCH_DATA, KEY_SEQUENCE_NUMBER
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ def register_api_routes(db: ProjectDB) -> None:
     _db = db
 
     app.add_api_route("/api/projects", _list_projects, methods=["GET"])
+    app.add_api_route("/api/active-project", _get_active_project, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files", _list_files, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/sequences", _list_sequences, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/data", _get_data, methods=["GET"])
@@ -44,6 +45,11 @@ def _list_projects() -> dict[str, Any]:
     db = _get_db()
     projects = db.list_projects()
     return {"projects": [p["name"] for p in projects]}
+
+
+def _get_active_project() -> dict[str, Any]:
+    config = load_config()
+    return {"project": config.get("current_project", "")}
 
 
 def _list_files(name: str) -> dict[str, Any]:
