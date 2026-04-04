@@ -28,6 +28,7 @@ def register_api_routes(db: ProjectDB) -> None:
 
     app.add_api_route("/api/projects", _list_projects, methods=["GET"])
     app.add_api_route("/api/active-project", _get_active_project, methods=["GET"])
+    app.add_api_route("/api/projects/{name}", _get_project, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files", _list_files, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/sequences", _list_sequences, methods=["GET"])
     app.add_api_route("/api/projects/{name}/files/{file_name}/data", _get_data, methods=["GET"])
@@ -50,6 +51,15 @@ def _list_projects() -> dict[str, Any]:
 def _get_active_project() -> dict[str, Any]:
     config = load_config()
     return {"project": config.get("current_project", "")}
+
+
+def _get_project(name: str) -> dict[str, Any]:
+    db = _get_db()
+    proj = db.get_project(name)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+    return {"name": proj["name"], "folder_path": proj["folder_path"],
+            "description": proj.get("description", "")}
 
 
 def _list_files(name: str) -> dict[str, Any]:

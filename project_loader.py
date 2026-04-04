@@ -67,6 +67,13 @@ def _fetch_json(url: str) -> dict:
         return {"error": "parse_error", "message": str(e)}
 
 
+def _fetch_project(manager_url: str, project: str) -> dict:
+    """Fetch project details (including folder_path) from the NiceGUI REST API."""
+    p = urllib.parse.quote(project, safe='')
+    url = f"{manager_url.rstrip('/')}/api/projects/{p}"
+    return _fetch_json(url)
+
+
 def _fetch_data(manager_url: str, project: str, file: str, seq: int) -> dict:
     """Fetch sequence data from the NiceGUI REST API."""
     p = urllib.parse.quote(project, safe='')
@@ -221,14 +228,16 @@ class ProjectSource:
             },
         }
 
-    RETURN_TYPES = ("INT", "STRING",)
-    RETURN_NAMES = ("sequence_number", "file_name",)
+    RETURN_TYPES = ("INT", "STRING", "STRING")
+    RETURN_NAMES = ("sequence_number", "file_name", "project_path")
     FUNCTION = "hold_config"
     CATEGORY = "JSON Manager/project"
     OUTPUT_NODE = True
 
     def hold_config(self, manager_url, project_name, file_name, sequence_number, label):
-        return (sequence_number, file_name,)
+        proj = _fetch_project(manager_url, project_name)
+        folder_path = proj.get("folder_path", "") if "error" not in proj else ""
+        return (sequence_number, file_name, folder_path)
 
 
 class ProjectKey:
