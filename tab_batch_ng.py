@@ -553,48 +553,6 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                 dict_textarea('Specific Negative', seq, 'negative').classes(
                     'w-full q-mt-sm').props('outlined rows=2')
 
-                # --- Resolutions (8 fixed slots) ---
-                ui.label('Resolutions').classes('text-caption text-weight-bold q-mt-md')
-                resolutions = seq.setdefault('resolutions', [])
-                while len(resolutions) < 8:
-                    resolutions.append([512, 512, 0])
-                # Migrate old [w, h] entries to [w, h, seed] (persisted on next real save)
-                for r_i in range(len(resolutions)):
-                    if len(resolutions[r_i]) < 3:
-                        resolutions[r_i] = list(resolutions[r_i]) + [0]
-                for idx in range(8):
-                    entry = resolutions[idx]
-                    with ui.row().classes('items-center w-full q-mt-xs no-wrap'):
-                        ui.label(str(idx)).classes('text-caption').style('min-width:16px')
-                        w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').style(
-                            'width:70px').props('outlined dense hide-bottom-space')
-                        h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').style(
-                            'width:70px').props('outlined dense hide-bottom-space')
-                        seed_inp = ui.number(value=int(entry[2]), min=0, step=1, label='Seed').style(
-                            'flex:1; min-width:60px').props('outlined dense hide-bottom-space')
-
-                        async def _sync_entry(r=idx, wi=w_inp, hi=h_inp, si=seed_inp):
-                            seq['resolutions'][r] = [
-                                int(wi.value) if wi.value else 512,
-                                int(hi.value) if hi.value else 512,
-                                int(si.value) if si.value else 0,
-                            ]
-                            await commit()
-
-                        async def _randomize(si=seed_inp, r=idx):
-                            si.value = random.randint(0, 2**32 - 1)
-                            seq['resolutions'][r][2] = int(si.value)
-                            await commit()
-
-                        ui.button(icon='casino', on_click=_randomize).props(
-                            'flat dense round').classes('q-ml-xs')
-
-                        w_inp.on('blur', lambda _, s=_sync_entry: s())
-                        w_inp.on('update:model-value', lambda _, s=_sync_entry: s())
-                        h_inp.on('blur', lambda _, s=_sync_entry: s())
-                        h_inp.on('update:model-value', lambda _, s=_sync_entry: s())
-                        seed_inp.on('blur', lambda _, s=_sync_entry: s())
-                        seed_inp.on('update:model-value', lambda _, s=_sync_entry: s())
 
             with splitter.after:
                 # Mode
@@ -662,6 +620,48 @@ def _render_sequence_card(i, seq, batch_list, data, file_path, state,
                             with ui.dialog() as dlg, ui.card():
                                 ui.image(str(img_path)).classes('w-full')
                             ui.button(icon='visibility', on_click=dlg.open).props('flat dense')
+
+        # --- Resolutions (8 fixed slots) ---
+        resolutions = seq.setdefault('resolutions', [])
+        while len(resolutions) < 8:
+            resolutions.append([512, 512, 0])
+        for r_i in range(len(resolutions)):
+            if len(resolutions[r_i]) < 3:
+                resolutions[r_i] = list(resolutions[r_i]) + [0]
+        with ui.expansion('Resolutions', icon='aspect_ratio').classes('w-full'):
+            for idx in range(8):
+                entry = resolutions[idx]
+                with ui.row().classes('items-center w-full q-mt-xs no-wrap'):
+                    ui.label(str(idx)).classes('text-caption').style('min-width:16px')
+                    w_inp = ui.number(value=int(entry[0]), min=1, step=1, label='W').style(
+                        'width:70px').props('outlined dense hide-bottom-space')
+                    h_inp = ui.number(value=int(entry[1]), min=1, step=1, label='H').style(
+                        'width:70px').props('outlined dense hide-bottom-space')
+                    seed_inp = ui.number(value=int(entry[2]), min=0, step=1, label='Seed').style(
+                        'flex:1; min-width:60px').props('outlined dense hide-bottom-space')
+
+                    async def _sync_entry(r=idx, wi=w_inp, hi=h_inp, si=seed_inp):
+                        seq['resolutions'][r] = [
+                            int(wi.value) if wi.value else 512,
+                            int(hi.value) if hi.value else 512,
+                            int(si.value) if si.value else 0,
+                        ]
+                        await commit()
+
+                    async def _randomize(si=seed_inp, r=idx):
+                        si.value = random.randint(0, 2**32 - 1)
+                        seq['resolutions'][r][2] = int(si.value)
+                        await commit()
+
+                    ui.button(icon='casino', on_click=_randomize).props(
+                        'flat dense round').classes('q-ml-xs')
+
+                    w_inp.on('blur', lambda _, s=_sync_entry: s())
+                    w_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                    h_inp.on('blur', lambda _, s=_sync_entry: s())
+                    h_inp.on('update:model-value', lambda _, s=_sync_entry: s())
+                    seed_inp.on('blur', lambda _, s=_sync_entry: s())
+                    seed_inp.on('update:model-value', lambda _, s=_sync_entry: s())
 
         # --- VACE Settings (full width) ---
         with ui.expansion('VACE Settings', icon='settings').classes('w-full'):
